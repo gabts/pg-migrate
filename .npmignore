@@ -1,0 +1,9 @@
+.DS_Store
+.gitignore
+.npmignore
+.prettierrc
+*.log
+build/
+node_modules/
+src/
+tsconfig.json
