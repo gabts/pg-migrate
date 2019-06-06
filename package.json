@@ -1,0 +1,32 @@
+{
+  "name": "pgup",
+  "version": "0.0.1",
+  "description": "A very simple pg database schema upgrade tool.",
+  "author": "Gabriel Toll Stålbom <gabtost@gmail.com>",
+  "license": "MIT",
+  "main": "build/index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gabbes/mig.git"
+  },
+  "homepage": "https://github.com/gabbes/mig#readme",
+  "bugs": {
+    "url": "https://github.com/gabbes/mig/issues"
+  },
+  "keywords": [
+    "pg",
+    "postgres",
+    "database",
+    "up",
+    "migration"
+  ],
+  "devDependencies": {
+    "@types/node": "^12.0.5",
+    "@types/pg": "^7.4.14",
+    "prettier": "^1.17.1",
+    "typescript": "^3.5.1"
+  },
+  "peerDependencies": {
+    "pg": "^7.11.0"
+  }
+}

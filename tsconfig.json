@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "declaration": true,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "./build",
+    "strict": true,
+    "target": "es2018"
+  },
+  "include": ["./src/**/*"]
+}
