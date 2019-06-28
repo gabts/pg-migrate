@@ -55,9 +55,12 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
       const a = parseInt(fileA.split('-')[0], 10);
       const b = parseInt(fileB.split('-')[0], 10);
 
-      return a > b ? 1 : a < b ? -1 : 0;
+      return a < b ? 1 : a > b ? -1 : 0;
     })
-    .map((file) => ({ file, migrated: migrationHistoryFiles.includes(file) }));
+    .map((file) => ({
+      file,
+      migrated: migrationHistoryFiles.includes(file),
+    }));
 
   for (const { file, migrated } of files) {
     // End loop if file has already been migrated. NOTE: Since migration files
