@@ -4,10 +4,11 @@ import { Pool } from 'pg';
 
 interface Args {
   directory?: string;
+  table?: string;
 }
 
 export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
-  const { directory = 'sql' } = args;
+  const { directory = 'sql', table = 'pgup_history' } = args;
 
   const client = await pool.connect();
 
@@ -15,7 +16,7 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
   const migrationTableQueryResult = await client.query(`
     SELECT COUNT (*)
     FROM information_schema.tables
-    WHERE table_name = 'migrations';
+    WHERE table_name = '${table}';
   `);
 
   // If a migrations table does not exist
@@ -23,7 +24,7 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
     console.log('pgup: No migrations table found. Creating one...');
 
     await client.query(`
-      CREATE TABLE migrations (
+      CREATE TABLE ${table} (
         id serial PRIMARY KEY,
         file VARCHAR (100) UNIQUE NOT NULL
       );
@@ -34,7 +35,7 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
 
   const migrationsQueryResult = await client.query(`
     SELECT file
-    FROM migrations
+    FROM ${table}
     ORDER BY file ASC;
   `);
 
@@ -75,7 +76,7 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
 
     // Store migration in migrations table
     await client.query(`
-      INSERT INTO migrations (
+      INSERT INTO ${table} (
         file
       ) VALUES (
         '${file}'
