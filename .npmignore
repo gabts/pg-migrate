@@ -3,7 +3,7 @@
 .npmignore
 .prettierrc
 *.log
-build/
+dist/
 node_modules/
 src/
 tsconfig.json

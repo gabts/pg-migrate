@@ -4,7 +4,7 @@
   "description": "A very simple pg database schema upgrade tool.",
   "author": "Gabriel Toll Stålbom <gabtost@gmail.com>",
   "license": "MIT",
-  "main": "build/index.js",
+  "main": "dist/index.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/gabbes/pgup.git"
