@@ -46,18 +46,20 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
 
   const dir = path.resolve(directory);
 
-  // Read files inside migrations directory, filter any non .sql files and sort
-  // them according to their index prefix in ascending order. Lastly add a
-  // property whether the they have already been migrated.
   const files = fs
+    // Read files in migrations directory
     .readdirSync(dir)
-    .filter((file) => file.match(/\.sql$/))
+    // Filter any files that does not start with a number, followed by either
+    // a dash and some character or nothing, and ending with .sql
+    .filter((file) => file.match(/^\d{1,}(-.*)?\.sql$/))
+    // Sort files by initial number descending
     .sort((fileA, fileB) => {
       const a = parseInt(fileA.split('-')[0], 10);
       const b = parseInt(fileB.split('-')[0], 10);
 
       return a < b ? 1 : a > b ? -1 : 0;
     })
+    // Add an object storing whether file has been migrated
     .map((file) => ({
       file,
       migrated: migrationHistoryFiles.includes(file),
