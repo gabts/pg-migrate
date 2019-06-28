@@ -51,7 +51,7 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
     .readdirSync(dir)
     // Filter any files that does not start with a number, followed by either
     // a dash and some character or nothing, and ending with .sql
-    .filter((file) => file.match(/^\d{1,}(-.*)?\.sql$/))
+    .filter((file) => file.match(/^\d{1,}(\.\d{1,})?(-.*)?\.sql$/))
     // Sort files by initial number descending
     .sort((fileA, fileB) => {
       const a = parseInt(fileA.split('-')[0], 10);
