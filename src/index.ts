@@ -59,19 +59,18 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
     })
     .map((file) => ({ file, migrated: migrationHistoryFiles.includes(file) }));
 
-  // Loop through each migration file
   for (const { file, migrated } of files) {
-    // Return if file has already been migrated
+    // End loop if file has already been migrated. NOTE: Since migration files
+    // are in descending order any unmigrated files that are after a migrated
+    // file will be ignored.
     if (migrated) {
       return;
     }
 
     console.log(`pgup: Found new migration "${file}". Upgrading...`);
 
-    // Read migration sql from file
     const sql = fs.readFileSync(`${dir}/${file}`, 'utf8');
 
-    // Execute sql
     await client.query(sql);
 
     // Store migration in migrations table
