@@ -26,7 +26,8 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
     await client.query(`
       CREATE TABLE ${table} (
         id serial PRIMARY KEY,
-        file VARCHAR (100) UNIQUE NOT NULL
+        file VARCHAR (100) UNIQUE NOT NULL,
+        date TIMESTAMPTZ NOT NULL
       );
     `);
 
@@ -79,9 +80,11 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
     // Store migration in migrations table
     await client.query(`
       INSERT INTO ${table} (
-        file
+        file,
+        date
       ) VALUES (
-        '${file}'
+        '${file}',
+        NOW()
       );
     `);
 
