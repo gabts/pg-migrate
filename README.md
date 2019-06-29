@@ -41,6 +41,11 @@ The first argument is a [pg](https://www.npmjs.com/package/pg) Pool instance and
 The second argument is options but allows you configure pgup.
 
 - `directory` A string value of the path to the directory containing your postgres database migrations in .sql files. Default is "sql".
+- `table` A string value for the name of the table in the database that should store migration history.
+
+## Changelog
+
+[Changelog](./CHANGELOG)
 
 ## Lisence
 
