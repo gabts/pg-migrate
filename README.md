@@ -45,7 +45,7 @@ The second argument is options but allows you configure pgup.
 
 ## Changelog
 
-[Changelog](./CHANGELOG)
+[Changelog](./CHANGELOG.md)
 
 ## Lisence
 
