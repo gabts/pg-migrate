@@ -1,6 +1,6 @@
 {
   "name": "pgup",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A very simple pg database schema upgrade tool.",
   "author": "Gabriel Toll Stålbom <gabtost@gmail.com>",
   "license": "MIT",
