@@ -52,12 +52,12 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
     // Filter any files that does not start with a number, followed by either
     // a dash and some character or nothing, and ending with .sql
     .filter((file) => file.match(/^\d{1,}(\.\d{1,})?(-.*)?\.sql$/))
-    // Sort files by initial number descending
+    // Sort files by index ascending
     .sort((fileA, fileB) => {
       const a = parseInt(fileA.split('-')[0], 10);
       const b = parseInt(fileB.split('-')[0], 10);
 
-      return a < b ? 1 : a > b ? -1 : 0;
+      return a > b ? 1 : a < b ? -1 : 0;
     })
     // Add an object storing whether file has been migrated
     .map((file) => ({
@@ -66,11 +66,8 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
     }));
 
   for (const { file, migrated } of files) {
-    // End loop if file has already been migrated. NOTE: Since migration files
-    // are in descending order any unmigrated files that are after a migrated
-    // file will be ignored.
     if (migrated) {
-      return;
+      continue;
     }
 
     console.log(`pgup: Found new migration "${file}". Upgrading...`);
