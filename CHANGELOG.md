@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.3 - 2019-12-07
+
+- Fixed ignoring migration files of lower index than latest migration.
+
 ## 0.0.2 - 2019-06-29
 
 - Added customization option for migrations table name.
