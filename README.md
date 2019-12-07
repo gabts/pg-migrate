@@ -43,6 +43,14 @@ The second argument is options but allows you configure pgup.
 - `directory` A string value of the path to the directory containing your postgres database migrations in .sql files. Default is "sql".
 - `table` A string value for the name of the table in the database that should store migration history.
 
+## Tests
+
+Run tests:
+
+```sh
+DATABASE_URL="postgres://localhost:5432/DATABASE" yarn mocha --verbose`
+```
+
 ## Changelog
 
 [Changelog](./CHANGELOG.md)
