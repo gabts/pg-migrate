@@ -65,8 +65,13 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
       migrated: migrationHistoryFiles.includes(file),
     }));
 
+  const latestMigratedIndex = migrationHistoryFiles.reduce((acc, file) => {
+    const index = parseInt(file.split('-')[0], 10);
+    return index > acc ? index : acc;
+  }, -1);
+
   for (const { file, migrated } of files) {
-    if (migrated) {
+    if (migrated || parseInt(file.split('-')[0], 10) <= latestMigratedIndex) {
       continue;
     }
 
