@@ -2,12 +2,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Pool } from 'pg';
 
-interface Args {
-  directory?: string;
-  table?: string;
-}
-
-export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
+export async function pgup(
+  pool: Pool,
+  args: { directory?: string; table?: string } = {}
+): Promise<void> {
   const { directory = 'sql', table = 'pgup_history' } = args;
 
   const client = await pool.connect();
@@ -25,24 +23,25 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
 
     await client.query(`
       CREATE TABLE ${table} (
-        id serial PRIMARY KEY,
-        file VARCHAR (100) UNIQUE NOT NULL,
-        date TIMESTAMPTZ NOT NULL
+        index integer PRIMARY KEY,
+        file text UNIQUE NOT NULL,
+        date timestamptz NOT NULL DEFAULT now()
       );
     `);
 
     console.log('pgup: Migrations table was created successfully.');
   }
 
-  const migrationsQueryResult = await client.query(`
-    SELECT file
+  const lastMigrationQuery = await client.query(`
+    SELECT index
     FROM ${table}
-    ORDER BY file ASC;
+    ORDER BY index DESC
+    LIMIT 1;
   `);
 
-  const migrationHistoryFiles = migrationsQueryResult.rows.map((row) => {
-    return row.file;
-  });
+  const lastMigrationIndex: number = lastMigrationQuery.rows.length
+    ? lastMigrationQuery.rows[0].index
+    : -1;
 
   const dir = path.resolve(directory);
 
@@ -52,29 +51,19 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
     // Filter any files that does not start with a number, followed by either
     // a dash and some character or nothing, and ending with .sql
     .filter((file) => file.match(/^\d{1,}(\.\d{1,})?(-.*)?\.sql$/))
-    // Sort files by index ascending
-    .sort((fileA, fileB) => {
-      const a = parseInt(fileA.split('-')[0], 10);
-      const b = parseInt(fileB.split('-')[0], 10);
-
-      return a > b ? 1 : a < b ? -1 : 0;
-    })
-    // Add an object storing whether file has been migrated
+    // Add an object storing file index and name
     .map((file) => ({
       file,
-      migrated: migrationHistoryFiles.includes(file),
-    }));
+      index: parseInt(file.split('-')[0], 10),
+    }))
+    // Filter files that are invalid
+    .filter((migration) => migration.index > lastMigrationIndex)
+    // Sort files by index ascending
+    .sort((a, b) => {
+      return a.index > b.index ? 1 : a.index < b.index ? -1 : 0;
+    });
 
-  const latestMigratedIndex = migrationHistoryFiles.reduce((acc, file) => {
-    const index = parseInt(file.split('-')[0], 10);
-    return index > acc ? index : acc;
-  }, -1);
-
-  for (const { file, migrated } of files) {
-    if (migrated || parseInt(file.split('-')[0], 10) <= latestMigratedIndex) {
-      continue;
-    }
-
+  for (const { index, file } of files) {
     console.log(`pgup: Found new migration "${file}". Upgrading...`);
 
     const sql = fs.readFileSync(`${dir}/${file}`, 'utf8');
@@ -83,13 +72,10 @@ export async function pgup(pool: Pool, args: Args = {}): Promise<void> {
 
     // Store migration in migrations table
     await client.query(`
-      INSERT INTO ${table} (
-        file,
-        date
-      ) VALUES (
-        '${file}',
-        NOW()
-      );
+      INSERT INTO ${table}
+        ( index, file )
+      VALUES
+        ( ${index}, '${file}' );
     `);
 
     console.log(`pgup: "${file}" was upgraded successfully.`);

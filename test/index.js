@@ -35,7 +35,7 @@ describe('pgup', () => {
 
     assert(historyRows.length === 2);
     assert(Object.keys(historyRows[0]).length === 3);
-    assert(typeof historyRows[0].id === 'number');
+    assert(typeof historyRows[0].index === 'number');
     assert(historyRows[0].date instanceof Date);
     assert(historyRows[0].file === '0-create.sql');
     assert(historyRows[1].file === '1-insert.sql');
