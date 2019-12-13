@@ -52,26 +52,21 @@ export async function pgup(
     // a dash and some character or nothing, and ending with .sql
     .filter((file) => file.match(/^\d{1,}(\.\d{1,})?(-.*)?\.sql$/))
     // Add an object storing file index and name
-    .map((file) => ({
-      file,
-      index: parseInt(file.split('-')[0], 10),
-    }))
+    .map((file) => ({ file, index: parseInt(file.split('-')[0], 10) }))
     // Filter files that are invalid
     .filter((migration) => migration.index > lastMigrationIndex)
     // Sort files by index ascending
-    .sort((a, b) => {
-      return a.index > b.index ? 1 : a.index < b.index ? -1 : 0;
-    });
+    .sort((a, b) => (a.index > b.index ? 1 : a.index < b.index ? -1 : 0));
 
   for (const { index, file } of files) {
     console.log(`pgup: Found new migration "${file}". Upgrading...`);
 
     const sql = fs.readFileSync(`${dir}/${file}`, 'utf8');
 
-    await client.query(sql);
-
-    // Store migration in migrations table
+    // Execute migration and store in history table
     await client.query(`
+      ${sql}
+
       INSERT INTO ${table}
         ( index, file )
       VALUES
