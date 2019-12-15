@@ -2,6 +2,10 @@
 
 A very simple pg database schema upgrade tool.
 
+## THIS PACKAGE IS DEPRECATED
+
+It lives on as [migratosaurus](https://www.npmjs.com/package/migratosaurus) with expanded functionality.
+
 ## Install
 
 ```sh
