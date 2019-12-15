@@ -1,12 +1,12 @@
 const assert = require('assert');
 const { Pool } = require('pg');
-const { pgup } = require('../dist');
+const { migratosaurus } = require('../dist');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 async function queryHistory() {
   const client = await pool.connect();
-  const res = await client.query('SELECT * FROM pgup_history;');
+  const res = await client.query('SELECT * FROM migration_history;');
   client.release();
 
   return res.rows;
@@ -22,17 +22,17 @@ async function queryPersons() {
 
 async function dropTables() {
   const client = await pool.connect();
-  await client.query('DROP TABLE IF EXISTS pgup_history, person;');
+  await client.query('DROP TABLE IF EXISTS migration_history, person;');
   client.release();
 }
 
-describe('pgup', () => {
+describe('migratosaurus', () => {
   before(async () => {
     await dropTables;
   });
 
   it('initializes', async () => {
-    await pgup(pool, { directory: `${__dirname}/migrations-1` });
+    await migratosaurus(pool, { directory: `${__dirname}/migrations-1` });
 
     const historyRows = await queryHistory();
     const personRows = await queryPersons();
@@ -49,7 +49,7 @@ describe('pgup', () => {
   });
 
   it('migrates on top of existing', async () => {
-    await pgup(pool, { directory: `${__dirname}/migrations-2` });
+    await migratosaurus(pool, { directory: `${__dirname}/migrations-2` });
 
     const historyRows = await queryHistory();
     const personRows = await queryPersons();
@@ -59,7 +59,7 @@ describe('pgup', () => {
   });
 
   it('ignores numbers lower or equal to latest migration', async () => {
-    await pgup(pool, { directory: `${__dirname}/migrations-3` });
+    await migratosaurus(pool, { directory: `${__dirname}/migrations-3` });
 
     const historyRows = await queryHistory();
 
