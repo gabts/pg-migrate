@@ -22,11 +22,15 @@ async function queryPersons() {
 
 async function dropTables() {
   const client = await pool.connect();
-  await client.query('DROP TABLE pgup_history, person;');
+  await client.query('DROP TABLE IF EXISTS pgup_history, person;');
   client.release();
 }
 
 describe('pgup', () => {
+  before(async () => {
+    await dropTables;
+  });
+
   it('initializes', async () => {
     await pgup(pool, { directory: `${__dirname}/migrations-1` });
 
