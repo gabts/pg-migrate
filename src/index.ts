@@ -2,12 +2,41 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Pool } from 'pg';
 
-export async function pgup(
-  pool: Pool,
-  args: { directory?: string; table?: string } = {}
-): Promise<void> {
-  const { directory = 'sql', table = 'pgup_history' } = args;
+interface MigrationFile {
+  file: string;
+  index: number;
+  path: string;
+}
 
+const parseMatch = {
+  up: /^--.*up-migration/,
+  down: /^--.*down-migration/,
+};
+
+function parseMigration(sql: string, direction: 'up' | 'down') {
+  return sql
+    .split(/(?=--.*[(down|up)]-migration)/g)
+    .find((str) => str.match(parseMatch[direction]));
+}
+
+function getMigrationFiles(dir: string) {
+  return (
+    fs
+      // Read files in migrations directory
+      .readdirSync(dir)
+      // Filter any files that does not start with a number, followed by either
+      // a dash and some character or nothing, and ending with .sql
+      .filter((file) => file.match(/^\d{1,}(\.\d{1,})?(-.*)?\.sql$/))
+      // Add an object storing file index, name and path
+      .map<MigrationFile>((file) => ({
+        file,
+        index: parseInt(file.split('-')[0], 10),
+        path: `${dir}/${file}`,
+      }))
+  );
+}
+
+async function initialize(pool: Pool, table: string) {
   const client = await pool.connect();
 
   // Check if migrations table exists
@@ -17,64 +46,121 @@ export async function pgup(
     WHERE table_name = '${table}';
   `);
 
-  // If a migrations table does not exist
+  // If migrations table does not exist, create it
   if (migrationTableQueryResult.rows[0].count !== '1') {
-    console.log('pgup: No migrations table found. Creating one...');
+    console.log('🚧  performing first time setup');
 
     await client.query(`
-      CREATE TABLE ${table} (
+      CREATE TABLE ${table}
+      (
         index integer PRIMARY KEY,
         file text UNIQUE NOT NULL,
         date timestamptz NOT NULL DEFAULT now()
       );
     `);
-
-    console.log('pgup: Migrations table was created successfully.');
   }
 
+  client.release();
+}
+
+async function migrateDown(
+  pool: Pool,
+  table: string,
+  files: MigrationFile[],
+  limit: number
+) {
+  const client = await pool.connect();
+
+  const migrationsToDowngrade = await client.query(`
+    SELECT file FROM ${table} ORDER BY index DESC LIMIT ${limit};
+  `);
+
+  const checkFiles = migrationsToDowngrade.rows.map<string>(({ file }) => file);
+
+  files
+    .filter((migration) => checkFiles.includes(migration.file))
+    .sort((a, b) => (a.index > b.index ? -1 : a.index < b.index ? 1 : 0))
+    .filter((_, index) => index < limit)
+    .forEach(async ({ file, index, path }) => {
+      const sql = parseMigration(fs.readFileSync(path, 'utf8'), 'down');
+
+      if (!sql) {
+        console.log(`🌋  "${file}" is invalid!`);
+        return;
+      }
+
+      console.log(`⬇️  downgrading > "${file}"`);
+
+      await client.query(
+        sql + `\nDELETE FROM ${table} WHERE index = ${index};`
+      );
+    });
+
+  client.release();
+}
+
+async function migrateUp(pool: Pool, table: string, files: MigrationFile[]) {
+  const client = await pool.connect();
+
   const lastMigrationQuery = await client.query(`
-    SELECT index
-    FROM ${table}
-    ORDER BY index DESC
-    LIMIT 1;
+    SELECT index FROM ${table} ORDER BY index DESC LIMIT 1;
   `);
 
   const lastMigrationIndex: number = lastMigrationQuery.rows.length
     ? lastMigrationQuery.rows[0].index
     : -1;
 
-  const dir = path.resolve(directory);
-
-  const files = fs
-    // Read files in migrations directory
-    .readdirSync(dir)
-    // Filter any files that does not start with a number, followed by either
-    // a dash and some character or nothing, and ending with .sql
-    .filter((file) => file.match(/^\d{1,}(\.\d{1,})?(-.*)?\.sql$/))
-    // Add an object storing file index and name
-    .map((file) => ({ file, index: parseInt(file.split('-')[0], 10) }))
-    // Filter files that are invalid
+  files
     .filter((migration) => migration.index > lastMigrationIndex)
-    // Sort files by index ascending
-    .sort((a, b) => (a.index > b.index ? 1 : a.index < b.index ? -1 : 0));
+    .sort((a, b) => (a.index > b.index ? 1 : a.index < b.index ? -1 : 0))
+    .forEach(async ({ file, index, path }) => {
+      const sql = parseMigration(fs.readFileSync(path, 'utf8'), 'up');
 
-  for (const { index, file } of files) {
-    console.log(`pgup: Found new migration "${file}". Upgrading...`);
+      if (!sql) {
+        console.log(`🌋  "${file}" is invalid!`);
+        return;
+      }
 
-    const sql = fs.readFileSync(`${dir}/${file}`, 'utf8');
+      console.log(`⬆️  upgrading   > "${file}"`);
 
-    // Execute migration and store in history table
-    await client.query(`
-      ${sql}
-
-      INSERT INTO ${table}
-        ( index, file )
-      VALUES
-        ( ${index}, '${file}' );
-    `);
-
-    console.log(`pgup: "${file}" was upgraded successfully.`);
-  }
+      await client.query(
+        sql +
+          `\nINSERT INTO ${table} ( index, file ) VALUES ( ${index}, '${file}' );`
+      );
+    });
 
   client.release();
+}
+
+export async function migratosaurus(
+  pool: Pool,
+  args: {
+    amountToDownMigrate?: number;
+    directory?: string;
+    shouldUpMigrate?: boolean;
+    table?: string;
+  } = {}
+) {
+  const {
+    directory = 'sql',
+    amountToDownMigrate = 0,
+    shouldUpMigrate = true,
+    table = 'migration_history',
+  } = args;
+
+  console.log('🦖  migratosaurus initiated!');
+
+  await initialize(pool, table);
+
+  const files = getMigrationFiles(path.resolve(directory));
+
+  if (amountToDownMigrate) {
+    await migrateDown(pool, table, files, amountToDownMigrate);
+  }
+
+  if (shouldUpMigrate) {
+    await migrateUp(pool, table, files);
+  }
+
+  console.log('🍾  migratosaurus completed!');
 }
