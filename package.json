@@ -1,17 +1,17 @@
 {
   "name": "pgup",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "A very simple pg database schema upgrade tool.",
   "author": "Gabriel Toll Stålbom <gabtost@gmail.com>",
   "license": "MIT",
   "main": "dist/index.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gabbes/pgup.git"
+    "url": "git+https://github.com/gabbes/migratosaurus.git"
   },
-  "homepage": "https://github.com/gabbes/pgup#readme",
+  "homepage": "https://github.com/gabbes/migratosaurus#readme",
   "bugs": {
-    "url": "https://github.com/gabbes/pgup/issues"
+    "url": "https://github.com/gabbes/migratosaurus/issues"
   },
   "keywords": [
     "pg",
