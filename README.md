@@ -1,17 +1,17 @@
-# pgup
+# 🦖 migratosaurus
 
-A very simple pg database schema upgrade tool.
+A node pg database migration tool.
 
-## THIS PACKAGE IS DEPRECATED
-
-It lives on as [migratosaurus](https://www.npmjs.com/package/migratosaurus) with expanded functionality.
-
-## Install
+## 🌱 Install
 
 ```sh
-npm install pgup
-# or
-yarn add pgup
+npm install migratosaurus
+```
+
+Or using [yarn](https://yarnpkg.com/).
+
+```sh
+yarn add migratosaurus
 ```
 
 ## Sample usage
@@ -29,12 +29,14 @@ And add a pgup step after initializing your pg instance.
 
 ```js
 import { Pool } from 'pg';
-import { pgup } from 'pgup';
+import { migratosaurus } from 'migrate-pg';
 
-const pool = new Pool();
+const pool = new Pool({
+  connectionString: 'postgres://localhost:5432/database',
+});
 
 (async () => {
-  await pgup(pool);
+  await migratosaurus(pool);
 })();
 ```
 
@@ -52,7 +54,7 @@ The second argument is options but allows you configure pgup.
 Run tests:
 
 ```sh
-DATABASE_URL="postgres://localhost:5432/DATABASE" yarn mocha --verbose`
+DATABASE_URL="postgres://localhost:5432/DATABASE" yarn mocha --verbose
 ```
 
 ## Changelog
