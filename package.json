@@ -9,7 +9,6 @@
     "type": "git",
     "url": "git+https://github.com/gabbes/migratosaurus.git"
   },
-  "homepage": "https://github.com/gabbes/migratosaurus#readme",
   "bugs": {
     "url": "https://github.com/gabbes/migratosaurus/issues"
   },
@@ -22,14 +21,14 @@
   ],
   "devDependencies": {
     "@types/mocha": "^5.2.7",
-    "@types/node": "^12.12.17",
+    "@types/node": "^12.12.20",
     "@types/pg": "^7.11.2",
     "mocha": "^6.2.2",
-    "pg": "^7.14.0",
+    "pg": "^7.15.0",
     "prettier": "^1.19.1",
     "typescript": "^3.7.3"
   },
   "peerDependencies": {
-    "pg": "^7.14.0"
+    "pg": "^7.15.0"
   }
 }
