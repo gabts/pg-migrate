@@ -4,43 +4,41 @@ const { migratosaurus } = require('../dist');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-async function queryHistory() {
-  const client = await pool.connect();
+async function queryHistory(client) {
   const res = await client.query('SELECT * FROM migration_history;');
-  client.release();
-
   return res.rows;
 }
 
-async function queryPersons() {
-  const client = await pool.connect();
+async function queryPersons(client) {
   const res = await client.query('SELECT * FROM person;');
-  client.release();
-
   return res.rows;
 }
 
-async function dropTables() {
-  const client = await pool.connect();
+async function dropTables(client) {
   await client.query('DROP TABLE IF EXISTS migration_history, person;');
-  client.release();
 }
 
 describe('migratosaurus', () => {
   before(async () => {
-    await dropTables();
+    const client = await pool.connect();
+    await dropTables(client);
+    client.release();
   });
 
   after(async () => {
-    await dropTables();
+    const client = await pool.connect();
+    await dropTables(client);
+    client.release();
     await pool.end();
   });
 
   it('initializes', async () => {
     await migratosaurus(pool, { directory: `${__dirname}/migrations` });
 
-    const historyRows = await queryHistory();
-    const personRows = await queryPersons();
+    const client = await pool.connect();
+    const historyRows = await queryHistory(client);
+    const personRows = await queryPersons(client);
+    client.release();
 
     assert.equal(historyRows.length, 2);
     assert.equal(Object.keys(historyRows[0]).length, 3);
@@ -59,8 +57,10 @@ describe('migratosaurus', () => {
       shouldUpMigrate: false,
     });
 
-    const historyRows = await queryHistory();
-    const personRows = await queryPersons();
+    const client = await pool.connect();
+    const historyRows = await queryHistory(client);
+    const personRows = await queryPersons(client);
+    client.release();
 
     assert.equal(historyRows.length, 1);
     assert.equal(historyRows[0].index, 0);
@@ -71,8 +71,10 @@ describe('migratosaurus', () => {
   it('up migrates', async () => {
     await migratosaurus(pool, { directory: `${__dirname}/migrations` });
 
-    const historyRows = await queryHistory();
-    const personRows = await queryPersons();
+    const client = await pool.connect();
+    const historyRows = await queryHistory(client);
+    const personRows = await queryPersons(client);
+    client.release();
 
     assert.equal(historyRows.length, 2);
     assert.equal(historyRows[0].index, 0);
