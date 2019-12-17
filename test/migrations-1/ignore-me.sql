@@ -1,1 +1,0 @@
-DROP TABLE pgup_history;

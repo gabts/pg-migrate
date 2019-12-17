@@ -28,46 +28,57 @@ async function dropTables() {
 
 describe('migratosaurus', () => {
   before(async () => {
-    await dropTables;
-  });
-
-  it('initializes', async () => {
-    await migratosaurus(pool, { directory: `${__dirname}/migrations-1` });
-
-    const historyRows = await queryHistory();
-    const personRows = await queryPersons();
-
-    assert(historyRows.length === 2);
-    assert(Object.keys(historyRows[0]).length === 3);
-    assert(typeof historyRows[0].index === 'number');
-    assert(historyRows[0].date instanceof Date);
-    assert(historyRows[0].file === '0-create.sql');
-    assert(historyRows[1].file === '1-insert.sql');
-    assert(!historyRows.find(({ name }) => name === '3-ignore-me.txt'));
-    assert(!historyRows.find(({ name }) => name === 'ignore-me.sql'));
-    assert(personRows.length === 3);
-  });
-
-  it('migrates on top of existing', async () => {
-    await migratosaurus(pool, { directory: `${__dirname}/migrations-2` });
-
-    const historyRows = await queryHistory();
-    const personRows = await queryPersons();
-
-    assert(historyRows.length === 3);
-    assert(personRows.find(({ name }) => name === 'lierbag'));
-  });
-
-  it('ignores numbers lower or equal to latest migration', async () => {
-    await migratosaurus(pool, { directory: `${__dirname}/migrations-3` });
-
-    const historyRows = await queryHistory();
-
-    assert(historyRows.length === 3);
+    await dropTables();
   });
 
   after(async () => {
     await dropTables();
     await pool.end();
+  });
+
+  it('initializes', async () => {
+    await migratosaurus(pool, { directory: `${__dirname}/migrations` });
+
+    const historyRows = await queryHistory();
+    const personRows = await queryPersons();
+
+    assert.equal(historyRows.length, 2);
+    assert.equal(Object.keys(historyRows[0]).length, 3);
+    assert.ok(historyRows[0].date instanceof Date);
+    assert.equal(historyRows[0].index, 0);
+    assert.equal(historyRows[1].index, 1);
+    assert.equal(historyRows[0].file, '0-create.sql');
+    assert.equal(historyRows[1].file, '1-insert.sql');
+    assert.equal(personRows.length, 3);
+  });
+
+  it('down migrates', async () => {
+    await migratosaurus(pool, {
+      directory: `${__dirname}/migrations`,
+      amountToDownMigrate: 1,
+      shouldUpMigrate: false,
+    });
+
+    const historyRows = await queryHistory();
+    const personRows = await queryPersons();
+
+    assert.equal(historyRows.length, 1);
+    assert.equal(historyRows[0].index, 0);
+    assert.equal(historyRows[0].file, '0-create.sql');
+    assert.equal(personRows.length, 0);
+  });
+
+  it('up migrates', async () => {
+    await migratosaurus(pool, { directory: `${__dirname}/migrations` });
+
+    const historyRows = await queryHistory();
+    const personRows = await queryPersons();
+
+    assert.equal(historyRows.length, 2);
+    assert.equal(historyRows[0].index, 0);
+    assert.equal(historyRows[1].index, 1);
+    assert.equal(historyRows[0].file, '0-create.sql');
+    assert.equal(historyRows[1].file, '1-insert.sql');
+    assert.equal(personRows.length, 3);
   });
 });
