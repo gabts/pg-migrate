@@ -1,6 +1,12 @@
 # 🦖 migratosaurus
 
-A node pg database migration tool.
+An exotically simple database migration tool for node [pg](https://www.npmjs.com/package/pg).
+
+## ☄️ Features
+
+- Dead simple, zero config!
+- Write migrations in .sql files!
+- Lightweight and easy to integrate into workflows!
 
 ## 🌱 Install
 
@@ -14,53 +20,31 @@ Or using [yarn](https://yarnpkg.com/).
 yarn add migratosaurus
 ```
 
-## Sample usage
+You must also install [pg](https://www.npmjs.com/package/pg) and have a [postgres](https://www.postgresql.org/) database setup.
 
-Create database migration files. Defaultly pgup will look for `./sql/` directory, but this can be configured. The file naming convention should be _index_-_name_.sql. A valid migration path would be: `./sql/1-initial-migration.sql`.
+## 🥚 Development
 
-```sql
-CREATE TABLE users (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR (100) NOT NULL
-);
-```
-
-And add a pgup step after initializing your pg instance.
-
-```js
-import { Pool } from 'pg';
-import { migratosaurus } from 'migrate-pg';
-
-const pool = new Pool({
-  connectionString: 'postgres://localhost:5432/database',
-});
-
-(async () => {
-  await migratosaurus(pool);
-})();
-```
-
-## Configuration
-
-The first argument is a [pg](https://www.npmjs.com/package/pg) Pool instance and is required.
-
-The second argument is options but allows you configure pgup.
-
-- `directory` A string value of the path to the directory containing your postgres database migrations in .sql files. Default is "sql".
-- `table` A string value for the name of the table in the database that should store migration history.
-
-## Tests
-
-Run tests:
+Download the project repository and initiate development with the following commands:
 
 ```sh
-DATABASE_URL="postgres://localhost:5432/DATABASE" yarn mocha --verbose
+git clone https://github.com/gabbes/migratosaurus
+cd migratosaurus
+yarn # installs dependencies
+yarn tsc -w # watch /src and compile TypeScript on changes
 ```
 
-## Changelog
+### 🦟 Tests
 
-[Changelog](./CHANGELOG.md)
+To test that any changes did not break the package first ensure that you have a [postgres](https://www.postgresql.org/)s database running. Then run `yarn mocha` with the database connection string as an node env variable.
 
-## Lisence
+```sh
+DATABASE_URL="postgres://localhost:5432/database" yarn mocha --verbose
+```
+
+## 🌋 Changelog
+
+Changes are tracked [here](./CHANGELOG.md).
+
+## 🐣 License
 
 [MIT](./LICENSE)
