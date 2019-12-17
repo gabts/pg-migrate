@@ -3,7 +3,6 @@
 .npmignore
 .prettierrc
 *.log
-dist/
 node_modules/
 src/
 test/
