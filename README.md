@@ -1,14 +1,14 @@
-# 🦖 migratosaurus
+<h1 align="center">🦖 migratosaurus 🦖</h1>
+<p align="center">An exotically simple database migration tool for node [pg](https://www.npmjs.com/package/pg).</p>
+<br />
 
-An exotically simple database migration tool for node [pg](https://www.npmjs.com/package/pg).
-
-## ☄️ Features
+## 🌋 Features
 
 - Dead simple, zero config!
 - Write migrations in .sql files!
 - Lightweight and easy to integrate into workflows!
 
-## 🌱 Install
+## 🌍 Install
 
 ```sh
 npm install migratosaurus
@@ -20,9 +20,13 @@ Or using [yarn](https://yarnpkg.com/).
 yarn add migratosaurus
 ```
 
-You must also install [pg](https://www.npmjs.com/package/pg) and have a [postgres](https://www.postgresql.org/) database setup.
+Your environment should also have [pg](https://www.npmjs.com/package/pg) installed and have a [postgres](https://www.postgresql.org/) database setup.
 
-## 🥚 Development
+## 🧬 Usage
+
+_Coming soon..._
+
+## 👩‍🔬 Development
 
 Download the project repository and initiate development with the following commands:
 
@@ -30,18 +34,18 @@ Download the project repository and initiate development with the following comm
 git clone https://github.com/gabbes/migratosaurus
 cd migratosaurus
 yarn # installs dependencies
-yarn tsc -w # watch /src and compile TypeScript on changes
+yarn tsc -w # watch and compile TypeScript on changes
 ```
 
-### 🦟 Tests
+### 🦟 Testing
 
-To test that any changes did not break the package first ensure that you have a [postgres](https://www.postgresql.org/)s database running. Then run `yarn mocha` with the database connection string as an node env variable.
+To test that any changes did not break the package first ensure that you have a [PostgreSQL](https://www.postgresql.org/) database running. Then run `yarn mocha` with the database connection string as an node env variable.
 
 ```sh
 DATABASE_URL="postgres://localhost:5432/database" yarn mocha --verbose
 ```
 
-## 🌋 Changelog
+## ☄️ Changelog
 
 Changes are tracked [here](./CHANGELOG.md).
 
