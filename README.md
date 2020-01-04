@@ -1,4 +1,4 @@
-<h1 align="center">🦖 migratosaurus 🦖</h1>
+<h1 align="center">🦖 migratorosaurus 🦖</h1>
 <p align="center">An exotically simple database migration tool for node [pg](https://www.npmjs.com/package/pg).</p>
 <br />
 
@@ -11,13 +11,13 @@
 ## 🌍 Install
 
 ```sh
-npm install migratosaurus
+npm install migratorosaurus
 ```
 
 Or using [yarn](https://yarnpkg.com/).
 
 ```sh
-yarn add migratosaurus
+yarn add migratorosaurus
 ```
 
 Your environment should also have [pg](https://www.npmjs.com/package/pg) installed and have a [postgres](https://www.postgresql.org/) database setup.
@@ -31,8 +31,8 @@ _Coming soon..._
 Download the project repository and initiate development with the following commands:
 
 ```sh
-git clone https://github.com/gabbes/migratosaurus
-cd migratosaurus
+git clone https://github.com/gabts/migratorosaurus
+cd migratorosaurus
 yarn # installs dependencies
 yarn tsc -w # watch and compile TypeScript on changes
 ```

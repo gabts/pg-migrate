@@ -1,16 +1,16 @@
 {
-  "name": "migratosaurus",
-  "version": "0.0.1",
-  "description": "A node pg database migration tool.",
+  "name": "migratorosaurus",
+  "version": "1.0.0",
+  "description": "An exotically simple PostgreSQL database migration tool for Node!",
   "author": "Gabriel Toll Stålbom <gabtost@gmail.com>",
   "license": "MIT",
   "main": "dist/index.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gabbes/migratosaurus.git"
+    "url": "git+https://github.com/gabts/migratorosaurus.git"
   },
   "bugs": {
-    "url": "https://github.com/gabbes/migratosaurus/issues"
+    "url": "https://github.com/gabts/migratorosaurus/issues"
   },
   "keywords": [
     "pg",
