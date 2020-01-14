@@ -21,14 +21,14 @@
   ],
   "devDependencies": {
     "@types/mocha": "^5.2.7",
-    "@types/node": "^12.12.20",
-    "@types/pg": "^7.11.2",
-    "mocha": "^6.2.2",
-    "pg": "^7.15.0",
+    "@types/node": "^13.1.6",
+    "@types/pg": "^7.14.1",
+    "mocha": "^7.0.0",
+    "pg": "^7.17.1",
     "prettier": "^1.19.1",
-    "typescript": "^3.7.3"
+    "typescript": "^3.7.4"
   },
   "peerDependencies": {
-    "pg": "^7.15.0"
+    "pg": "^7.17.1"
   }
 }
