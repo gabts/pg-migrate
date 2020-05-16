@@ -14,9 +14,11 @@ const parseMatch = {
 };
 
 function parseMigration(sql: string, direction: 'up' | 'down') {
-  return sql
-    .split(/(?=--.*[(down|up)]-migration)/g)
-    .find((str) => str.match(parseMatch[direction]));
+  return (
+    sql
+      .split(/(?=--.*[(down|up)]-migration)/g)
+      .find((str) => str.match(parseMatch[direction])) || ''
+  );
 }
 
 function getMigrationFiles(dir: string) {
@@ -36,19 +38,25 @@ function getMigrationFiles(dir: string) {
   );
 }
 
-async function initialize(pool: Pool, table: string) {
+async function initialize(
+  pool: Pool,
+  log: (...args: any) => void,
+  table: string
+) {
   const client = await pool.connect();
 
   // Check if migrations table exists
   const migrationTableQueryResult = await client.query(`
-    SELECT COUNT (*)
-    FROM information_schema.tables
-    WHERE table_name = '${table}';
+    SELECT EXISTS (
+      SELECT *
+      FROM information_schema.tables
+      WHERE table_name = '${table}'
+    );
   `);
 
   // If migrations table does not exist, create it
-  if (migrationTableQueryResult.rows[0].count !== '1') {
-    console.log('🚧  performing first time setup');
+  if (!migrationTableQueryResult.rows[0].exists) {
+    log('🚧  performing first time setup');
 
     await client.query(`
       CREATE TABLE ${table}
@@ -63,104 +71,125 @@ async function initialize(pool: Pool, table: string) {
   client.release();
 }
 
-async function migrateDown(
+async function downMigration(
   pool: Pool,
+  log: (...args: any) => void,
   table: string,
   files: MigrationFile[],
-  limit: number
+  lastIndex: number,
+  targetFile: MigrationFile
 ) {
-  const client = await pool.connect();
+  const filesToDownMigrate = files
+    .filter((migration) => {
+      const isLastOrLower = migration.index <= lastIndex;
+      const isTargetOrAbove = targetFile.index <= migration.index;
 
-  const migrationsToDowngrade = await client.query(`
-    SELECT file FROM ${table} ORDER BY index DESC LIMIT ${limit};
-  `);
-
-  const checkFiles = migrationsToDowngrade.rows.map<string>(({ file }) => file);
-
-  files
-    .filter((migration) => checkFiles.includes(migration.file))
+      return isTargetOrAbove && isLastOrLower;
+    })
     .sort((a, b) => (a.index > b.index ? -1 : a.index < b.index ? 1 : 0))
-    .filter((_, index) => index < limit)
-    .forEach(async ({ file, index, path }) => {
+    .map(({ file, index, path }) => {
       const sql = parseMigration(fs.readFileSync(path, 'utf8'), 'down');
-
-      if (!sql) {
-        console.log(`🌋  "${file}" is invalid!`);
-        return;
-      }
-
-      console.log(`⬇️  downgrading > "${file}"`);
-
-      await client.query(
-        sql + `\nDELETE FROM ${table} WHERE index = ${index};`
-      );
+      return { file, index, sql };
     });
 
-  client.release();
-}
-
-async function migrateUp(pool: Pool, table: string, files: MigrationFile[]) {
   const client = await pool.connect();
 
-  const lastMigrationQuery = await client.query(`
-    SELECT index FROM ${table} ORDER BY index DESC LIMIT 1;
-  `);
-
-  const lastMigrationIndex: number = lastMigrationQuery.rows.length
-    ? lastMigrationQuery.rows[0].index
-    : -1;
-
-  files
-    .filter((migration) => migration.index > lastMigrationIndex)
-    .sort((a, b) => (a.index > b.index ? 1 : a.index < b.index ? -1 : 0))
-    .forEach(async ({ file, index, path }) => {
-      const sql = parseMigration(fs.readFileSync(path, 'utf8'), 'up');
-
-      if (!sql) {
-        console.log(`🌋  "${file}" is invalid!`);
-        return;
-      }
-
-      console.log(`⬆️  upgrading   > "${file}"`);
-
-      await client.query(
-        sql +
-          `\nINSERT INTO ${table} ( index, file ) VALUES ( ${index}, '${file}' );`
-      );
-    });
+  for (const { file, index, sql } of filesToDownMigrate) {
+    log(`⬇️  downgrading > "${file}"`);
+    await client.query(sql + `\nDELETE FROM ${table} WHERE index = ${index};`);
+  }
 
   client.release();
 }
 
-export async function migratosaurus(
+async function upMigration(
+  pool: Pool,
+  log: (...args: any) => void,
+  table: string,
+  files: MigrationFile[],
+  lastIndex: number,
+  targetFile?: MigrationFile
+) {
+  const filesToUpMigrate = files
+    .filter((migration) => {
+      const isAboveLast = migration.index > lastIndex;
+
+      const hasTargetAndIsBelow = targetFile
+        ? targetFile.index >= migration.index
+        : true;
+
+      return hasTargetAndIsBelow && isAboveLast;
+    })
+    .sort((a, b) => (a.index > b.index ? 1 : a.index < b.index ? -1 : 0))
+    .map(({ file, index, path }) => {
+      const sql = parseMigration(fs.readFileSync(path, 'utf8'), 'up');
+      return { file, index, sql };
+    });
+
+  const client = await pool.connect();
+
+  for (const { file, index, sql } of filesToUpMigrate) {
+    log(`⬆️  upgrading   > "${file}"`);
+
+    await client.query(
+      sql +
+        `\nINSERT INTO ${table} ( index, file ) VALUES ( ${index}, '${file}' );`
+    );
+  }
+
+  client.release();
+}
+
+export async function migratorosaurus(
   pool: Pool,
   args: {
-    amountToDownMigrate?: number;
     directory?: string;
-    shouldUpMigrate?: boolean;
+    log?: (...args: any) => void;
     table?: string;
+    target?: string;
   } = {}
 ) {
   const {
-    directory = 'sql',
-    amountToDownMigrate = 0,
-    shouldUpMigrate = true,
+    directory = 'migrations',
+    log = () => undefined,
     table = 'migration_history',
+    target,
   } = args;
 
-  console.log('🦖  migratosaurus initiated!');
+  log('🦖  migratorosaurus initiated!');
 
-  await initialize(pool, table);
+  await initialize(pool, log, table);
 
   const files = getMigrationFiles(path.resolve(directory));
 
-  if (amountToDownMigrate) {
-    await migrateDown(pool, table, files, amountToDownMigrate);
+  if (!files.length) {
+    log('🍾  migratorosaurus completed! No files found.');
+    return;
   }
 
-  if (shouldUpMigrate) {
-    await migrateUp(pool, table, files);
+  const client = await pool.connect();
+  const lastMigrationQuery = await client.query(`
+      SELECT index FROM ${table} ORDER BY index DESC LIMIT 1;
+    `);
+  client.release();
+
+  const lastIndex = lastMigrationQuery.rowCount
+    ? lastMigrationQuery.rows[0].index
+    : -1;
+
+  let targetFile: MigrationFile | undefined = undefined;
+
+  if (target) {
+    targetFile = files.find(({ file }) => file === target);
+
+    if (!targetFile) {
+      throw new Error('no such target file');
+    }
   }
 
-  console.log('🍾  migratosaurus completed!');
+  targetFile && targetFile.index <= lastIndex
+    ? await downMigration(pool, log, table, files, lastIndex, targetFile)
+    : await upMigration(pool, log, table, files, lastIndex, targetFile);
+
+  log('🍾  migratorosaurus completed!');
 }
