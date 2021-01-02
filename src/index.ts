@@ -1,5 +1,4 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import { Pool } from 'pg';
 
 interface MigrationFile {
@@ -160,7 +159,7 @@ export async function migratorosaurus(
 
   await initialize(pool, log, table);
 
-  const files = getMigrationFiles(path.resolve(directory));
+  const files = getMigrationFiles(directory);
 
   if (!files.length) {
     log('🍾  migratorosaurus completed! No files found.');
