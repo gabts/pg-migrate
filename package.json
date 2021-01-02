@@ -29,6 +29,6 @@
     "typescript": "^3.9.2"
   },
   "peerDependencies": {
-    "pg": "^7.0.0"
+    "pg": "^7.0.0 || ^8.0.0"
   }
 }
