@@ -1,6 +1,6 @@
 {
   "name": "migratorosaurus",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "An exotically simple PostgreSQL database migration tool for Node!",
   "author": "Gabriel Toll Stålbom <gabtost@gmail.com>",
   "license": "MIT",
