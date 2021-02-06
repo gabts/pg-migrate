@@ -140,7 +140,7 @@ async function upMigration(
 }
 
 export async function migratorosaurus(
-  pool: Pool,
+  connection: string | Pool,
   args: {
     directory?: string;
     log?: (...args: any) => void;
@@ -156,6 +156,11 @@ export async function migratorosaurus(
   } = args;
 
   log('🦖  migratorosaurus initiated!');
+
+  const pool =
+    typeof connection === 'string'
+      ? new Pool({ connectionString: connection })
+      : connection;
 
   await initialize(pool, log, table);
 
