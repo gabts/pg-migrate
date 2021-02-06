@@ -56,7 +56,9 @@ Migrations will be split by up/down comments.
 
 ## 👩‍🔬 Configuration
 
-Optional configuration arguments.
+First argument is a required pg Pool object or a database connection string.
+
+Second argument is an optional configuration object.
 
 - **directory** The directory that contains your migation .sql files. Defaults to "migrations".
 - **log** Function to handle logging, e.g. console.log.
