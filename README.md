@@ -6,19 +6,13 @@ An exotically simple database migration tool for node [pg](https://www.npmjs.com
 ## 🌋 Features
 
 - Dead simple, zero config!
-- Write migrations in .sql files!
+- Write up and down migrations in the same .sql file!
 - Lightweight and easy to integrate into workflows!
 
 ## 🌍 Install
 
 ```sh
 npm install --save migratorosaurus
-```
-
-Or using [yarn](https://yarnpkg.com/).
-
-```sh
-yarn add migratorosaurus
 ```
 
 Your environment should also have [pg](https://www.npmjs.com/package/pg) installed and have a [postgres](https://www.postgresql.org/) database setup.
@@ -28,12 +22,9 @@ Your environment should also have [pg](https://www.npmjs.com/package/pg) install
 In your database migration script file:
 
 ```javascript
-const { Pool } = require('pg');
 const { migratorosaurus } = require('migratorosaurus');
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-migratorosaurus(pool, {
+migratorosaurus('postgres://localhost:5432/database', {
   directory: `sql/migrations`,
   table: 'my_migration_history',
 });
@@ -56,7 +47,7 @@ Migrations will be split by up/down comments.
 
 ## 👩‍🔬 Configuration
 
-First argument is a required pg Pool object or a database connection string.
+First argument is a required pg client configuration.
 
 Second argument is an optional configuration object.
 
@@ -81,7 +72,7 @@ yarn tsc -w # watch and compile TypeScript on changes
 To test that any changes did not break the package first ensure that you have a [PostgreSQL](https://www.postgresql.org/) database running. Then run `yarn mocha` with the database connection string as an node env variable.
 
 ```sh
-DATABASE_URL="postgres://localhost:5432/database" yarn mocha --verbose
+DATABASE_URL="postgres://localhost:5432/database" yarn mocha --verbose --exit
 ```
 
 ## ☄️ License
