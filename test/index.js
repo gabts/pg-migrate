@@ -1,8 +1,8 @@
 const assert = require('assert');
-const { Pool } = require('pg');
+const pg = require('pg');
 const { migratorosaurus } = require('../dist');
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const client = new pg.Client(process.env.DATABASE_URL);
 
 // The default migration history table name used by migratorosaurus
 const defaultMigrationHistoryTable = 'migration_history';
@@ -13,7 +13,7 @@ const customMigrationHistoryTable = 'custom_migration_history';
 /**
  * Select table exists.
  */
-async function queryTableExists(client, tableName) {
+async function queryTableExists(tableName) {
   const res = await client.query(`
     SELECT EXISTS (
       SELECT *
@@ -28,7 +28,7 @@ async function queryTableExists(client, tableName) {
 /**
  * Select all rows in migration history table.
  */
-async function queryHistory(client, tableName = 'migration_history') {
+async function queryHistory(tableName = 'migration_history') {
   const res = await client.query(`SELECT * FROM ${tableName};`);
   return res.rows;
 }
@@ -36,7 +36,7 @@ async function queryHistory(client, tableName = 'migration_history') {
 /**
  * Select all rows in person table.
  */
-async function queryPersons(client) {
+async function queryPersons() {
   const res = await client.query('SELECT * FROM person;');
   return res.rows;
 }
@@ -44,7 +44,7 @@ async function queryPersons(client) {
 /**
  * Drop all tables used by test scripts.
  */
-async function dropTables(client) {
+async function dropTables() {
   await client.query(`
     DROP TABLE IF EXISTS
       ${customMigrationHistoryTable},
@@ -72,11 +72,9 @@ async function assertError(fn) {
  * Assert migration history exists and is empty.
  */
 async function queryAssertMigrationEmpty(migrationHistoryTable) {
-  const client = await pool.connect();
-  assert.ok(!(await queryTableExists(client, 'person')));
-  assert.ok(await queryTableExists(client, migrationHistoryTable));
-  const historyRows = await queryHistory(client, migrationHistoryTable);
-  client.release();
+  assert.ok(!(await queryTableExists('person')));
+  assert.ok(await queryTableExists(migrationHistoryTable));
+  const historyRows = await queryHistory(migrationHistoryTable);
   assert.equal(historyRows.length, 0);
 }
 
@@ -84,11 +82,9 @@ async function queryAssertMigrationEmpty(migrationHistoryTable) {
  * Assert database has successfully migrated up to and including migration 0.
  */
 async function queryAssertMigration0(migrationHistoryTable) {
-  const client = await pool.connect();
-  assert.ok(await queryTableExists(client, migrationHistoryTable));
-  const historyRows = await queryHistory(client, migrationHistoryTable);
-  const personRows = await queryPersons(client);
-  client.release();
+  assert.ok(await queryTableExists(migrationHistoryTable));
+  const historyRows = await queryHistory(migrationHistoryTable);
+  const personRows = await queryPersons();
 
   assert.equal(historyRows.length, 1);
   assert.equal(Object.keys(historyRows[0]).length, 3);
@@ -102,11 +98,9 @@ async function queryAssertMigration0(migrationHistoryTable) {
  * Assert database has successfully migrated up to and including migration 1.
  */
 async function queryAssertMigration1(migrationHistoryTable) {
-  const client = await pool.connect();
-  assert.ok(await queryTableExists(client, migrationHistoryTable));
-  const historyRows = await queryHistory(client, migrationHistoryTable);
-  const personRows = await queryPersons(client);
-  client.release();
+  assert.ok(await queryTableExists(migrationHistoryTable));
+  const historyRows = await queryHistory(migrationHistoryTable);
+  const personRows = await queryPersons();
 
   assert.equal(historyRows.length, 2);
   assert.equal(Object.keys(historyRows[0]).length, 3);
@@ -120,120 +114,114 @@ async function queryAssertMigration1(migrationHistoryTable) {
 
 describe('migratorosaurus', () => {
   before(async () => {
-    const client = await pool.connect();
-    await dropTables(client);
-    client.release();
+    await client.connect();
+    await dropTables();
   });
 
   after(async () => {
-    await pool.end();
+    await client.end();
   });
 
   afterEach(async () => {
-    const client = await pool.connect();
-    await dropTables(client);
-    client.release();
+    await dropTables();
   });
 
   it('throws error on invalid directory', async () => {
     await assertError(() => {
-      return migratorosaurus(pool, { directory: `${__dirname}/iñvàlïd-dîr` });
+      return migratorosaurus(process.env.DATABASE_URL, {
+        directory: `${__dirname}/iñvàlïd-dîr`,
+      });
     });
   });
 
   it('initializes with empty directory', async () => {
-    await migratorosaurus(pool, { directory: `${__dirname}/empty` });
+    await migratorosaurus(process.env.DATABASE_URL, {
+      directory: `${__dirname}/empty`,
+    });
     await queryAssertMigrationEmpty(defaultMigrationHistoryTable);
   });
 
   it('initializes with custom table name', async () => {
-    await migratorosaurus(pool, {
+    await migratorosaurus(process.env.DATABASE_URL, {
       directory: `${__dirname}/empty`,
       table: customMigrationHistoryTable,
     });
-
     await queryAssertMigrationEmpty(customMigrationHistoryTable);
   });
 
   it('initializes and up migrates all', async () => {
-    await migratorosaurus(pool, { directory: `${__dirname}/migrations` });
+    await migratorosaurus(process.env.DATABASE_URL, {
+      directory: `${__dirname}/migrations`,
+    });
     await queryAssertMigration1(defaultMigrationHistoryTable);
   });
 
   it('initializes with custom table name and up migrates all', async () => {
-    await migratorosaurus(pool, {
+    await migratorosaurus(process.env.DATABASE_URL, {
       directory: `${__dirname}/migrations`,
       table: customMigrationHistoryTable,
     });
-
     await queryAssertMigration1(customMigrationHistoryTable);
   });
 
   it('throws error on invalid target', async () => {
     let result = null;
-
     try {
-      await migratorosaurus(pool, {
+      await migratorosaurus(process.env.DATABASE_URL, {
         directory: `${__dirname}/migrations`,
         target: '0-crëâté.skl',
       });
     } catch (error) {
       result = error;
     }
-
     assert.ok(result instanceof Error);
   });
 
   it('initializes with migration target', async () => {
-    await migratorosaurus(pool, {
+    await migratorosaurus(process.env.DATABASE_URL, {
       directory: `${__dirname}/migrations`,
       target: '0-create.sql',
     });
-
     await queryAssertMigration0(defaultMigrationHistoryTable);
   });
 
   it('down migrates one migration', async () => {
-    await migratorosaurus(pool, { directory: `${__dirname}/migrations` });
-
-    await migratorosaurus(pool, {
+    await migratorosaurus(process.env.DATABASE_URL, {
+      directory: `${__dirname}/migrations`,
+    });
+    await migratorosaurus(process.env.DATABASE_URL, {
       directory: `${__dirname}/migrations`,
       target: '1-insert.sql',
     });
-
     await queryAssertMigration0(defaultMigrationHistoryTable);
   });
 
   it('up migrates all migrations then down migrates all', async () => {
-    await migratorosaurus(pool, { directory: `${__dirname}/migrations` });
-
+    await migratorosaurus(process.env.DATABASE_URL, {
+      directory: `${__dirname}/migrations`,
+    });
     await queryAssertMigration1(defaultMigrationHistoryTable);
-
-    await migratorosaurus(pool, {
+    await migratorosaurus(process.env.DATABASE_URL, {
       directory: `${__dirname}/migrations`,
       target: '0-create.sql',
     });
-
     await queryAssertMigrationEmpty(defaultMigrationHistoryTable);
   });
 
   it('down migrate one migration then up migrate same migration', async () => {
-    await migratorosaurus(pool, { directory: `${__dirname}/migrations` });
-
+    await migratorosaurus(process.env.DATABASE_URL, {
+      directory: `${__dirname}/migrations`,
+    });
     await queryAssertMigration1(defaultMigrationHistoryTable);
-
-    await migratorosaurus(pool, {
+    await migratorosaurus(process.env.DATABASE_URL, {
       directory: `${__dirname}/migrations`,
       target: '1-insert.sql',
     });
-
     await queryAssertMigration0(defaultMigrationHistoryTable);
-
-    await migratorosaurus(pool, {
+    await migratorosaurus(process.env.DATABASE_URL, {
       directory: `${__dirname}/migrations`,
       target: '1-insert.sql',
     });
-
     await queryAssertMigration1(defaultMigrationHistoryTable);
   });
 });
