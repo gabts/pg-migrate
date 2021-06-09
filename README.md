@@ -33,17 +33,17 @@ migratorosaurus('postgres://localhost:5432/database', {
 Sample migration file:
 
 ```sql
--- up-migration
+-- % up migration % --
 CREATE TABLE person (
   id SERIAL PRIMARY KEY,
   name varchar(100) NOT NULL
 );
 
--- down-migration
+-- % down migration % --
 DROP TABLE person;
 ```
 
-Migrations will be split by up/down comments.
+Migrations will be split by up/down comments. Ensure they follow above pattern.
 
 ## 👩‍🔬 Configuration
 

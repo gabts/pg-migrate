@@ -1,7 +1,7 @@
--- up-migration
+-- % up-migration % --
 INSERT INTO person (name)
-  VALUES ('gabriel'), ('david'), ('frasse');
+VALUES ('gabriel'), ('david'), ('frasse');
 
--- down-migration
+-- % down-migration % --
 DELETE FROM person
 WHERE name IN ('gabriel', 'david', 'frasse');

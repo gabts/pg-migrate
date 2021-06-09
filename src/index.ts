@@ -8,14 +8,14 @@ interface MigrationFile {
 }
 
 const parseMatch = {
-  up: /^--.*up-migration/,
-  down: /^--.*down-migration/,
+  up: /^--.*%.*up.*migration.*%.*--/,
+  down: /^--.*%.*down.*migration.*%.*--/,
 };
 
 function parseMigration(sql: string, direction: 'up' | 'down') {
   return (
     sql
-      .split(/(?=--.*[(down|up)]-migration)/g)
+      .split(/(?=--.*%.*[(down|up)].*migration.*%.*--)/g)
       .find((str) => str.match(parseMatch[direction])) || ''
   );
 }
