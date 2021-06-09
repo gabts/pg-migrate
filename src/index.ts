@@ -53,7 +53,7 @@ async function initialize(
 
   // If migrations table does not exist, create it
   if (!migrationTableQueryResult.rows[0].exists) {
-    log('🚧  performing first time setup');
+    log('🥚 performing first time setup');
     await client.query(`
       CREATE TABLE ${tableName}
       (
@@ -86,7 +86,7 @@ async function downMigration(
     });
 
   for (const { file, index, sql } of filesToDownMigrate) {
-    log(`⬇️  downgrading > "${file}"`);
+    log(`↓  downgrading > "${file}"`);
     await client.query(sql + `\nDELETE FROM ${table} WHERE index = ${index};`);
   }
 }
@@ -114,7 +114,7 @@ async function upMigration(
     });
 
   for (const { file, index, sql } of filesToUpMigrate) {
-    log(`⬆️  upgrading   > "${file}"`);
+    log(`↑  upgrading > "${file}"`);
     await client.query(
       sql +
         `\nINSERT INTO ${table} ( index, file ) VALUES ( ${index}, '${file}' );`
@@ -137,7 +137,7 @@ export async function migratorosaurus(
     table = 'migration_history',
     target,
   } = args;
-  log('🦖  migratorosaurus initiated!');
+  log('🦖 migratorosaurus initiated!');
   const client = new pg.Client(clientConfig);
   await client.connect();
   await initialize(client, log, table);
@@ -145,7 +145,7 @@ export async function migratorosaurus(
 
   if (!files.length) {
     await client.end();
-    log('🍾  migratorosaurus completed! No files found.');
+    log('🌋 migratorosaurus completed! no files found.');
     return;
   }
 
@@ -171,5 +171,5 @@ export async function migratorosaurus(
     : await upMigration(client, log, table, files, lastIndex, targetFile);
 
   await client.end();
-  log('🍾  migratorosaurus completed!');
+  log('🌋 migratorosaurus completed!');
 }
