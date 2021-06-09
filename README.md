@@ -30,7 +30,13 @@ migratorosaurus('postgres://localhost:5432/database', {
 });
 ```
 
-Sample migration file:
+Migration file should be named by the following pattern <index>-<name>.sql, for example: `1-create.sql`. It is important that file indices are in the correct numerical order. To ease this process you can use the built in cli to create a new migration:
+
+```sh
+migratorosaurus --directory migrations --name create-person-table
+```
+
+Sample migration file contents:
 
 ```sql
 -- % up migration % --
