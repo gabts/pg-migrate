@@ -18,6 +18,9 @@
     "database",
     "migration"
   ],
+  "bin": {
+    "migratorosaurus": "./bin/cli.js"
+  },
   "scripts": {
     "prepublish": "yarn tsc"
   },
