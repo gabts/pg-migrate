@@ -166,9 +166,11 @@ export async function migratorosaurus(
     }
   }
 
+  await client.query(`BEGIN; LOCK TABLE ${table} IN EXCLUSIVE MODE;`);
   targetFile && targetFile.index <= lastIndex
     ? await downMigration(client, log, table, files, lastIndex, targetFile)
     : await upMigration(client, log, table, files, lastIndex, targetFile);
+  await client.query('COMMIT;');
 
   await client.end();
   log('🌋 migratorosaurus completed!');
