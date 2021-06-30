@@ -30,8 +30,8 @@ if (!opts.name) throw new Error('Name flag (--name, -n) is required');
 let index = 0;
 const files = fs.readdirSync(opts.directory);
 for (const file of files) {
-  const fileIndex = file.split('-')[0];
-  if (Number(fileIndex) && fileIndex >= index) index = Number(fileIndex) + 1;
+  const fileIndex = parseInt(file.split('-')[0], 10);
+  if (!Number.isNaN(fileIndex) && fileIndex >= index) index = fileIndex + 1;
 }
 
 const filePath = `${opts.directory}/${index}-${opts.name}.sql`;
