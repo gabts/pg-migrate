@@ -25,12 +25,12 @@
     "prepublish": "yarn tsc"
   },
   "devDependencies": {
-    "@types/mocha": "^7.0.2",
-    "@types/node": "^14.0.1",
-    "@types/pg": "^7.14.1",
-    "mocha": "^7.1.2",
-    "pg": "^8.2.0",
-    "prettier": "^2.0.5",
-    "typescript": "^3.9.2"
+    "@types/mocha": "^10.0.1",
+    "@types/node": "^16",
+    "@types/pg": "^8.6.6",
+    "mocha": "^10.2.0",
+    "pg": "^8.8.0",
+    "prettier": "^2.8.3",
+    "typescript": "^4.9.4"
   }
 }

@@ -138,39 +138,46 @@ export async function migratorosaurus(
     target,
   } = args;
   log('🦖 migratorosaurus initiated!');
-  const client = new pg.Client(clientConfig);
-  await client.connect();
-  await initialize(client, log, table);
-  const files = getMigrationFiles(directory);
 
+  const files = getMigrationFiles(directory);
   if (!files.length) {
-    await client.end();
     log('🌋 migratorosaurus completed! no files found.');
     return;
   }
 
-  const lastMigrationQuery = await client.query(`
-    SELECT index FROM ${table} ORDER BY index DESC LIMIT 1;
-  `);
+  const client = new pg.Client(clientConfig);
 
-  const lastIndex = lastMigrationQuery.rowCount
-    ? lastMigrationQuery.rows[0].index
-    : -1;
+  try {
+    await client.connect();
+    await initialize(client, log, table);
 
-  let targetFile: MigrationFile | undefined = undefined;
-  if (target) {
-    targetFile = files.find(({ file }) => file === target);
-    if (!targetFile) {
-      await client.end();
-      throw new Error(`migratorosaurus: no such target file "${targetFile}"`);
+    const lastMigrationQuery = await client.query(
+      `SELECT index FROM ${table} ORDER BY index DESC LIMIT 1;`
+    );
+
+    const lastIndex = lastMigrationQuery.rowCount
+      ? lastMigrationQuery.rows[0].index
+      : -1;
+
+    let targetFile: MigrationFile | undefined = undefined;
+    if (target) {
+      targetFile = files.find(({ file }) => file === target);
+      if (!targetFile) {
+        await client.end();
+        throw new Error(`migratorosaurus: no such target file "${targetFile}"`);
+      }
     }
-  }
 
-  await client.query(`BEGIN; LOCK TABLE ${table} IN EXCLUSIVE MODE;`);
-  targetFile && targetFile.index <= lastIndex
-    ? await downMigration(client, log, table, files, lastIndex, targetFile)
-    : await upMigration(client, log, table, files, lastIndex, targetFile);
-  await client.query('COMMIT;');
+    await client.query(`BEGIN; LOCK TABLE ${table} IN EXCLUSIVE MODE;`);
+    targetFile && targetFile.index <= lastIndex
+      ? await downMigration(client, log, table, files, lastIndex, targetFile)
+      : await upMigration(client, log, table, files, lastIndex, targetFile);
+    await client.query('COMMIT;');
+  } catch(error) {
+    log('☄️ migratorosaurus threw error!');
+    await client.end();
+    throw error;
+  }
 
   await client.end();
   log('🌋 migratorosaurus completed!');

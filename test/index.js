@@ -69,6 +69,14 @@ async function assertError(fn) {
 }
 
 /**
+ * Assert person and migration history tables does not exist.
+ */
+async function queryAssertMigrationDoesntExist(migrationHistoryTable) {
+  assert.ok(!(await queryTableExists('person')));
+  assert.ok(!(await queryTableExists(migrationHistoryTable)));
+}
+
+/**
  * Assert migration history exists and is empty.
  */
 async function queryAssertMigrationEmpty(migrationHistoryTable) {
@@ -135,18 +143,26 @@ describe('migratorosaurus', () => {
   });
 
   it('initializes with empty directory', async () => {
-    await migratorosaurus(process.env.DATABASE_URL, {
-      directory: `${__dirname}/empty`,
-    });
-    await queryAssertMigrationEmpty(defaultMigrationHistoryTable);
+    try {
+      await migratorosaurus(process.env.DATABASE_URL, {
+        directory: `${__dirname}/empty`,
+      });
+    } catch(error) {
+      // expected
+    }
+    await queryAssertMigrationDoesntExist(defaultMigrationHistoryTable);
   });
 
   it('initializes with custom table name', async () => {
-    await migratorosaurus(process.env.DATABASE_URL, {
-      directory: `${__dirname}/empty`,
-      table: customMigrationHistoryTable,
-    });
-    await queryAssertMigrationEmpty(customMigrationHistoryTable);
+    try {
+      await migratorosaurus(process.env.DATABASE_URL, {
+        directory: `${__dirname}/empty`,
+        table: customMigrationHistoryTable,
+      });
+    } catch(error) {
+      // expected
+    }
+    await queryAssertMigrationDoesntExist(customMigrationHistoryTable);
   });
 
   it('initializes and up migrates all', async () => {
@@ -223,5 +239,17 @@ describe('migratorosaurus', () => {
       target: '1-insert.sql',
     });
     await queryAssertMigration1(defaultMigrationHistoryTable);
+  });
+
+  it('ends connection and throws error on postgres error', async () => {
+    try {
+      await migratorosaurus(process.env.DATABASE_URL, {
+        directory: `${__dirname}/broken-migrations`,
+      });
+    }catch(e) {
+      // expected
+      return;
+    }
+    throw "Should not reach this";
   });
 });

@@ -78,7 +78,7 @@ yarn tsc -w # watch and compile TypeScript on changes
 To test that any changes did not break the package first ensure that you have a [PostgreSQL](https://www.postgresql.org/) database running. Then run `yarn mocha` with the database connection string as an node env variable.
 
 ```sh
-DATABASE_URL="postgres://localhost:5432/database" yarn mocha --verbose --exit
+DATABASE_URL="postgres://localhost:5432/database" yarn mocha --verbose
 ```
 
 ## ☄️ License
