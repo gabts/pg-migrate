@@ -69,16 +69,16 @@ Download the project repository and initiate development with the following comm
 ```sh
 git clone https://github.com/gabts/migratorosaurus
 cd migratorosaurus
-yarn # installs dependencies
-yarn tsc -w # watch and compile TypeScript on changes
+npm install # installs dependencies
+npm run build:watch # watch and compile TypeScript on changes
 ```
 
 ### 🦟 Testing
 
-To test that any changes did not break the package first ensure that you have a [PostgreSQL](https://www.postgresql.org/) database running. Then run `yarn mocha` with the database connection string as an node env variable.
+To test that any changes did not break the package first ensure that you have a [PostgreSQL](https://www.postgresql.org/) database running. Then run `npm run test` with the database connection string as an node env variable.
 
 ```sh
-DATABASE_URL="postgres://localhost:5432/database" yarn mocha --verbose
+DATABASE_URL="postgres://localhost:5432/database" npm run test
 ```
 
 ## ☄️ License

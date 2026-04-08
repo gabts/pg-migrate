@@ -22,7 +22,10 @@
     "migratorosaurus": "./bin/cli.js"
   },
   "scripts": {
-    "prepublish": "yarn tsc"
+    "build": "tsc",
+    "build:watch": "tsc -w",
+    "prepublish": "npm run build",
+    "test": "mocha --verbose"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.1",
