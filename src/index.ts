@@ -39,18 +39,43 @@ function qualifyTableName({ schema, table }: TableNameParts) {
   return schema ? `${schema}.${table}` : table;
 }
 
-const parseMatch = {
-  up: /^--.*%.*up.*migration.*%.*--/,
-  down: /^--.*%.*down.*migration.*%.*--/,
+const migrationMarkers = {
+  up: "-- % up-migration % --",
+  down: "-- % down-migration % --",
 };
 const migrationFilePattern = /^\d+(?:\.\d+)?(?:[-_.][A-Za-z0-9_-]+)*\.sql$/;
 
-function parseMigration(sql: string, direction: "up" | "down") {
-  return (
-    sql
-      .split(/(?=--.*%.*[(down|up)].*migration.*%.*--)/g)
-      .find((str) => str.match(parseMatch[direction])) || ""
-  );
+function parseMigration(sql: string, direction: "up" | "down", file: string) {
+  const upMarker = migrationMarkers.up;
+  const downMarker = migrationMarkers.down;
+  const upMarkerIndex = sql.indexOf(upMarker);
+  const downMarkerIndex = sql.indexOf(downMarker);
+
+  if (upMarkerIndex === -1 || downMarkerIndex === -1) {
+    throw new Error(`Invalid migration file contents: ${file}`);
+  }
+
+  if (
+    sql.indexOf(upMarker, upMarkerIndex + upMarker.length) !== -1 ||
+    sql.indexOf(downMarker, downMarkerIndex + downMarker.length) !== -1
+  ) {
+    throw new Error(`Invalid migration file contents: ${file}`);
+  }
+
+  if (upMarkerIndex > downMarkerIndex) {
+    throw new Error(`Invalid migration file contents: ${file}`);
+  }
+
+  const upSql = sql
+    .slice(upMarkerIndex + upMarker.length, downMarkerIndex)
+    .trim();
+  const downSql = sql.slice(downMarkerIndex + downMarker.length).trim();
+
+  if (!upSql || !downSql) {
+    throw new Error(`Invalid migration file contents: ${file}`);
+  }
+
+  return direction === "up" ? upSql : downSql;
 }
 
 function parseMigrationDetails(file: string, dir: string): MigrationFile {
@@ -138,15 +163,13 @@ async function downMigration(
     })
     .sort((a, b) => (a.index > b.index ? -1 : a.index < b.index ? 1 : 0))
     .map(({ file, index, path }) => {
-      const sql = parseMigration(fs.readFileSync(path, "utf8"), "down");
+      const sql = parseMigration(fs.readFileSync(path, "utf8"), "down", file);
       return { file, index, sql };
     });
 
   for (const { file, index, sql } of filesToDownMigrate) {
     log(`↓  downgrading > "${file}"`);
-    if (sql.trim()) {
-      await client.query(sql);
-    }
+    await client.query(sql);
     await client.query(`DELETE FROM ${qualifiedTableName} WHERE index = $1;`, [
       index,
     ]);
@@ -172,15 +195,13 @@ async function upMigration(
     })
     .sort((a, b) => (a.index > b.index ? 1 : a.index < b.index ? -1 : 0))
     .map(({ file, index, path }) => {
-      const sql = parseMigration(fs.readFileSync(path, "utf8"), "up");
+      const sql = parseMigration(fs.readFileSync(path, "utf8"), "up", file);
       return { file, index, sql };
     });
 
   for (const { file, index, sql } of filesToUpMigrate) {
     log(`↑  upgrading > "${file}"`);
-    if (sql.trim()) {
-      await client.query(sql);
-    }
+    await client.query(sql);
     await client.query(
       `INSERT INTO ${qualifiedTableName} ( index, file ) VALUES ( $1, $2 );`,
       [index, file],

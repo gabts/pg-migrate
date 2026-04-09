@@ -241,6 +241,22 @@ describe("migratorosaurus", () => {
     );
   });
 
+  it("rejects migration files without an up section", async () => {
+    await assertError(() =>
+      migratorosaurus(process.env.DATABASE_URL, {
+        directory: `${__dirname}/missing-up-migration`,
+      }),
+    );
+  });
+
+  it("rejects migration files without a down section", async () => {
+    await assertError(() =>
+      migratorosaurus(process.env.DATABASE_URL, {
+        directory: `${__dirname}/missing-down-migration`,
+      }),
+    );
+  });
+
   it("throws error on invalid target", async () => {
     let result = null;
     try {
