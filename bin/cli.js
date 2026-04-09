@@ -17,7 +17,7 @@ while (i < process.argv.length) {
       break;
     case "-n":
     case "--name":
-      opts.name = process.argv[i + 1].replace(/.sql$/, "");
+      opts.name = process.argv[i + 1].replace(/\.sql$/, "");
       i += 2;
       break;
     default:
@@ -26,6 +26,15 @@ while (i < process.argv.length) {
 }
 
 if (!opts.name) throw new Error("Name flag (--name, -n) is required");
+if (!opts.name.match(/^[A-Za-z0-9_-]+$/)) {
+  throw new Error("Migration name may only use letters, numbers, _ and -");
+}
+if (
+  !fs.existsSync(opts.directory) ||
+  !fs.statSync(opts.directory).isDirectory()
+) {
+  throw new Error(`Migration directory does not exist: ${opts.directory}`);
+}
 
 let index = 0;
 const files = fs.readdirSync(opts.directory);
@@ -35,5 +44,6 @@ for (const file of files) {
 }
 
 const filePath = `${opts.directory}/${index}-${opts.name}.sql`;
-const fileContent = "-- % up migration % --\n\n-- % down migration % --\n";
-fs.writeFileSync(filePath, fileContent);
+const fileContent = "-- % up-migration % --\n\n-- % down-migration % --\n";
+fs.writeFileSync(filePath, fileContent, { flag: "wx" });
+process.stdout.write(`${filePath}\n`);
