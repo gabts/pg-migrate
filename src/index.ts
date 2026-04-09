@@ -178,7 +178,7 @@ export async function migratorosaurus(
       targetFile = files.find(({ file }) => file === target);
       if (!targetFile) {
         await client.end();
-        throw new Error(`migratorosaurus: no such target file "${targetFile}"`);
+        throw new Error(`migratorosaurus: no such target file "${target}"`);
       }
     }
 
