@@ -30,8 +30,14 @@ describe("cli", () => {
   });
 
   it("creates a migration file with the expected markers", () => {
-    const output = runCli(["--directory", tempDir, "--name", "create-person"]);
-    const createdPath = path.join(tempDir, "0-create-person.sql");
+    const output = runCli([
+      "create",
+      "--directory",
+      tempDir,
+      "--name",
+      "create-person",
+    ]);
+    const createdPath = path.join(tempDir, "001-create-person.sql");
 
     assert.equal(output, `${createdPath}\n`);
     assert.equal(
@@ -40,19 +46,73 @@ describe("cli", () => {
     );
   });
 
+  it("prints help text", () => {
+    const output = runCli(["--help"]);
+
+    assert.ok(output.length > 0);
+  });
+
+  it("prints create help text", () => {
+    const output = runCli(["create", "--help"]);
+
+    assert.ok(output.length > 0);
+  });
+
+  it("prints create help text even when help appears after another flag", () => {
+    const output = runCli(["create", "--name", "--help"]);
+
+    assert.ok(output.length > 0);
+  });
+
   it("rejects migration names with unexpected characters", () => {
     assert.throws(
-      () => runCli(["--directory", tempDir, "--name", "create person's"]),
+      () =>
+        runCli(["create", "--directory", tempDir, "--name", "create person's"]),
       /Migration name may only use letters, numbers, _ and -/,
     );
+  });
+
+  it("accepts migration names that start with a hyphen", () => {
+    const output = runCli([
+      "create",
+      "--directory",
+      tempDir,
+      "--name",
+      "-create-person",
+    ]);
+    const createdPath = path.join(tempDir, "001--create-person.sql");
+
+    assert.equal(output, `${createdPath}\n`);
+    assert.ok(fs.existsSync(createdPath));
   });
 
   it("rejects missing migration directories", () => {
     const missingDir = path.join(tempDir, "missing");
 
     assert.throws(
-      () => runCli(["--directory", missingDir, "--name", "create-person"]),
+      () =>
+        runCli([
+          "create",
+          "--directory",
+          missingDir,
+          "--name",
+          "create-person",
+        ]),
       new RegExp(`Migration directory does not exist: ${missingDir}`),
+    );
+  });
+
+  it("rejects missing name flag values", () => {
+    assert.throws(
+      () => runCli(["create", "--directory", tempDir, "--name"]),
+      /Name flag \(\-\-name, -n\) requires a value/,
+    );
+  });
+
+  it("rejects missing directory flag values", () => {
+    assert.throws(
+      () => runCli(["create", "--directory"]),
+      /Directory flag \(\-\-directory, -d\) requires a value/,
     );
   });
 
@@ -60,10 +120,86 @@ describe("cli", () => {
     fs.writeFileSync(path.join(tempDir, "000-initial.sql"), "existing\n");
     fs.writeFileSync(path.join(tempDir, "2-existing.sql"), "existing\n");
 
-    const output = runCli(["--directory", tempDir, "--name", "create-person"]);
-    const createdPath = path.join(tempDir, "3-create-person.sql");
+    const output = runCli([
+      "create",
+      "--directory",
+      tempDir,
+      "--name",
+      "create-person",
+    ]);
+    const createdPath = path.join(tempDir, "003-create-person.sql");
 
     assert.equal(output, `${createdPath}\n`);
     assert.ok(fs.existsSync(createdPath));
+  });
+
+  it("supports customizing zero-padding width", () => {
+    const output = runCli([
+      "create",
+      "--directory",
+      tempDir,
+      "--pad-width",
+      "5",
+      "--name",
+      "create-person",
+    ]);
+    const createdPath = path.join(tempDir, "00001-create-person.sql");
+
+    assert.equal(output, `${createdPath}\n`);
+    assert.ok(fs.existsSync(createdPath));
+  });
+
+  it("supports disabling zero-padding", () => {
+    fs.writeFileSync(path.join(tempDir, "000-initial.sql"), "existing\n");
+
+    const output = runCli([
+      "create",
+      "--directory",
+      tempDir,
+      "--pad-width",
+      "0",
+      "--name",
+      "create-person",
+    ]);
+    const createdPath = path.join(tempDir, "1-create-person.sql");
+
+    assert.equal(output, `${createdPath}\n`);
+    assert.ok(fs.existsSync(createdPath));
+  });
+
+  it("rejects invalid zero-padding widths", () => {
+    assert.throws(
+      () =>
+        runCli([
+          "create",
+          "--directory",
+          tempDir,
+          "--pad-width",
+          "8",
+          "--name",
+          "create-person",
+        ]),
+      /Pad width flag \(\-\-pad-width, -p\) must be an integer from 0 to 7/,
+    );
+  });
+
+  it("rejects zero-padding widths with trailing characters", () => {
+    assert.throws(
+      () =>
+        runCli([
+          "create",
+          "--directory",
+          tempDir,
+          "--pad-width",
+          "3abc",
+          "--name",
+          "create-person",
+        ]),
+      /Pad width flag \(\-\-pad-width, -p\) must be an integer from 0 to 7/,
+    );
+  });
+
+  it("rejects unknown commands", () => {
+    assert.throws(() => runCli(["unknown"]), /Unknown command: unknown/);
   });
 });
