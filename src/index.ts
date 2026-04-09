@@ -1,5 +1,5 @@
-import * as fs from 'fs';
-import * as pg from 'pg';
+import * as fs from "fs";
+import * as pg from "pg";
 
 interface MigrationFile {
   file: string;
@@ -12,16 +12,16 @@ const parseMatch = {
   down: /^--.*%.*down.*migration.*%.*--/,
 };
 
-function parseMigration(sql: string, direction: 'up' | 'down') {
+function parseMigration(sql: string, direction: "up" | "down") {
   return (
     sql
       .split(/(?=--.*%.*[(down|up)].*migration.*%.*--)/g)
-      .find((str) => str.match(parseMatch[direction])) || ''
+      .find((str) => str.match(parseMatch[direction])) || ""
   );
 }
 
 function parseMigrationDetails(file: string, dir: string): MigrationFile {
-  const parts = file.split('-');
+  const parts = file.split("-");
   if (!parts[0]) {
     throw new Error(`Invalid migration file name: ${file}`);
   }
@@ -54,7 +54,7 @@ function getMigrationFiles(dir: string) {
 async function initialize(
   client: pg.Client,
   log: (...args: any) => void,
-  tableName: string
+  tableName: string,
 ) {
   // Check if migrations table exists
   const migrationTableQueryResult = await client.query(`
@@ -67,7 +67,7 @@ async function initialize(
 
   // If migrations table does not exist, create it
   if (!migrationTableQueryResult.rows[0].exists) {
-    log('🥚 performing first time setup');
+    log("🥚 performing first time setup");
     await client.query(`
       CREATE TABLE ${tableName}
       (
@@ -85,7 +85,7 @@ async function downMigration(
   table: string,
   files: MigrationFile[],
   lastIndex: number,
-  targetFile: MigrationFile
+  targetFile: MigrationFile,
 ) {
   const filesToDownMigrate = files
     .filter((migration) => {
@@ -95,7 +95,7 @@ async function downMigration(
     })
     .sort((a, b) => (a.index > b.index ? -1 : a.index < b.index ? 1 : 0))
     .map(({ file, index, path }) => {
-      const sql = parseMigration(fs.readFileSync(path, 'utf8'), 'down');
+      const sql = parseMigration(fs.readFileSync(path, "utf8"), "down");
       return { file, index, sql };
     });
 
@@ -111,7 +111,7 @@ async function upMigration(
   table: string,
   files: MigrationFile[],
   lastIndex: number,
-  targetFile?: MigrationFile
+  targetFile?: MigrationFile,
 ) {
   const filesToUpMigrate = files
     .filter((migration) => {
@@ -123,7 +123,7 @@ async function upMigration(
     })
     .sort((a, b) => (a.index > b.index ? 1 : a.index < b.index ? -1 : 0))
     .map(({ file, index, path }) => {
-      const sql = parseMigration(fs.readFileSync(path, 'utf8'), 'up');
+      const sql = parseMigration(fs.readFileSync(path, "utf8"), "up");
       return { file, index, sql };
     });
 
@@ -131,7 +131,7 @@ async function upMigration(
     log(`↑  upgrading > "${file}"`);
     await client.query(
       sql +
-        `\nINSERT INTO ${table} ( index, file ) VALUES ( ${index}, '${file}' );`
+        `\nINSERT INTO ${table} ( index, file ) VALUES ( ${index}, '${file}' );`,
     );
   }
 }
@@ -143,19 +143,19 @@ export async function migratorosaurus(
     log?: (...args: any) => void;
     table?: string;
     target?: string;
-  } = {}
+  } = {},
 ) {
   const {
-    directory = 'migrations',
+    directory = "migrations",
     log = () => undefined,
-    table = 'migration_history',
+    table = "migration_history",
     target,
   } = args;
-  log('🦖 migratorosaurus initiated!');
+  log("🦖 migratorosaurus initiated!");
 
   const files = getMigrationFiles(directory);
   if (!files.length) {
-    log('🌋 migratorosaurus completed! no files found.');
+    log("🌋 migratorosaurus completed! no files found.");
     return;
   }
 
@@ -166,7 +166,7 @@ export async function migratorosaurus(
     await initialize(client, log, table);
 
     const lastMigrationQuery = await client.query(
-      `SELECT index FROM ${table} ORDER BY index DESC LIMIT 1;`
+      `SELECT index FROM ${table} ORDER BY index DESC LIMIT 1;`,
     );
 
     const lastIndex = lastMigrationQuery.rowCount
@@ -186,13 +186,13 @@ export async function migratorosaurus(
     targetFile && targetFile.index <= lastIndex
       ? await downMigration(client, log, table, files, lastIndex, targetFile)
       : await upMigration(client, log, table, files, lastIndex, targetFile);
-    await client.query('COMMIT;');
+    await client.query("COMMIT;");
   } catch (error) {
-    log('☄️ migratorosaurus threw error!');
+    log("☄️ migratorosaurus threw error!");
     await client.end();
     throw error;
   }
 
   await client.end();
-  log('🌋 migratorosaurus completed!');
+  log("🌋 migratorosaurus completed!");
 }

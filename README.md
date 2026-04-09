@@ -22,11 +22,11 @@ Your environment should have a [PostgreSQL](https://www.postgresql.org/) databas
 In your database migration script file:
 
 ```javascript
-const { migratorosaurus } = require('migratorosaurus');
+const { migratorosaurus } = require("migratorosaurus");
 
-migratorosaurus('postgres://localhost:5432/database', {
+migratorosaurus("postgres://localhost:5432/database", {
   directory: `sql/migrations`,
-  table: 'my_migration_history',
+  table: "my_migration_history",
 });
 ```
 
