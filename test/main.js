@@ -1,6 +1,6 @@
 const assert = require("assert");
 const pg = require("pg");
-const { migratorosaurus } = require("../dist");
+const { migratorosaurus } = require("../dist/main.js");
 
 const client = new pg.Client(process.env.DATABASE_URL);
 

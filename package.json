@@ -4,7 +4,7 @@
   "description": "An exotically simple database migration tool for Node postgres!",
   "author": "gabts",
   "license": "MIT",
-  "main": "dist/index.js",
+  "main": "dist/main.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/gabts/migratorosaurus.git"
