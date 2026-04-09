@@ -160,10 +160,18 @@ export async function migratorosaurus(
   }
 
   const client = new pg.Client(clientConfig);
+  let transactionStarted = false;
 
   try {
     await client.connect();
+    await client.query("BEGIN;");
+    transactionStarted = true;
+
+    // Serialize migration runners before table initialization so first-run setup
+    // and subsequent migration state reads happen from a single transaction view.
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1));", [table]);
     await initialize(client, log, table);
+    await client.query(`LOCK TABLE ${table} IN EXCLUSIVE MODE;`);
 
     const lastMigrationQuery = await client.query(
       `SELECT index FROM ${table} ORDER BY index DESC LIMIT 1;`,
@@ -177,18 +185,25 @@ export async function migratorosaurus(
     if (target) {
       targetFile = files.find(({ file }) => file === target);
       if (!targetFile) {
-        await client.end();
         throw new Error(`migratorosaurus: no such target file "${target}"`);
       }
     }
 
-    await client.query(`BEGIN; LOCK TABLE ${table} IN EXCLUSIVE MODE;`);
     targetFile && targetFile.index <= lastIndex
       ? await downMigration(client, log, table, files, lastIndex, targetFile)
       : await upMigration(client, log, table, files, lastIndex, targetFile);
+
     await client.query("COMMIT;");
+    transactionStarted = false;
   } catch (error) {
     log("☄️ migratorosaurus threw error!");
+    if (transactionStarted) {
+      try {
+        await client.query("ROLLBACK;");
+      } catch {
+        // Ignore rollback errors and surface the original failure.
+      }
+    }
     await client.end();
     throw error;
   }

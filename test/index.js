@@ -54,6 +54,22 @@ async function dropTables() {
 }
 
 /**
+ * Create an empty migration history table.
+ */
+async function createMigrationHistoryTable(
+  tableName = defaultMigrationHistoryTable,
+) {
+  await client.query(`
+    CREATE TABLE ${tableName}
+    (
+      index integer PRIMARY KEY,
+      file text UNIQUE NOT NULL,
+      date timestamptz NOT NULL DEFAULT now()
+    );
+  `);
+}
+
+/**
  * Assert function throws an error.
  */
 async function assertError(fn) {
@@ -238,6 +254,25 @@ describe("migratorosaurus", () => {
       directory: `${__dirname}/migrations`,
       target: "1-insert.sql",
     });
+    await queryAssertMigration1(defaultMigrationHistoryTable);
+  });
+
+  it("serializes concurrent runners against the same history table", async () => {
+    await createMigrationHistoryTable();
+
+    const results = await Promise.allSettled([
+      migratorosaurus(process.env.DATABASE_URL, {
+        directory: `${__dirname}/concurrent-migrations`,
+      }),
+      migratorosaurus(process.env.DATABASE_URL, {
+        directory: `${__dirname}/concurrent-migrations`,
+      }),
+    ]);
+
+    assert.deepEqual(
+      results.map((result) => result.status),
+      ["fulfilled", "fulfilled"],
+    );
     await queryAssertMigration1(defaultMigrationHistoryTable);
   });
 
