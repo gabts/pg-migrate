@@ -32,10 +32,13 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.1",
-    "@types/node": "^16",
+    "@types/node": "^22.19.17",
     "@types/pg": "^8.20.0",
     "mocha": "^10.2.0",
     "prettier": "^2.8.3",
-    "typescript": "^4.9.4"
+    "typescript": "^6.0.2"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

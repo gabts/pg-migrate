@@ -20,6 +20,24 @@ function parseMigration(sql: string, direction: 'up' | 'down') {
   );
 }
 
+function parseMigrationDetails(file: string, dir: string): MigrationFile {
+  const parts = file.split('-');
+  if (!parts[0]) {
+    throw new Error(`Invalid migration file name: ${file}`);
+  }
+
+  const index = parseInt(parts[0], 10);
+  if (isNaN(index)) {
+    throw new Error(`Invalid migration file name: ${file}`);
+  }
+
+  return {
+    file,
+    index,
+    path: `${dir}/${file}`,
+  };
+}
+
 function getMigrationFiles(dir: string) {
   return (
     fs
@@ -29,11 +47,7 @@ function getMigrationFiles(dir: string) {
       // a dash and some character or nothing, and ending with .sql
       .filter((file) => file.match(/^\d{1,}(\.\d{1,})?(-.*)?\.sql$/))
       // Add an object storing file index, name and path
-      .map<MigrationFile>((file) => ({
-        file,
-        index: parseInt(file.split('-')[0], 10),
-        path: `${dir}/${file}`,
-      }))
+      .map((file) => parseMigrationDetails(file, dir))
   );
 }
 
@@ -173,7 +187,7 @@ export async function migratorosaurus(
       ? await downMigration(client, log, table, files, lastIndex, targetFile)
       : await upMigration(client, log, table, files, lastIndex, targetFile);
     await client.query('COMMIT;');
-  } catch(error) {
+  } catch (error) {
     log('☄️ migratorosaurus threw error!');
     await client.end();
     throw error;

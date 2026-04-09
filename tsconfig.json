@@ -1,11 +1,18 @@
 {
   "compilerOptions": {
     "declaration": true,
-    "module": "commonjs",
-    "moduleResolution": "node",
+    "declarationMap": true,
+    "lib": ["ES2023"],
+    "module": "node20",
+    "noEmitOnError": true,
+    "noUncheckedIndexedAccess": true,
     "outDir": "dist",
+    "rootDir": "src",
+    "skipLibCheck": true,
+    "sourceMap": true,
     "strict": true,
-    "target": "es2018"
+    "target": "ES2023",
+    "types": ["node"]
   },
-  "include": ["./src/**/*"]
+  "include": ["src"]
 }
