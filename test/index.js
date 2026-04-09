@@ -103,6 +103,13 @@ async function assertError(fn) {
 }
 
 /**
+ * Wait for a short period in async tests.
+ */
+async function delay(ms) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
  * Assert person and migration history tables does not exist.
  */
 async function queryAssertMigrationDoesntExist(migrationHistoryTable) {
@@ -241,6 +248,22 @@ describe("migratorosaurus", () => {
     );
   });
 
+  it("rejects migration filenames with decimal indices", async () => {
+    await assertError(() =>
+      migratorosaurus(process.env.DATABASE_URL, {
+        directory: `${__dirname}/decimal-indices`,
+      }),
+    );
+  });
+
+  it("rejects duplicate resolved migration indices", async () => {
+    await assertError(() =>
+      migratorosaurus(process.env.DATABASE_URL, {
+        directory: `${__dirname}/duplicate-indices`,
+      }),
+    );
+  });
+
   it("rejects migration files without an up section", async () => {
     await assertError(() =>
       migratorosaurus(process.env.DATABASE_URL, {
@@ -320,20 +343,60 @@ describe("migratorosaurus", () => {
 
   it("serializes concurrent runners against the same history table", async () => {
     await createMigrationHistoryTable();
+    const lockClient = new pg.Client(process.env.DATABASE_URL);
 
-    const results = await Promise.allSettled([
-      migratorosaurus(process.env.DATABASE_URL, {
-        directory: `${__dirname}/concurrent-migrations`,
-      }),
-      migratorosaurus(process.env.DATABASE_URL, {
-        directory: `${__dirname}/concurrent-migrations`,
-      }),
-    ]);
+    await lockClient.connect();
 
-    assert.deepEqual(
-      results.map((result) => result.status),
-      ["fulfilled", "fulfilled"],
-    );
+    let firstSettled = false;
+    let secondSettled = false;
+    let lockTransactionOpen = false;
+    let firstMigration;
+    let secondMigration;
+
+    try {
+      await lockClient.query("BEGIN;");
+      lockTransactionOpen = true;
+      await lockClient.query("SELECT pg_advisory_xact_lock(hashtext($1));", [
+        defaultMigrationHistoryTable,
+      ]);
+
+      firstMigration = migratorosaurus(process.env.DATABASE_URL, {
+        directory: `${__dirname}/migrations`,
+      }).finally(() => {
+        firstSettled = true;
+      });
+      secondMigration = migratorosaurus(process.env.DATABASE_URL, {
+        directory: `${__dirname}/migrations`,
+      }).finally(() => {
+        secondSettled = true;
+      });
+
+      await delay(100);
+      assert.equal(firstSettled, false);
+      assert.equal(secondSettled, false);
+
+      await lockClient.query("COMMIT;");
+      lockTransactionOpen = false;
+
+      const results = await Promise.allSettled([
+        firstMigration,
+        secondMigration,
+      ]);
+
+      assert.deepEqual(
+        results.map((result) => result.status),
+        ["fulfilled", "fulfilled"],
+      );
+    } finally {
+      if (lockTransactionOpen) {
+        await lockClient.query("ROLLBACK;");
+      }
+      await lockClient.end();
+      if (firstMigration && secondMigration) {
+        await Promise.allSettled([firstMigration, secondMigration]);
+      }
+    }
+
     await queryAssertMigration1(defaultMigrationHistoryTable);
   });
 

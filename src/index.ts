@@ -43,7 +43,7 @@ const migrationMarkers = {
   up: "-- % up-migration % --",
   down: "-- % down-migration % --",
 };
-const migrationFilePattern = /^\d+(?:\.\d+)?(?:[-_.][A-Za-z0-9_-]+)*\.sql$/;
+const migrationFilePattern = /^\d+(?:[-_.][A-Za-z0-9_-]+)*\.sql$/;
 
 function parseMigration(sql: string, direction: "up" | "down", file: string) {
   const upMarker = migrationMarkers.up;
@@ -80,7 +80,7 @@ function parseMigration(sql: string, direction: "up" | "down", file: string) {
 
 function parseMigrationDetails(file: string, dir: string): MigrationFile {
   const parts = file.split("-");
-  if (!parts[0]) {
+  if (!parts[0] || !parts[0].match(/^\d+$/)) {
     throw new Error(`Invalid migration file name: ${file}`);
   }
 
@@ -107,7 +107,22 @@ function getMigrationFiles(dir: string) {
     throw new Error(`Invalid migration file name: ${invalidMigrationFile}`);
   }
 
-  return migrationFiles.map((file) => parseMigrationDetails(file, dir));
+  const parsedMigrationFiles = migrationFiles.map((file) =>
+    parseMigrationDetails(file, dir),
+  );
+  const seenIndices = new Map<number, string>();
+
+  for (const { file, index } of parsedMigrationFiles) {
+    const existingFile = seenIndices.get(index);
+    if (existingFile) {
+      throw new Error(
+        `Duplicate migration index ${index}: ${existingFile} and ${file}`,
+      );
+    }
+    seenIndices.set(index, file);
+  }
+
+  return parsedMigrationFiles;
 }
 
 async function initialize(
