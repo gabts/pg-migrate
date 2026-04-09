@@ -15,7 +15,7 @@ An exotically simple database migration tool for node [pg](https://www.npmjs.com
 npm install --save migratorosaurus
 ```
 
-Your environment should also have [pg](https://www.npmjs.com/package/pg) installed and have a [postgres](https://www.postgresql.org/) database setup.
+Your environment should have a [PostgreSQL](https://www.postgresql.org/) database setup.
 
 ## 🧬 Usage
 
@@ -53,7 +53,7 @@ Migrations will be split by up/down comments. Ensure they follow above pattern.
 
 ## 👩‍🔬 Configuration
 
-First argument is a required pg client configuration.
+First argument is a required PostgreSQL connection string or `pg` client configuration.
 
 Second argument is an optional configuration object.
 
