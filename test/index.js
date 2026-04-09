@@ -9,18 +9,29 @@ const defaultMigrationHistoryTable = "migration_history";
 
 // Used as a custom migration history table name
 const customMigrationHistoryTable = "custom_migration_history";
+const schemaMigrationHistorySchema = "migratorosaurus_test";
+const schemaMigrationHistoryTable = "migration_history";
+const qualifiedMigrationHistoryTable = `${schemaMigrationHistorySchema}.${schemaMigrationHistoryTable}`;
+const missingSchemaMigrationHistoryTable = `missing_migratorosaurus_schema.${schemaMigrationHistoryTable}`;
 
 /**
  * Select table exists.
  */
 async function queryTableExists(tableName) {
-  const res = await client.query(`
+  const [schema, table] = tableName.includes(".")
+    ? tableName.split(".")
+    : [undefined, tableName];
+  const res = await client.query(
+    `
     SELECT EXISTS (
       SELECT *
       FROM information_schema.tables
-      WHERE table_name = '${tableName}'
+      WHERE table_name = $1
+      ${schema ? "AND table_schema = $2" : ""}
     );
-  `);
+  `,
+    schema ? [table, schema] : [table],
+  );
 
   return res.rows[0].exists;
 }
@@ -45,6 +56,9 @@ async function queryPersons() {
  * Drop all tables used by test scripts.
  */
 async function dropTables() {
+  await client.query(
+    `DROP SCHEMA IF EXISTS ${schemaMigrationHistorySchema} CASCADE;`,
+  );
   await client.query(`
     DROP TABLE IF EXISTS
       ${customMigrationHistoryTable},
@@ -59,6 +73,10 @@ async function dropTables() {
 async function createMigrationHistoryTable(
   tableName = defaultMigrationHistoryTable,
 ) {
+  const [schema] = tableName.includes(".") ? tableName.split(".") : [undefined];
+  if (schema) {
+    await client.query(`CREATE SCHEMA IF NOT EXISTS ${schema};`);
+  }
   await client.query(`
     CREATE TABLE ${tableName}
     (
@@ -159,25 +177,17 @@ describe("migratorosaurus", () => {
   });
 
   it("initializes with empty directory", async () => {
-    try {
-      await migratorosaurus(process.env.DATABASE_URL, {
-        directory: `${__dirname}/empty`,
-      });
-    } catch (error) {
-      // expected
-    }
+    await migratorosaurus(process.env.DATABASE_URL, {
+      directory: `${__dirname}/empty`,
+    });
     await queryAssertMigrationDoesntExist(defaultMigrationHistoryTable);
   });
 
   it("initializes with custom table name", async () => {
-    try {
-      await migratorosaurus(process.env.DATABASE_URL, {
-        directory: `${__dirname}/empty`,
-        table: customMigrationHistoryTable,
-      });
-    } catch (error) {
-      // expected
-    }
+    await migratorosaurus(process.env.DATABASE_URL, {
+      directory: `${__dirname}/empty`,
+      table: customMigrationHistoryTable,
+    });
     await queryAssertMigrationDoesntExist(customMigrationHistoryTable);
   });
 
@@ -194,6 +204,41 @@ describe("migratorosaurus", () => {
       table: customMigrationHistoryTable,
     });
     await queryAssertMigration1(customMigrationHistoryTable);
+  });
+
+  it("supports schema-qualified table names", async () => {
+    await createMigrationHistoryTable(qualifiedMigrationHistoryTable);
+    await migratorosaurus(process.env.DATABASE_URL, {
+      directory: `${__dirname}/migrations`,
+      table: qualifiedMigrationHistoryTable,
+    });
+    await queryAssertMigration1(qualifiedMigrationHistoryTable);
+  });
+
+  it("requires schema-qualified table names to use an existing schema", async () => {
+    await assertError(() =>
+      migratorosaurus(process.env.DATABASE_URL, {
+        directory: `${__dirname}/migrations`,
+        table: missingSchemaMigrationHistoryTable,
+      }),
+    );
+  });
+
+  it("rejects unconventional migration table names", async () => {
+    await assertError(() =>
+      migratorosaurus(process.env.DATABASE_URL, {
+        directory: `${__dirname}/migrations`,
+        table: `custom "migration" history`,
+      }),
+    );
+  });
+
+  it("rejects migration filenames with unexpected characters", async () => {
+    await assertError(() =>
+      migratorosaurus(process.env.DATABASE_URL, {
+        directory: `${__dirname}/invalid-filenames`,
+      }),
+    );
   });
 
   it("throws error on invalid target", async () => {
@@ -285,6 +330,6 @@ describe("migratorosaurus", () => {
       // expected
       return;
     }
-    throw "Should not reach this";
+    throw new Error("Should not reach this");
   });
 });

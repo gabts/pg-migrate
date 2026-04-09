@@ -7,10 +7,43 @@ interface MigrationFile {
   path: string;
 }
 
+interface TableNameParts {
+  schema?: string;
+  table: string;
+}
+
+const conventionalTableNamePattern =
+  /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?$/;
+
+function parseTableName(tableName: string): TableNameParts {
+  if (!tableName.match(conventionalTableNamePattern)) {
+    throw new Error(`Invalid migration table name: ${tableName}`);
+  }
+
+  const parts = tableName.split(".");
+  const [firstPart, secondPart] = parts;
+
+  if (!secondPart) {
+    return {
+      table: firstPart!,
+    };
+  }
+
+  return {
+    schema: firstPart!,
+    table: secondPart,
+  };
+}
+
+function qualifyTableName({ schema, table }: TableNameParts) {
+  return schema ? `${schema}.${table}` : table;
+}
+
 const parseMatch = {
   up: /^--.*%.*up.*migration.*%.*--/,
   down: /^--.*%.*down.*migration.*%.*--/,
 };
+const migrationFilePattern = /^\d+(?:\.\d+)?(?:[-_.][A-Za-z0-9_-]+)*\.sql$/;
 
 function parseMigration(sql: string, direction: "up" | "down") {
   return (
@@ -39,16 +72,17 @@ function parseMigrationDetails(file: string, dir: string): MigrationFile {
 }
 
 function getMigrationFiles(dir: string) {
-  return (
-    fs
-      // Read files in migrations directory
-      .readdirSync(dir)
-      // Filter any files that does not start with a number, followed by either
-      // a dash and some character or nothing, and ending with .sql
-      .filter((file) => file.match(/^\d{1,}(\.\d{1,})?(-.*)?\.sql$/))
-      // Add an object storing file index, name and path
-      .map((file) => parseMigrationDetails(file, dir))
+  const files = fs.readdirSync(dir);
+  const migrationFiles = files.filter((file) => file.endsWith(".sql"));
+  const invalidMigrationFile = migrationFiles.find(
+    (file) => !file.match(migrationFilePattern),
   );
+
+  if (invalidMigrationFile) {
+    throw new Error(`Invalid migration file name: ${invalidMigrationFile}`);
+  }
+
+  return migrationFiles.map((file) => parseMigrationDetails(file, dir));
 }
 
 async function initialize(
@@ -56,20 +90,28 @@ async function initialize(
   log: (...args: any) => void,
   tableName: string,
 ) {
+  const tableNameParts = parseTableName(tableName);
+  const qualifiedTableName = qualifyTableName(tableNameParts);
+  const { schema, table } = tableNameParts;
+
   // Check if migrations table exists
-  const migrationTableQueryResult = await client.query(`
+  const migrationTableQueryResult = await client.query(
+    `
     SELECT EXISTS (
       SELECT *
       FROM information_schema.tables
-      WHERE table_name = '${tableName}'
+      WHERE table_name = $1
+      ${schema ? "AND table_schema = $2" : ""}
     );
-  `);
+  `,
+    schema ? [table, schema] : [table],
+  );
 
   // If migrations table does not exist, create it
   if (!migrationTableQueryResult.rows[0].exists) {
     log("🥚 performing first time setup");
     await client.query(`
-      CREATE TABLE ${tableName}
+      CREATE TABLE ${qualifiedTableName}
       (
         index integer PRIMARY KEY,
         file text UNIQUE NOT NULL,
@@ -87,6 +129,7 @@ async function downMigration(
   lastIndex: number,
   targetFile: MigrationFile,
 ) {
+  const qualifiedTableName = qualifyTableName(parseTableName(table));
   const filesToDownMigrate = files
     .filter((migration) => {
       const isLastOrLower = migration.index <= lastIndex;
@@ -101,7 +144,12 @@ async function downMigration(
 
   for (const { file, index, sql } of filesToDownMigrate) {
     log(`↓  downgrading > "${file}"`);
-    await client.query(sql + `\nDELETE FROM ${table} WHERE index = ${index};`);
+    if (sql.trim()) {
+      await client.query(sql);
+    }
+    await client.query(`DELETE FROM ${qualifiedTableName} WHERE index = $1;`, [
+      index,
+    ]);
   }
 }
 
@@ -113,6 +161,7 @@ async function upMigration(
   lastIndex: number,
   targetFile?: MigrationFile,
 ) {
+  const qualifiedTableName = qualifyTableName(parseTableName(table));
   const filesToUpMigrate = files
     .filter((migration) => {
       const isAboveLast = migration.index > lastIndex;
@@ -129,9 +178,12 @@ async function upMigration(
 
   for (const { file, index, sql } of filesToUpMigrate) {
     log(`↑  upgrading > "${file}"`);
+    if (sql.trim()) {
+      await client.query(sql);
+    }
     await client.query(
-      sql +
-        `\nINSERT INTO ${table} ( index, file ) VALUES ( ${index}, '${file}' );`,
+      `INSERT INTO ${qualifiedTableName} ( index, file ) VALUES ( $1, $2 );`,
+      [index, file],
     );
   }
 }
@@ -161,6 +213,7 @@ export async function migratorosaurus(
 
   const client = new pg.Client(clientConfig);
   let transactionStarted = false;
+  const qualifiedTableName = qualifyTableName(parseTableName(table));
 
   try {
     await client.connect();
@@ -171,10 +224,10 @@ export async function migratorosaurus(
     // and subsequent migration state reads happen from a single transaction view.
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1));", [table]);
     await initialize(client, log, table);
-    await client.query(`LOCK TABLE ${table} IN EXCLUSIVE MODE;`);
+    await client.query(`LOCK TABLE ${qualifiedTableName} IN EXCLUSIVE MODE;`);
 
     const lastMigrationQuery = await client.query(
-      `SELECT index FROM ${table} ORDER BY index DESC LIMIT 1;`,
+      `SELECT index FROM ${qualifiedTableName} ORDER BY index DESC LIMIT 1;`,
     );
 
     const lastIndex = lastMigrationQuery.rowCount
