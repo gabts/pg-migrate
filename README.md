@@ -16,10 +16,11 @@ npm install --save migratorosaurus
 ```
 
 Your environment should have a [PostgreSQL](https://www.postgresql.org/) database setup.
+This package requires Node.js `>=22`.
 
-## 🧬 Usage
+## 🧬 Quick Start
 
-In your database migration script file:
+Use it from your app or migration runner:
 
 ```javascript
 const { migratorosaurus } = require("migratorosaurus");
@@ -30,52 +31,85 @@ migratorosaurus("postgres://localhost:5432/database", {
 });
 ```
 
-Migration file should be named by the following pattern <index>-<name>.sql, for example: `1-create.sql`. It is important that file indices are in the correct numerical order. To ease this process you can use the built in cli to create a new migration:
+## 📁 Migration Files
 
-```sh
-migratorosaurus --directory migrations --name create-person-table
-```
+Migration files must use the pattern `<index>-<name>.sql`, for example `1-create.sql` or `001-create-person.sql`.
 
-Sample migration file contents:
+- `<index>` must be a whole number and may include leading zeros, for example `1` or `001`
+- `<name>` may use letters, numbers, `_`, `-`, and `.`
+- Any `.sql` file in the directory that does not match this pattern will cause migration to fail
+- Duplicate resolved indices such as `1-create.sql` and `001-create-again.sql` will cause migration to fail
+
+Each file must contain exactly one `up` marker and one `down` marker, in this order:
 
 ```sql
--- % up migration % --
+-- % up-migration % --
 CREATE TABLE person (
   id SERIAL PRIMARY KEY,
   name varchar(100) NOT NULL
 );
 
--- % down migration % --
+-- % down-migration % --
 DROP TABLE person;
 ```
 
-Migrations will be split by up/down comments. Ensure they follow above pattern.
+Both sections must contain SQL.
+
+## 🛠️ CLI
+
+```sh
+migratorosaurus --help
+```
+
+The built-in CLI currently supports one command:
+
+- `create` creates a new migration file
+
+The CLI creates the next available whole-number index starting at `1` and zero-pads it to 3 digits by default.
+
+Useful commands:
+
+```sh
+migratorosaurus create --help
+migratorosaurus create --directory sql/migrations --name add-users
+migratorosaurus create --directory sql/migrations --pad-width 5 --name add-users
+migratorosaurus create --directory sql/migrations --pad-width 0 --name add-users
+```
+
+`create` command rules:
+
+- `--name` is required
+- CLI-generated migration names may only use letters, numbers, `_`, and `-`
+- `--directory` defaults to `"migrations"`
+- `--pad-width` defaults to `3` and must be an integer from `0` to `7`
+- `--help` and `-h` are boolean flags
+- Unknown commands and unknown flags cause the CLI to fail
 
 ## 👩‍🔬 Configuration
 
-First argument is a required PostgreSQL connection string or `pg` client configuration.
+The first argument is a required PostgreSQL connection string or `pg` client configuration.
+The second argument is an optional configuration object:
 
-Second argument is an optional configuration object.
-
-- **directory** The directory that contains your migation .sql files. Defaults to "migrations".
+- **directory** The directory that contains your migration `.sql` files. Defaults to `"migrations"`.
 - **log** Function to handle logging, e.g. console.log.
-- **table** The name of the database table that stores migration history. Default to "migration_history".
+- **table** The name of the database table that stores migration history. Defaults to `"migration_history"`.
+  Valid values must use conventional PostgreSQL-style names only: `table_name` or `schema_name.table_name`. Table names may only use lowercase letters, numbers, and `_`, and must start with a letter or `_`. If you use a schema-qualified name, the schema must already exist.
 - **target** A specific migration that you would like to up/down migrate. Any migrations between the last migrated migration and the target will be up/down migrated as well.
 
 ## 🚁 Development
 
-Download the project repository and initiate development with the following commands:
+Clone the repository and install dependencies:
 
 ```sh
 git clone https://github.com/gabts/migratorosaurus
 cd migratorosaurus
-npm install # installs dependencies
-npm run build:watch # watch and compile TypeScript on changes
+npm install
+npm run build:watch
 ```
 
 ### 🦟 Testing
 
-To test that any changes did not break the package first ensure that you have a [PostgreSQL](https://www.postgresql.org/) database running. Then run `npm run test` with the database connection string as an node env variable.
+Ensure a [PostgreSQL](https://www.postgresql.org/) database is running, then run the tests with a `DATABASE_URL`:
 
 ```sh
 DATABASE_URL="postgres://localhost:5432/database" npm run test
