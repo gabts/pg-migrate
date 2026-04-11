@@ -12,6 +12,12 @@ interface TableNameParts {
   table: string;
 }
 
+interface MigrationSql {
+  file: string;
+  index: number;
+  sql: string;
+}
+
 const conventionalTableNamePattern =
   /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?$/;
 
@@ -35,7 +41,7 @@ function parseTableName(tableName: string): TableNameParts {
   };
 }
 
-function qualifyTableName({ schema, table }: TableNameParts) {
+function qualifyTableName({ schema, table }: TableNameParts): string {
   return schema ? `${schema}.${table}` : table;
 }
 
@@ -45,7 +51,11 @@ const migrationMarkers = {
 };
 const migrationFilePattern = /^\d+(?:[-_.][A-Za-z0-9_-]+)*\.sql$/;
 
-function parseMigration(sql: string, direction: "up" | "down", file: string) {
+function parseMigration(
+  sql: string,
+  direction: "up" | "down",
+  file: string,
+): string {
   const upMarker = migrationMarkers.up;
   const downMarker = migrationMarkers.down;
   const upMarkerIndex = sql.indexOf(upMarker);
@@ -96,19 +106,19 @@ function parseMigrationDetails(file: string, dir: string): MigrationFile {
   };
 }
 
-function getMigrationFiles(dir: string) {
+function getMigrationFiles(dir: string): MigrationFile[] {
   const files = fs.readdirSync(dir);
-  const migrationFiles = files.filter((file) => file.endsWith(".sql"));
+  const migrationFiles = files.filter((file): boolean => file.endsWith(".sql"));
   const invalidMigrationFile = migrationFiles.find(
-    (file) => !file.match(migrationFilePattern),
+    (file): boolean => !file.match(migrationFilePattern),
   );
 
   if (invalidMigrationFile) {
     throw new Error(`Invalid migration file name: ${invalidMigrationFile}`);
   }
 
-  const parsedMigrationFiles = migrationFiles.map((file) =>
-    parseMigrationDetails(file, dir),
+  const parsedMigrationFiles = migrationFiles.map(
+    (file): MigrationFile => parseMigrationDetails(file, dir),
   );
   const seenIndices = new Map<number, string>();
 
@@ -129,7 +139,7 @@ async function initialize(
   client: pg.Client,
   log: (...args: any) => void,
   tableName: string,
-) {
+): Promise<void> {
   const tableNameParts = parseTableName(tableName);
   const qualifiedTableName = qualifyTableName(tableNameParts);
   const { schema, table } = tableNameParts;
@@ -168,16 +178,18 @@ async function downMigration(
   files: MigrationFile[],
   lastIndex: number,
   targetFile: MigrationFile,
-) {
+): Promise<void> {
   const qualifiedTableName = qualifyTableName(parseTableName(table));
   const filesToDownMigrate = files
-    .filter((migration) => {
+    .filter((migration): boolean => {
       const isLastOrLower = migration.index <= lastIndex;
       const isTargetOrAbove = targetFile.index <= migration.index;
       return isTargetOrAbove && isLastOrLower;
     })
-    .sort((a, b) => (a.index > b.index ? -1 : a.index < b.index ? 1 : 0))
-    .map(({ file, index, path }) => {
+    .sort((a, b): number =>
+      a.index > b.index ? -1 : a.index < b.index ? 1 : 0,
+    )
+    .map(({ file, index, path }): MigrationSql => {
       const sql = parseMigration(fs.readFileSync(path, "utf8"), "down", file);
       return { file, index, sql };
     });
@@ -198,18 +210,20 @@ async function upMigration(
   files: MigrationFile[],
   lastIndex: number,
   targetFile?: MigrationFile,
-) {
+): Promise<void> {
   const qualifiedTableName = qualifyTableName(parseTableName(table));
   const filesToUpMigrate = files
-    .filter((migration) => {
+    .filter((migration): boolean => {
       const isAboveLast = migration.index > lastIndex;
       const hasTargetAndIsBelow = targetFile
         ? targetFile.index >= migration.index
         : true;
       return hasTargetAndIsBelow && isAboveLast;
     })
-    .sort((a, b) => (a.index > b.index ? 1 : a.index < b.index ? -1 : 0))
-    .map(({ file, index, path }) => {
+    .sort((a, b): number =>
+      a.index > b.index ? 1 : a.index < b.index ? -1 : 0,
+    )
+    .map(({ file, index, path }): MigrationSql => {
       const sql = parseMigration(fs.readFileSync(path, "utf8"), "up", file);
       return { file, index, sql };
     });
@@ -232,10 +246,10 @@ export async function migratorosaurus(
     table?: string;
     target?: string;
   } = {},
-) {
+): Promise<void> {
   const {
     directory = "migrations",
-    log = () => undefined,
+    log = (): undefined => undefined,
     table = "migration_history",
     target,
   } = args;
@@ -272,7 +286,7 @@ export async function migratorosaurus(
 
     let targetFile: MigrationFile | undefined = undefined;
     if (target) {
-      targetFile = files.find(({ file }) => file === target);
+      targetFile = files.find(({ file }): boolean => file === target);
       if (!targetFile) {
         throw new Error(`migratorosaurus: no such target file "${target}"`);
       }

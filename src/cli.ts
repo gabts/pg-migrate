@@ -33,7 +33,7 @@ function getFlagValue(
   flags: string,
   args: string[],
   index: number,
-) {
+): string {
   const value = args[index + 1];
   if (value === undefined) {
     throw new Error(`${label} flag (${flags}) requires a value`);
@@ -103,7 +103,7 @@ function parseCreateArgs(args: string[]): CreateOptions {
   return opts;
 }
 
-function createMigration(args: string[]) {
+function createMigration(args: string[]): void {
   const opts = parseCreateArgs(args);
 
   if (!opts.name) {
