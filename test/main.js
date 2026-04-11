@@ -1,4 +1,7 @@
 const assert = require("assert");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 const pg = require("pg");
 const { migratorosaurus } = require("../dist/main.js");
 
@@ -13,6 +16,52 @@ const schemaMigrationHistorySchema = "migratorosaurus_test";
 const schemaMigrationHistoryTable = "migration_history";
 const qualifiedMigrationHistoryTable = `${schemaMigrationHistorySchema}.${schemaMigrationHistoryTable}`;
 const missingSchemaMigrationHistoryTable = `missing_migratorosaurus_schema.${schemaMigrationHistoryTable}`;
+const tempMigrationDirectories = [];
+
+const createPersonMigration = `-- % up-migration % --
+CREATE TABLE person (
+  id SERIAL PRIMARY KEY,
+  name varchar(100) NOT NULL
+);
+
+-- % down-migration % --
+DROP TABLE person;
+`;
+
+const insertPeopleMigration = `-- % up-migration % --
+INSERT INTO person (name)
+VALUES ('gabriel'), ('david'), ('frasse');
+
+-- % down-migration % --
+DELETE FROM person
+WHERE name IN ('gabriel', 'david', 'frasse');
+`;
+
+function createMigrationDirectory(files = {}) {
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "migratorosaurus-migrations-"),
+  );
+  tempMigrationDirectories.push(directory);
+
+  for (const [file, content] of Object.entries(files)) {
+    fs.writeFileSync(path.join(directory, file), content);
+  }
+
+  return directory;
+}
+
+function createStandardMigrationDirectory() {
+  return createMigrationDirectory({
+    "0-create.sql": createPersonMigration,
+    "1-insert.sql": insertPeopleMigration,
+  });
+}
+
+function removeTempMigrationDirectories() {
+  while (tempMigrationDirectories.length > 0) {
+    fs.rmSync(tempMigrationDirectories.pop(), { recursive: true, force: true });
+  }
+}
 
 /**
  * Select table exists.
@@ -172,7 +221,11 @@ describe("migratorosaurus", () => {
   });
 
   afterEach(async () => {
-    await dropTables();
+    try {
+      await dropTables();
+    } finally {
+      removeTempMigrationDirectories();
+    }
   });
 
   it("throws error on invalid directory", async () => {
@@ -185,14 +238,14 @@ describe("migratorosaurus", () => {
 
   it("initializes with empty directory", async () => {
     await migratorosaurus(process.env.DATABASE_URL, {
-      directory: `${__dirname}/empty`,
+      directory: createMigrationDirectory(),
     });
     await queryAssertMigrationDoesntExist(defaultMigrationHistoryTable);
   });
 
   it("initializes with custom table name", async () => {
     await migratorosaurus(process.env.DATABASE_URL, {
-      directory: `${__dirname}/empty`,
+      directory: createMigrationDirectory(),
       table: customMigrationHistoryTable,
     });
     await queryAssertMigrationDoesntExist(customMigrationHistoryTable);
@@ -200,14 +253,14 @@ describe("migratorosaurus", () => {
 
   it("initializes and up migrates all", async () => {
     await migratorosaurus(process.env.DATABASE_URL, {
-      directory: `${__dirname}/migrations`,
+      directory: createStandardMigrationDirectory(),
     });
     await queryAssertMigration1(defaultMigrationHistoryTable);
   });
 
   it("initializes with custom table name and up migrates all", async () => {
     await migratorosaurus(process.env.DATABASE_URL, {
-      directory: `${__dirname}/migrations`,
+      directory: createStandardMigrationDirectory(),
       table: customMigrationHistoryTable,
     });
     await queryAssertMigration1(customMigrationHistoryTable);
@@ -216,7 +269,7 @@ describe("migratorosaurus", () => {
   it("supports schema-qualified table names", async () => {
     await createMigrationHistoryTable(qualifiedMigrationHistoryTable);
     await migratorosaurus(process.env.DATABASE_URL, {
-      directory: `${__dirname}/migrations`,
+      directory: createStandardMigrationDirectory(),
       table: qualifiedMigrationHistoryTable,
     });
     await queryAssertMigration1(qualifiedMigrationHistoryTable);
@@ -225,7 +278,7 @@ describe("migratorosaurus", () => {
   it("requires schema-qualified table names to use an existing schema", async () => {
     await assertError(() =>
       migratorosaurus(process.env.DATABASE_URL, {
-        directory: `${__dirname}/migrations`,
+        directory: createStandardMigrationDirectory(),
         table: missingSchemaMigrationHistoryTable,
       }),
     );
@@ -234,7 +287,7 @@ describe("migratorosaurus", () => {
   it("rejects unconventional migration table names", async () => {
     await assertError(() =>
       migratorosaurus(process.env.DATABASE_URL, {
-        directory: `${__dirname}/migrations`,
+        directory: createStandardMigrationDirectory(),
         table: `custom "migration" history`,
       }),
     );
@@ -243,7 +296,17 @@ describe("migratorosaurus", () => {
   it("rejects migration filenames with unexpected characters", async () => {
     await assertError(() =>
       migratorosaurus(process.env.DATABASE_URL, {
-        directory: `${__dirname}/invalid-filenames`,
+        directory: createMigrationDirectory({
+          "0-create.sql": createPersonMigration,
+          "1-o'hara.sql": `-- % up-migration % --
+INSERT INTO person (name)
+VALUES ('o''hara');
+
+-- % down-migration % --
+DELETE FROM person
+WHERE name = 'o''hara';
+`,
+        }),
       }),
     );
   });
@@ -251,7 +314,9 @@ describe("migratorosaurus", () => {
   it("rejects migration filenames with decimal indices", async () => {
     await assertError(() =>
       migratorosaurus(process.env.DATABASE_URL, {
-        directory: `${__dirname}/decimal-indices`,
+        directory: createMigrationDirectory({
+          "1.1-create.sql": createPersonMigration,
+        }),
       }),
     );
   });
@@ -259,7 +324,18 @@ describe("migratorosaurus", () => {
   it("rejects duplicate resolved migration indices", async () => {
     await assertError(() =>
       migratorosaurus(process.env.DATABASE_URL, {
-        directory: `${__dirname}/duplicate-indices`,
+        directory: createMigrationDirectory({
+          "001-create_again.sql": `-- % up-migration % --
+CREATE TABLE company (
+  id SERIAL PRIMARY KEY,
+  name varchar(100) NOT NULL
+);
+
+-- % down-migration % --
+DROP TABLE company;
+`,
+          "1-create.sql": createPersonMigration,
+        }),
       }),
     );
   });
@@ -267,7 +343,16 @@ describe("migratorosaurus", () => {
   it("rejects migration files without an up section", async () => {
     await assertError(() =>
       migratorosaurus(process.env.DATABASE_URL, {
-        directory: `${__dirname}/missing-up-migration`,
+        directory: createMigrationDirectory({
+          "0-create.sql": `CREATE TABLE person (
+  id SERIAL PRIMARY KEY,
+  name varchar(100) NOT NULL
+);
+
+-- % down-migration % --
+DROP TABLE person;
+`,
+        }),
       }),
     );
   });
@@ -275,7 +360,14 @@ describe("migratorosaurus", () => {
   it("rejects migration files without a down section", async () => {
     await assertError(() =>
       migratorosaurus(process.env.DATABASE_URL, {
-        directory: `${__dirname}/missing-down-migration`,
+        directory: createMigrationDirectory({
+          "0-create.sql": `-- % up-migration % --
+CREATE TABLE person (
+  id SERIAL PRIMARY KEY,
+  name varchar(100) NOT NULL
+);
+`,
+        }),
       }),
     );
   });
@@ -284,7 +376,7 @@ describe("migratorosaurus", () => {
     let result = null;
     try {
       await migratorosaurus(process.env.DATABASE_URL, {
-        directory: `${__dirname}/migrations`,
+        directory: createStandardMigrationDirectory(),
         target: "0-crëâté.skl",
       });
     } catch (error) {
@@ -295,7 +387,7 @@ describe("migratorosaurus", () => {
 
   it("initializes with migration target", async () => {
     await migratorosaurus(process.env.DATABASE_URL, {
-      directory: `${__dirname}/migrations`,
+      directory: createStandardMigrationDirectory(),
       target: "0-create.sql",
     });
     await queryAssertMigration0(defaultMigrationHistoryTable);
@@ -303,10 +395,10 @@ describe("migratorosaurus", () => {
 
   it("down migrates one migration", async () => {
     await migratorosaurus(process.env.DATABASE_URL, {
-      directory: `${__dirname}/migrations`,
+      directory: createStandardMigrationDirectory(),
     });
     await migratorosaurus(process.env.DATABASE_URL, {
-      directory: `${__dirname}/migrations`,
+      directory: createStandardMigrationDirectory(),
       target: "1-insert.sql",
     });
     await queryAssertMigration0(defaultMigrationHistoryTable);
@@ -314,11 +406,11 @@ describe("migratorosaurus", () => {
 
   it("up migrates all migrations then down migrates all", async () => {
     await migratorosaurus(process.env.DATABASE_URL, {
-      directory: `${__dirname}/migrations`,
+      directory: createStandardMigrationDirectory(),
     });
     await queryAssertMigration1(defaultMigrationHistoryTable);
     await migratorosaurus(process.env.DATABASE_URL, {
-      directory: `${__dirname}/migrations`,
+      directory: createStandardMigrationDirectory(),
       target: "0-create.sql",
     });
     await queryAssertMigrationEmpty(defaultMigrationHistoryTable);
@@ -326,16 +418,16 @@ describe("migratorosaurus", () => {
 
   it("down migrate one migration then up migrate same migration", async () => {
     await migratorosaurus(process.env.DATABASE_URL, {
-      directory: `${__dirname}/migrations`,
+      directory: createStandardMigrationDirectory(),
     });
     await queryAssertMigration1(defaultMigrationHistoryTable);
     await migratorosaurus(process.env.DATABASE_URL, {
-      directory: `${__dirname}/migrations`,
+      directory: createStandardMigrationDirectory(),
       target: "1-insert.sql",
     });
     await queryAssertMigration0(defaultMigrationHistoryTable);
     await migratorosaurus(process.env.DATABASE_URL, {
-      directory: `${__dirname}/migrations`,
+      directory: createStandardMigrationDirectory(),
       target: "1-insert.sql",
     });
     await queryAssertMigration1(defaultMigrationHistoryTable);
@@ -361,12 +453,12 @@ describe("migratorosaurus", () => {
       ]);
 
       firstMigration = migratorosaurus(process.env.DATABASE_URL, {
-        directory: `${__dirname}/migrations`,
+        directory: createStandardMigrationDirectory(),
       }).finally(() => {
         firstSettled = true;
       });
       secondMigration = migratorosaurus(process.env.DATABASE_URL, {
-        directory: `${__dirname}/migrations`,
+        directory: createStandardMigrationDirectory(),
       }).finally(() => {
         secondSettled = true;
       });
@@ -403,7 +495,17 @@ describe("migratorosaurus", () => {
   it("ends connection and throws error on postgres error", async () => {
     try {
       await migratorosaurus(process.env.DATABASE_URL, {
-        directory: `${__dirname}/broken-migrations`,
+        directory: createMigrationDirectory({
+          "0-break.sql": `-- % up-migration % --
+CREATE TABLE person (
+  id SERIALXXXXX PRIMARY KEY,
+  name varchar(100) NOT NULL
+);
+
+-- % down-migration % --
+DROP TABLE person;
+`,
+        }),
       });
     } catch (e) {
       // expected
