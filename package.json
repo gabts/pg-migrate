@@ -24,6 +24,7 @@
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc -w",
+    "prepare": "npm run build",
     "prepack": "npm run build",
     "pretest": "npm run build",
     "test": "mocha --verbose",
