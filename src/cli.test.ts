@@ -1,12 +1,12 @@
-const assert = require("assert");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const { spawnSync } = require("child_process");
+import { spawnSync } from "child_process";
+import * as assert from "assert";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 
 const cliPath = path.join(__dirname, "..", "bin", "cli.js");
 
-function runCli(args) {
+function runCli(args: string[]): string {
   const result = spawnSync("node", [cliPath, ...args], {
     encoding: "utf8",
   });
@@ -18,18 +18,18 @@ function runCli(args) {
   return result.stdout;
 }
 
-describe("cli", () => {
-  let tempDir;
+describe("cli", (): void => {
+  let tempDir: string;
 
-  beforeEach(() => {
+  beforeEach((): void => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "migratorosaurus-cli-"));
   });
 
-  afterEach(() => {
+  afterEach((): void => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("creates a migration file with the expected markers", () => {
+  it("creates a migration file with the expected markers", (): void => {
     const output = runCli([
       "create",
       "--directory",
@@ -46,33 +46,31 @@ describe("cli", () => {
     );
   });
 
-  it("prints help text", () => {
+  it("prints help text", (): void => {
     const output = runCli(["--help"]);
 
     assert.ok(output.length > 0);
   });
 
-  it("prints create help text", () => {
+  it("prints create help text", (): void => {
     const output = runCli(["create", "--help"]);
 
     assert.ok(output.length > 0);
   });
 
-  it("prints create help text even when help appears after another flag", () => {
+  it("prints create help text even when help appears after another flag", (): void => {
     const output = runCli(["create", "--name", "--help"]);
 
     assert.ok(output.length > 0);
   });
 
-  it("rejects migration names with unexpected characters", () => {
-    assert.throws(
-      () =>
-        runCli(["create", "--directory", tempDir, "--name", "create person's"]),
-      /Migration name may only use letters, numbers, _ and -/,
-    );
+  it("rejects migration names with unexpected characters", (): void => {
+    assert.throws((): void => {
+      runCli(["create", "--directory", tempDir, "--name", "create person's"]);
+    }, /Migration name may only use letters, numbers, _ and -/);
   });
 
-  it("accepts migration names that start with a hyphen", () => {
+  it("accepts migration names that start with a hyphen", (): void => {
     const output = runCli([
       "create",
       "--directory",
@@ -86,37 +84,36 @@ describe("cli", () => {
     assert.ok(fs.existsSync(createdPath));
   });
 
-  it("rejects missing migration directories", () => {
+  it("rejects missing migration directories", (): void => {
     const missingDir = path.join(tempDir, "missing");
 
     assert.throws(
-      () =>
+      (): void => {
         runCli([
           "create",
           "--directory",
           missingDir,
           "--name",
           "create-person",
-        ]),
+        ]);
+      },
       new RegExp(`Migration directory does not exist: ${missingDir}`),
     );
   });
 
-  it("rejects missing name flag values", () => {
-    assert.throws(
-      () => runCli(["create", "--directory", tempDir, "--name"]),
-      /Name flag \(\-\-name, -n\) requires a value/,
-    );
+  it("rejects missing name flag values", (): void => {
+    assert.throws((): void => {
+      runCli(["create", "--directory", tempDir, "--name"]);
+    }, /Name flag \(\-\-name, -n\) requires a value/);
   });
 
-  it("rejects missing directory flag values", () => {
-    assert.throws(
-      () => runCli(["create", "--directory"]),
-      /Directory flag \(\-\-directory, -d\) requires a value/,
-    );
+  it("rejects missing directory flag values", (): void => {
+    assert.throws((): void => {
+      runCli(["create", "--directory"]);
+    }, /Directory flag \(\-\-directory, -d\) requires a value/);
   });
 
-  it("creates the next whole-number index after existing files", () => {
+  it("creates the next whole-number index after existing files", (): void => {
     fs.writeFileSync(path.join(tempDir, "000-initial.sql"), "existing\n");
     fs.writeFileSync(path.join(tempDir, "2-existing.sql"), "existing\n");
 
@@ -133,7 +130,7 @@ describe("cli", () => {
     assert.ok(fs.existsSync(createdPath));
   });
 
-  it("supports customizing zero-padding width", () => {
+  it("supports customizing zero-padding width", (): void => {
     const output = runCli([
       "create",
       "--directory",
@@ -149,7 +146,7 @@ describe("cli", () => {
     assert.ok(fs.existsSync(createdPath));
   });
 
-  it("supports disabling zero-padding", () => {
+  it("supports disabling zero-padding", (): void => {
     fs.writeFileSync(path.join(tempDir, "000-initial.sql"), "existing\n");
 
     const output = runCli([
@@ -167,39 +164,37 @@ describe("cli", () => {
     assert.ok(fs.existsSync(createdPath));
   });
 
-  it("rejects invalid zero-padding widths", () => {
-    assert.throws(
-      () =>
-        runCli([
-          "create",
-          "--directory",
-          tempDir,
-          "--pad-width",
-          "8",
-          "--name",
-          "create-person",
-        ]),
-      /Pad width flag \(\-\-pad-width, -p\) must be an integer from 0 to 7/,
-    );
+  it("rejects invalid zero-padding widths", (): void => {
+    assert.throws((): void => {
+      runCli([
+        "create",
+        "--directory",
+        tempDir,
+        "--pad-width",
+        "8",
+        "--name",
+        "create-person",
+      ]);
+    }, /Pad width flag \(\-\-pad-width, -p\) must be an integer from 0 to 7/);
   });
 
-  it("rejects zero-padding widths with trailing characters", () => {
-    assert.throws(
-      () =>
-        runCli([
-          "create",
-          "--directory",
-          tempDir,
-          "--pad-width",
-          "3abc",
-          "--name",
-          "create-person",
-        ]),
-      /Pad width flag \(\-\-pad-width, -p\) must be an integer from 0 to 7/,
-    );
+  it("rejects zero-padding widths with trailing characters", (): void => {
+    assert.throws((): void => {
+      runCli([
+        "create",
+        "--directory",
+        tempDir,
+        "--pad-width",
+        "3abc",
+        "--name",
+        "create-person",
+      ]);
+    }, /Pad width flag \(\-\-pad-width, -p\) must be an integer from 0 to 7/);
   });
 
-  it("rejects unknown commands", () => {
-    assert.throws(() => runCli(["unknown"]), /Unknown command: unknown/);
+  it("rejects unknown commands", (): void => {
+    assert.throws((): void => {
+      runCli(["unknown"]);
+    }, /Unknown command: unknown/);
   });
 });

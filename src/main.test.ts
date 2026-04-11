@@ -1,11 +1,12 @@
-const assert = require("assert");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const pg = require("pg");
-const { migratorosaurus } = require("../dist/main.js");
+import * as assert from "assert";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import * as pg from "pg";
+import { migratorosaurus } from "./main.js";
 
-const client = new pg.Client(process.env.DATABASE_URL);
+const databaseConfig: string | pg.ClientConfig = process.env.DATABASE_URL ?? {};
+const client = new pg.Client(databaseConfig);
 
 // The default migration history table name used by migratorosaurus
 const defaultMigrationHistoryTable = "migration_history";
@@ -16,7 +17,7 @@ const schemaMigrationHistorySchema = "migratorosaurus_test";
 const schemaMigrationHistoryTable = "migration_history";
 const qualifiedMigrationHistoryTable = `${schemaMigrationHistorySchema}.${schemaMigrationHistoryTable}`;
 const missingSchemaMigrationHistoryTable = `missing_migratorosaurus_schema.${schemaMigrationHistoryTable}`;
-const tempMigrationDirectories = [];
+const tempMigrationDirectories: string[] = [];
 
 const createPersonMigration = `-- % up-migration % --
 CREATE TABLE person (
@@ -37,7 +38,7 @@ DELETE FROM person
 WHERE name IN ('gabriel', 'david', 'frasse');
 `;
 
-function createMigrationDirectory(files = {}) {
+function createMigrationDirectory(files: Record<string, string> = {}): string {
   const directory = fs.mkdtempSync(
     path.join(os.tmpdir(), "migratorosaurus-migrations-"),
   );
@@ -50,23 +51,26 @@ function createMigrationDirectory(files = {}) {
   return directory;
 }
 
-function createStandardMigrationDirectory() {
+function createStandardMigrationDirectory(): string {
   return createMigrationDirectory({
     "0-create.sql": createPersonMigration,
     "1-insert.sql": insertPeopleMigration,
   });
 }
 
-function removeTempMigrationDirectories() {
+function removeTempMigrationDirectories(): void {
   while (tempMigrationDirectories.length > 0) {
-    fs.rmSync(tempMigrationDirectories.pop(), { recursive: true, force: true });
+    fs.rmSync(tempMigrationDirectories.pop()!, {
+      recursive: true,
+      force: true,
+    });
   }
 }
 
 /**
  * Select table exists.
  */
-async function queryTableExists(tableName) {
+async function queryTableExists(tableName: string): Promise<boolean> {
   const [schema, table] = tableName.includes(".")
     ? tableName.split(".")
     : [undefined, tableName];
@@ -88,7 +92,7 @@ async function queryTableExists(tableName) {
 /**
  * Select all rows in migration history table.
  */
-async function queryHistory(tableName = "migration_history") {
+async function queryHistory(tableName = "migration_history"): Promise<any[]> {
   const res = await client.query(`SELECT * FROM ${tableName};`);
   return res.rows;
 }
@@ -96,7 +100,7 @@ async function queryHistory(tableName = "migration_history") {
 /**
  * Select all rows in person table.
  */
-async function queryPersons() {
+async function queryPersons(): Promise<any[]> {
   const res = await client.query("SELECT * FROM person;");
   return res.rows;
 }
@@ -104,7 +108,7 @@ async function queryPersons() {
 /**
  * Drop all tables used by test scripts.
  */
-async function dropTables() {
+async function dropTables(): Promise<void> {
   await client.query(
     `DROP SCHEMA IF EXISTS ${schemaMigrationHistorySchema} CASCADE;`,
   );
@@ -121,7 +125,7 @@ async function dropTables() {
  */
 async function createMigrationHistoryTable(
   tableName = defaultMigrationHistoryTable,
-) {
+): Promise<void> {
   const [schema] = tableName.includes(".") ? tableName.split(".") : [undefined];
   if (schema) {
     await client.query(`CREATE SCHEMA IF NOT EXISTS ${schema};`);
@@ -139,8 +143,8 @@ async function createMigrationHistoryTable(
 /**
  * Assert function throws an error.
  */
-async function assertError(fn) {
-  let result = null;
+async function assertError(fn: () => Promise<unknown>): Promise<void> {
+  let result: unknown = null;
 
   try {
     await fn();
@@ -154,14 +158,18 @@ async function assertError(fn) {
 /**
  * Wait for a short period in async tests.
  */
-async function delay(ms) {
-  await new Promise((resolve) => setTimeout(resolve, ms));
+async function delay(ms: number): Promise<void> {
+  await new Promise<void>((resolve): void => {
+    setTimeout(resolve, ms);
+  });
 }
 
 /**
  * Assert person and migration history tables does not exist.
  */
-async function queryAssertMigrationDoesntExist(migrationHistoryTable) {
+async function queryAssertMigrationDoesntExist(
+  migrationHistoryTable: string,
+): Promise<void> {
   assert.ok(!(await queryTableExists("person")));
   assert.ok(!(await queryTableExists(migrationHistoryTable)));
 }
@@ -169,7 +177,9 @@ async function queryAssertMigrationDoesntExist(migrationHistoryTable) {
 /**
  * Assert migration history exists and is empty.
  */
-async function queryAssertMigrationEmpty(migrationHistoryTable) {
+async function queryAssertMigrationEmpty(
+  migrationHistoryTable: string,
+): Promise<void> {
   assert.ok(!(await queryTableExists("person")));
   assert.ok(await queryTableExists(migrationHistoryTable));
   const historyRows = await queryHistory(migrationHistoryTable);
@@ -179,7 +189,9 @@ async function queryAssertMigrationEmpty(migrationHistoryTable) {
 /**
  * Assert database has successfully migrated up to and including migration 0.
  */
-async function queryAssertMigration0(migrationHistoryTable) {
+async function queryAssertMigration0(
+  migrationHistoryTable: string,
+): Promise<void> {
   assert.ok(await queryTableExists(migrationHistoryTable));
   const historyRows = await queryHistory(migrationHistoryTable);
   const personRows = await queryPersons();
@@ -195,7 +207,9 @@ async function queryAssertMigration0(migrationHistoryTable) {
 /**
  * Assert database has successfully migrated up to and including migration 1.
  */
-async function queryAssertMigration1(migrationHistoryTable) {
+async function queryAssertMigration1(
+  migrationHistoryTable: string,
+): Promise<void> {
   assert.ok(await queryTableExists(migrationHistoryTable));
   const historyRows = await queryHistory(migrationHistoryTable);
   const personRows = await queryPersons();
@@ -210,17 +224,17 @@ async function queryAssertMigration1(migrationHistoryTable) {
   assert.equal(personRows.length, 3);
 }
 
-describe("migratorosaurus", () => {
-  before(async () => {
+describe("migratorosaurus", (): void => {
+  before(async (): Promise<void> => {
     await client.connect();
     await dropTables();
   });
 
-  after(async () => {
+  after(async (): Promise<void> => {
     await client.end();
   });
 
-  afterEach(async () => {
+  afterEach(async (): Promise<void> => {
     try {
       await dropTables();
     } finally {
@@ -228,77 +242,80 @@ describe("migratorosaurus", () => {
     }
   });
 
-  it("throws error on invalid directory", async () => {
-    await assertError(() => {
-      return migratorosaurus(process.env.DATABASE_URL, {
+  it("throws error on invalid directory", async (): Promise<void> => {
+    await assertError((): Promise<void> => {
+      return migratorosaurus(databaseConfig, {
         directory: `${__dirname}/iñvàlïd-dîr`,
       });
     });
   });
 
-  it("initializes with empty directory", async () => {
-    await migratorosaurus(process.env.DATABASE_URL, {
+  it("initializes with empty directory", async (): Promise<void> => {
+    await migratorosaurus(databaseConfig, {
       directory: createMigrationDirectory(),
     });
     await queryAssertMigrationDoesntExist(defaultMigrationHistoryTable);
   });
 
-  it("initializes with custom table name", async () => {
-    await migratorosaurus(process.env.DATABASE_URL, {
+  it("initializes with custom table name", async (): Promise<void> => {
+    await migratorosaurus(databaseConfig, {
       directory: createMigrationDirectory(),
       table: customMigrationHistoryTable,
     });
     await queryAssertMigrationDoesntExist(customMigrationHistoryTable);
   });
 
-  it("initializes and up migrates all", async () => {
-    await migratorosaurus(process.env.DATABASE_URL, {
+  it("initializes and up migrates all", async (): Promise<void> => {
+    await migratorosaurus(databaseConfig, {
       directory: createStandardMigrationDirectory(),
     });
     await queryAssertMigration1(defaultMigrationHistoryTable);
   });
 
-  it("initializes with custom table name and up migrates all", async () => {
-    await migratorosaurus(process.env.DATABASE_URL, {
+  it("initializes with custom table name and up migrates all", async (): Promise<void> => {
+    await migratorosaurus(databaseConfig, {
       directory: createStandardMigrationDirectory(),
       table: customMigrationHistoryTable,
     });
     await queryAssertMigration1(customMigrationHistoryTable);
   });
 
-  it("supports schema-qualified table names", async () => {
+  it("supports schema-qualified table names", async (): Promise<void> => {
     await createMigrationHistoryTable(qualifiedMigrationHistoryTable);
-    await migratorosaurus(process.env.DATABASE_URL, {
+    await migratorosaurus(databaseConfig, {
       directory: createStandardMigrationDirectory(),
       table: qualifiedMigrationHistoryTable,
     });
     await queryAssertMigration1(qualifiedMigrationHistoryTable);
   });
 
-  it("requires schema-qualified table names to use an existing schema", async () => {
-    await assertError(() =>
-      migratorosaurus(process.env.DATABASE_URL, {
-        directory: createStandardMigrationDirectory(),
-        table: missingSchemaMigrationHistoryTable,
-      }),
+  it("requires schema-qualified table names to use an existing schema", async (): Promise<void> => {
+    await assertError(
+      (): Promise<void> =>
+        migratorosaurus(databaseConfig, {
+          directory: createStandardMigrationDirectory(),
+          table: missingSchemaMigrationHistoryTable,
+        }),
     );
   });
 
-  it("rejects unconventional migration table names", async () => {
-    await assertError(() =>
-      migratorosaurus(process.env.DATABASE_URL, {
-        directory: createStandardMigrationDirectory(),
-        table: `custom "migration" history`,
-      }),
+  it("rejects unconventional migration table names", async (): Promise<void> => {
+    await assertError(
+      (): Promise<void> =>
+        migratorosaurus(databaseConfig, {
+          directory: createStandardMigrationDirectory(),
+          table: `custom "migration" history`,
+        }),
     );
   });
 
-  it("rejects migration filenames with unexpected characters", async () => {
-    await assertError(() =>
-      migratorosaurus(process.env.DATABASE_URL, {
-        directory: createMigrationDirectory({
-          "0-create.sql": createPersonMigration,
-          "1-o'hara.sql": `-- % up-migration % --
+  it("rejects migration filenames with unexpected characters", async (): Promise<void> => {
+    await assertError(
+      (): Promise<void> =>
+        migratorosaurus(databaseConfig, {
+          directory: createMigrationDirectory({
+            "0-create.sql": createPersonMigration,
+            "1-o'hara.sql": `-- % up-migration % --
 INSERT INTO person (name)
 VALUES ('o''hara');
 
@@ -306,26 +323,28 @@ VALUES ('o''hara');
 DELETE FROM person
 WHERE name = 'o''hara';
 `,
+          }),
         }),
-      }),
     );
   });
 
-  it("rejects migration filenames with decimal indices", async () => {
-    await assertError(() =>
-      migratorosaurus(process.env.DATABASE_URL, {
-        directory: createMigrationDirectory({
-          "1.1-create.sql": createPersonMigration,
+  it("rejects migration filenames with decimal indices", async (): Promise<void> => {
+    await assertError(
+      (): Promise<void> =>
+        migratorosaurus(databaseConfig, {
+          directory: createMigrationDirectory({
+            "1.1-create.sql": createPersonMigration,
+          }),
         }),
-      }),
     );
   });
 
-  it("rejects duplicate resolved migration indices", async () => {
-    await assertError(() =>
-      migratorosaurus(process.env.DATABASE_URL, {
-        directory: createMigrationDirectory({
-          "001-create_again.sql": `-- % up-migration % --
+  it("rejects duplicate resolved migration indices", async (): Promise<void> => {
+    await assertError(
+      (): Promise<void> =>
+        migratorosaurus(databaseConfig, {
+          directory: createMigrationDirectory({
+            "001-create_again.sql": `-- % up-migration % --
 CREATE TABLE company (
   id SERIAL PRIMARY KEY,
   name varchar(100) NOT NULL
@@ -334,17 +353,18 @@ CREATE TABLE company (
 -- % down-migration % --
 DROP TABLE company;
 `,
-          "1-create.sql": createPersonMigration,
+            "1-create.sql": createPersonMigration,
+          }),
         }),
-      }),
     );
   });
 
-  it("rejects migration files without an up section", async () => {
-    await assertError(() =>
-      migratorosaurus(process.env.DATABASE_URL, {
-        directory: createMigrationDirectory({
-          "0-create.sql": `CREATE TABLE person (
+  it("rejects migration files without an up section", async (): Promise<void> => {
+    await assertError(
+      (): Promise<void> =>
+        migratorosaurus(databaseConfig, {
+          directory: createMigrationDirectory({
+            "0-create.sql": `CREATE TABLE person (
   id SERIAL PRIMARY KEY,
   name varchar(100) NOT NULL
 );
@@ -352,30 +372,31 @@ DROP TABLE company;
 -- % down-migration % --
 DROP TABLE person;
 `,
+          }),
         }),
-      }),
     );
   });
 
-  it("rejects migration files without a down section", async () => {
-    await assertError(() =>
-      migratorosaurus(process.env.DATABASE_URL, {
-        directory: createMigrationDirectory({
-          "0-create.sql": `-- % up-migration % --
+  it("rejects migration files without a down section", async (): Promise<void> => {
+    await assertError(
+      (): Promise<void> =>
+        migratorosaurus(databaseConfig, {
+          directory: createMigrationDirectory({
+            "0-create.sql": `-- % up-migration % --
 CREATE TABLE person (
   id SERIAL PRIMARY KEY,
   name varchar(100) NOT NULL
 );
 `,
+          }),
         }),
-      }),
     );
   });
 
-  it("throws error on invalid target", async () => {
+  it("throws error on invalid target", async (): Promise<void> => {
     let result = null;
     try {
-      await migratorosaurus(process.env.DATABASE_URL, {
+      await migratorosaurus(databaseConfig, {
         directory: createStandardMigrationDirectory(),
         target: "0-crëâté.skl",
       });
@@ -385,57 +406,57 @@ CREATE TABLE person (
     assert.ok(result instanceof Error);
   });
 
-  it("initializes with migration target", async () => {
-    await migratorosaurus(process.env.DATABASE_URL, {
+  it("initializes with migration target", async (): Promise<void> => {
+    await migratorosaurus(databaseConfig, {
       directory: createStandardMigrationDirectory(),
       target: "0-create.sql",
     });
     await queryAssertMigration0(defaultMigrationHistoryTable);
   });
 
-  it("down migrates one migration", async () => {
-    await migratorosaurus(process.env.DATABASE_URL, {
+  it("down migrates one migration", async (): Promise<void> => {
+    await migratorosaurus(databaseConfig, {
       directory: createStandardMigrationDirectory(),
     });
-    await migratorosaurus(process.env.DATABASE_URL, {
+    await migratorosaurus(databaseConfig, {
       directory: createStandardMigrationDirectory(),
       target: "1-insert.sql",
     });
     await queryAssertMigration0(defaultMigrationHistoryTable);
   });
 
-  it("up migrates all migrations then down migrates all", async () => {
-    await migratorosaurus(process.env.DATABASE_URL, {
+  it("up migrates all migrations then down migrates all", async (): Promise<void> => {
+    await migratorosaurus(databaseConfig, {
       directory: createStandardMigrationDirectory(),
     });
     await queryAssertMigration1(defaultMigrationHistoryTable);
-    await migratorosaurus(process.env.DATABASE_URL, {
+    await migratorosaurus(databaseConfig, {
       directory: createStandardMigrationDirectory(),
       target: "0-create.sql",
     });
     await queryAssertMigrationEmpty(defaultMigrationHistoryTable);
   });
 
-  it("down migrate one migration then up migrate same migration", async () => {
-    await migratorosaurus(process.env.DATABASE_URL, {
+  it("down migrate one migration then up migrate same migration", async (): Promise<void> => {
+    await migratorosaurus(databaseConfig, {
       directory: createStandardMigrationDirectory(),
     });
     await queryAssertMigration1(defaultMigrationHistoryTable);
-    await migratorosaurus(process.env.DATABASE_URL, {
+    await migratorosaurus(databaseConfig, {
       directory: createStandardMigrationDirectory(),
       target: "1-insert.sql",
     });
     await queryAssertMigration0(defaultMigrationHistoryTable);
-    await migratorosaurus(process.env.DATABASE_URL, {
+    await migratorosaurus(databaseConfig, {
       directory: createStandardMigrationDirectory(),
       target: "1-insert.sql",
     });
     await queryAssertMigration1(defaultMigrationHistoryTable);
   });
 
-  it("serializes concurrent runners against the same history table", async () => {
+  it("serializes concurrent runners against the same history table", async (): Promise<void> => {
     await createMigrationHistoryTable();
-    const lockClient = new pg.Client(process.env.DATABASE_URL);
+    const lockClient = new pg.Client(databaseConfig);
 
     await lockClient.connect();
 
@@ -452,14 +473,14 @@ CREATE TABLE person (
         defaultMigrationHistoryTable,
       ]);
 
-      firstMigration = migratorosaurus(process.env.DATABASE_URL, {
+      firstMigration = migratorosaurus(databaseConfig, {
         directory: createStandardMigrationDirectory(),
-      }).finally(() => {
+      }).finally((): void => {
         firstSettled = true;
       });
-      secondMigration = migratorosaurus(process.env.DATABASE_URL, {
+      secondMigration = migratorosaurus(databaseConfig, {
         directory: createStandardMigrationDirectory(),
-      }).finally(() => {
+      }).finally((): void => {
         secondSettled = true;
       });
 
@@ -476,7 +497,7 @@ CREATE TABLE person (
       ]);
 
       assert.deepEqual(
-        results.map((result) => result.status),
+        results.map((result): string => result.status),
         ["fulfilled", "fulfilled"],
       );
     } finally {
@@ -492,9 +513,9 @@ CREATE TABLE person (
     await queryAssertMigration1(defaultMigrationHistoryTable);
   });
 
-  it("ends connection and throws error on postgres error", async () => {
+  it("ends connection and throws error on postgres error", async (): Promise<void> => {
     try {
-      await migratorosaurus(process.env.DATABASE_URL, {
+      await migratorosaurus(databaseConfig, {
         directory: createMigrationDirectory({
           "0-break.sql": `-- % up-migration % --
 CREATE TABLE person (
