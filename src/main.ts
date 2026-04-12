@@ -1,10 +1,20 @@
 import * as fs from "fs";
 import * as pg from "pg";
 
-interface MigrationFile {
+interface DiskMigration {
   file: string;
   index: number;
   path: string;
+}
+
+interface LoadedMigrations {
+  all: DiskMigration[];
+  byFile: Map<string, DiskMigration>;
+}
+
+interface AppliedRow {
+  file: string;
+  index: number;
 }
 
 interface TableNameParts {
@@ -12,14 +22,22 @@ interface TableNameParts {
   table: string;
 }
 
-interface MigrationSql {
-  file: string;
-  index: number;
-  sql: string;
+interface MigrationOptions {
+  directory?: string;
+  log?: LogFn;
+  table?: string;
+  target?: string;
 }
+
+type LogFn = (...args: any[]) => void;
 
 const conventionalTableNamePattern =
   /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?$/;
+const migrationFilePattern = /^\d+(?:-[A-Za-z0-9_.-]+)?\.sql$/;
+const migrationMarkers = {
+  up: "-- % up-migration % --",
+  down: "-- % down-migration % --",
+};
 
 function parseTableName(tableName: string): TableNameParts {
   if (!tableName.match(conventionalTableNamePattern)) {
@@ -45,11 +63,14 @@ function qualifyTableName({ schema, table }: TableNameParts): string {
   return schema ? `${schema}.${table}` : table;
 }
 
-const migrationMarkers = {
-  up: "-- % up-migration % --",
-  down: "-- % down-migration % --",
-};
-const migrationFilePattern = /^\d+(?:[-_.][A-Za-z0-9_-]+)*\.sql$/;
+function parseMigrationIndex(file: string): number {
+  const indexText = file.split(/[-_.]/)[0];
+  if (!indexText || !indexText.match(/^\d+$/)) {
+    throw new Error(`Invalid migration file name: ${file}`);
+  }
+
+  return Number.parseInt(indexText, 10);
+}
 
 function parseMigration(
   sql: string,
@@ -88,26 +109,8 @@ function parseMigration(
   return direction === "up" ? upSql : downSql;
 }
 
-function parseMigrationDetails(file: string, dir: string): MigrationFile {
-  const parts = file.split("-");
-  if (!parts[0] || !parts[0].match(/^\d+$/)) {
-    throw new Error(`Invalid migration file name: ${file}`);
-  }
-
-  const index = parseInt(parts[0], 10);
-  if (isNaN(index)) {
-    throw new Error(`Invalid migration file name: ${file}`);
-  }
-
-  return {
-    file,
-    index,
-    path: `${dir}/${file}`,
-  };
-}
-
-function getMigrationFiles(dir: string): MigrationFile[] {
-  const files = fs.readdirSync(dir);
+function loadDiskMigrations(directory: string): LoadedMigrations {
+  const files = fs.readdirSync(directory);
   const migrationFiles = files.filter((file): boolean => file.endsWith(".sql"));
   const invalidMigrationFile = migrationFiles.find(
     (file): boolean => !file.match(migrationFilePattern),
@@ -117,34 +120,175 @@ function getMigrationFiles(dir: string): MigrationFile[] {
     throw new Error(`Invalid migration file name: ${invalidMigrationFile}`);
   }
 
-  const parsedMigrationFiles = migrationFiles.map(
-    (file): MigrationFile => parseMigrationDetails(file, dir),
+  const all = migrationFiles.map(
+    (file): DiskMigration => ({
+      file,
+      index: parseMigrationIndex(file),
+      path: `${directory}/${file}`,
+    }),
   );
+  const byFile = new Map<string, DiskMigration>();
   const seenIndices = new Map<number, string>();
 
-  for (const { file, index } of parsedMigrationFiles) {
-    const existingFile = seenIndices.get(index);
+  for (const migration of all) {
+    const existingFile = seenIndices.get(migration.index);
     if (existingFile) {
       throw new Error(
-        `Duplicate migration index ${index}: ${existingFile} and ${file}`,
+        `Duplicate migration index ${migration.index}: ${existingFile} and ${migration.file}`,
       );
     }
-    seenIndices.set(index, file);
+
+    seenIndices.set(migration.index, migration.file);
+    byFile.set(migration.file, migration);
   }
 
-  return parsedMigrationFiles;
+  return { all, byFile };
+}
+
+function validateAppliedHistory(rows: AppliedRow[]): void {
+  let previousIndex: number | null = null;
+
+  for (const { file, index } of rows) {
+    if (!file.match(migrationFilePattern)) {
+      throw new Error(`Invalid applied migration file name: ${file}`);
+    }
+
+    const parsedIndex = parseMigrationIndex(file);
+    if (index !== parsedIndex) {
+      throw new Error(
+        `Applied migration index mismatch for ${file}: expected ${parsedIndex}, found ${index}`,
+      );
+    }
+
+    if (previousIndex !== null && index >= previousIndex) {
+      throw new Error("Applied migration history is not strictly descending");
+    }
+
+    previousIndex = index;
+  }
+}
+
+function validateAppliedFilesExistOnDisk(
+  appliedRows: AppliedRow[],
+  disk: LoadedMigrations,
+): void {
+  for (const { file } of appliedRows) {
+    if (!disk.byFile.has(file)) {
+      throw new Error(`Applied migration file is missing on disk: ${file}`);
+    }
+  }
+}
+
+function validateUpPreconditions(args: {
+  appliedRows: AppliedRow[];
+  disk: LoadedMigrations;
+  target?: string;
+}): {
+  latestApplied: AppliedRow | null;
+  targetMigration: DiskMigration | null;
+} {
+  const { appliedRows, disk, target } = args;
+  const appliedFiles = new Set(appliedRows.map(({ file }): string => file));
+  const latestApplied = appliedRows[0] ?? null;
+  const unappliedDiskMigrations = disk.all.filter(
+    ({ file }): boolean => !appliedFiles.has(file),
+  );
+  const targetMigration = target ? disk.byFile.get(target) : undefined;
+
+  if (target && !targetMigration) {
+    throw new Error(`migratorosaurus: no such target file "${target}"`);
+  }
+
+  validateAppliedFilesExistOnDisk(appliedRows, disk);
+
+  if (latestApplied) {
+    if (targetMigration?.file === latestApplied.file) {
+      return {
+        latestApplied,
+        targetMigration,
+      };
+    }
+
+    for (const migration of unappliedDiskMigrations) {
+      if (migration.index <= latestApplied.index) {
+        throw new Error(
+          `Out-of-order migration file "${migration.file}" has index ${migration.index}, which is not above latest applied index ${latestApplied.index}`,
+        );
+      }
+    }
+
+    if (
+      targetMigration &&
+      targetMigration.file !== latestApplied.file &&
+      targetMigration.index < latestApplied.index
+    ) {
+      throw new Error(
+        `Target migration "${targetMigration.file}" is behind latest applied migration "${latestApplied.file}"`,
+      );
+    }
+  }
+
+  return {
+    latestApplied,
+    targetMigration: targetMigration ?? null,
+  };
+}
+
+function planUpExecution(args: {
+  disk: LoadedMigrations;
+  latestApplied: AppliedRow | null;
+  targetMigration: DiskMigration | null;
+}): DiskMigration[] {
+  const latestAppliedIndex = args.latestApplied?.index ?? -1;
+  const targetIndex = args.targetMigration?.index ?? Number.POSITIVE_INFINITY;
+
+  return args.disk.all
+    .filter(
+      ({ index }): boolean =>
+        index > latestAppliedIndex && index <= targetIndex,
+    )
+    .sort((a, b): number => a.index - b.index);
+}
+
+function planDownExecution(args: {
+  appliedRows: AppliedRow[];
+  disk: LoadedMigrations;
+  target?: string;
+}): DiskMigration[] {
+  const { appliedRows, disk, target } = args;
+  let rowsToRollback: AppliedRow[];
+
+  if (!target) {
+    rowsToRollback = appliedRows[0] ? [appliedRows[0]] : [];
+  } else {
+    const targetMigration = disk.byFile.get(target);
+    if (!targetMigration) {
+      throw new Error(`migratorosaurus: no such target file "${target}"`);
+    }
+
+    const targetRow = appliedRows.find(({ file }): boolean => file === target);
+    if (!targetRow) {
+      throw new Error(`Target migration is not applied: ${target}`);
+    }
+
+    rowsToRollback = appliedRows.filter(
+      ({ index }): boolean => index > targetMigration.index,
+    );
+  }
+
+  validateAppliedFilesExistOnDisk(rowsToRollback, disk);
+  return rowsToRollback.map(({ file }): DiskMigration => disk.byFile.get(file)!);
 }
 
 async function initialize(
   client: pg.Client,
-  log: (...args: any) => void,
+  log: LogFn,
   tableName: string,
 ): Promise<void> {
   const tableNameParts = parseTableName(tableName);
   const qualifiedTableName = qualifyTableName(tableNameParts);
   const { schema, table } = tableNameParts;
 
-  // Check if migrations table exists
   const migrationTableQueryResult = await client.query(
     `
     SELECT EXISTS (
@@ -157,7 +301,6 @@ async function initialize(
     schema ? [table, schema] : [table],
   );
 
-  // If migrations table does not exist, create it
   if (!migrationTableQueryResult.rows[0].exists) {
     log("🥚 performing first time setup");
     await client.query(`
@@ -165,139 +308,43 @@ async function initialize(
       (
         index integer PRIMARY KEY,
         file text UNIQUE NOT NULL,
-        date timestamptz NOT NULL DEFAULT now()
+        date timestamptz NOT NULL
       );
     `);
   }
 }
 
-async function downMigration(
-  client: pg.Client,
-  log: (...args: any) => void,
-  table: string,
-  files: MigrationFile[],
-  lastIndex: number,
-  targetFile: MigrationFile,
-): Promise<void> {
-  const qualifiedTableName = qualifyTableName(parseTableName(table));
-  const filesToDownMigrate = files
-    .filter((migration): boolean => {
-      const isLastOrLower = migration.index <= lastIndex;
-      const isTargetOrAbove = targetFile.index <= migration.index;
-      return isTargetOrAbove && isLastOrLower;
-    })
-    .sort((a, b): number =>
-      a.index > b.index ? -1 : a.index < b.index ? 1 : 0,
-    )
-    .map(({ file, index, path }): MigrationSql => {
-      const sql = parseMigration(fs.readFileSync(path, "utf8"), "down", file);
-      return { file, index, sql };
-    });
-
-  for (const { file, index, sql } of filesToDownMigrate) {
-    log(`↓  downgrading > "${file}"`);
-    await client.query(sql);
-    await client.query(`DELETE FROM ${qualifiedTableName} WHERE index = $1;`, [
-      index,
-    ]);
-  }
-}
-
-async function upMigration(
-  client: pg.Client,
-  log: (...args: any) => void,
-  table: string,
-  files: MigrationFile[],
-  lastIndex: number,
-  targetFile?: MigrationFile,
-): Promise<void> {
-  const qualifiedTableName = qualifyTableName(parseTableName(table));
-  const filesToUpMigrate = files
-    .filter((migration): boolean => {
-      const isAboveLast = migration.index > lastIndex;
-      const hasTargetAndIsBelow = targetFile
-        ? targetFile.index >= migration.index
-        : true;
-      return hasTargetAndIsBelow && isAboveLast;
-    })
-    .sort((a, b): number =>
-      a.index > b.index ? 1 : a.index < b.index ? -1 : 0,
-    )
-    .map(({ file, index, path }): MigrationSql => {
-      const sql = parseMigration(fs.readFileSync(path, "utf8"), "up", file);
-      return { file, index, sql };
-    });
-
-  for (const { file, index, sql } of filesToUpMigrate) {
-    log(`↑  upgrading > "${file}"`);
-    await client.query(sql);
-    await client.query(
-      `INSERT INTO ${qualifiedTableName} ( index, file ) VALUES ( $1, $2 );`,
-      [index, file],
-    );
-  }
-}
-
-export async function migratorosaurus(
-  clientConfig: string | pg.ClientConfig,
-  args: {
-    directory?: string;
-    log?: (...args: any) => void;
-    table?: string;
-    target?: string;
-  } = {},
-): Promise<void> {
-  const {
-    directory = "migrations",
-    log = (): undefined => undefined,
-    table = "migration_history",
-    target,
-  } = args;
-  log("🦖 migratorosaurus initiated!");
-
-  const files = getMigrationFiles(directory);
-  if (!files.length) {
-    log("🌋 migratorosaurus completed! no files found.");
-    return;
-  }
-
+async function withMigrationTransaction<T>(args: {
+  clientConfig: string | pg.ClientConfig;
+  log: LogFn;
+  run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
+  table: string;
+}): Promise<T> {
+  const { clientConfig, log, run, table } = args;
   const client = new pg.Client(clientConfig);
-  let transactionStarted = false;
   const qualifiedTableName = qualifyTableName(parseTableName(table));
+  let transactionStarted = false;
 
   try {
     await client.connect();
     await client.query("BEGIN;");
     transactionStarted = true;
 
-    // Serialize migration runners before table initialization so first-run setup
-    // and subsequent migration state reads happen from a single transaction view.
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1));", [table]);
     await initialize(client, log, table);
     await client.query(`LOCK TABLE ${qualifiedTableName} IN EXCLUSIVE MODE;`);
 
-    const lastMigrationQuery = await client.query(
-      `SELECT index FROM ${qualifiedTableName} ORDER BY index DESC LIMIT 1;`,
+    const appliedRowsResult = await client.query<AppliedRow>(
+      `SELECT index, file FROM ${qualifiedTableName} ORDER BY index DESC;`,
     );
+    const appliedRows = appliedRowsResult.rows;
+    validateAppliedHistory(appliedRows);
 
-    const lastIndex = lastMigrationQuery.rowCount
-      ? lastMigrationQuery.rows[0].index
-      : -1;
-
-    let targetFile: MigrationFile | undefined = undefined;
-    if (target) {
-      targetFile = files.find(({ file }): boolean => file === target);
-      if (!targetFile) {
-        throw new Error(`migratorosaurus: no such target file "${target}"`);
-      }
-    }
-
-    targetFile && targetFile.index <= lastIndex
-      ? await downMigration(client, log, table, files, lastIndex, targetFile)
-      : await upMigration(client, log, table, files, lastIndex, targetFile);
+    const result = await run({ appliedRows, client });
 
     await client.query("COMMIT;");
     transactionStarted = false;
+    return result;
   } catch (error) {
     log("☄️ migratorosaurus threw error!");
     if (transactionStarted) {
@@ -307,10 +354,128 @@ export async function migratorosaurus(
         // Ignore rollback errors and surface the original failure.
       }
     }
-    await client.end();
     throw error;
+  } finally {
+    await client.end();
+  }
+}
+
+async function executeUpPlan(args: {
+  client: pg.Client;
+  log: LogFn;
+  migrations: DiskMigration[];
+  table: string;
+}): Promise<void> {
+  const { client, log, migrations, table } = args;
+  const qualifiedTableName = qualifyTableName(parseTableName(table));
+
+  for (const { file, index, path } of migrations) {
+    const sql = parseMigration(fs.readFileSync(path, "utf8"), "up", file);
+    log(`↑  upgrading > "${file}"`);
+    await client.query(sql);
+    await client.query(
+      `INSERT INTO ${qualifiedTableName} ( index, file, date ) VALUES ( $1, $2, clock_timestamp() );`,
+      [index, file],
+    );
+  }
+}
+
+async function executeDownPlan(args: {
+  client: pg.Client;
+  log: LogFn;
+  migrations: DiskMigration[];
+  table: string;
+}): Promise<void> {
+  const { client, log, migrations, table } = args;
+  const qualifiedTableName = qualifyTableName(parseTableName(table));
+
+  for (const { file, path } of migrations) {
+    const sql = parseMigration(
+      fs.readFileSync(path, "utf8"),
+      "down",
+      file,
+    );
+    log(`↓  downgrading > "${file}"`);
+    await client.query(sql);
+    await client.query(`DELETE FROM ${qualifiedTableName} WHERE file = $1;`, [
+      file,
+    ]);
+  }
+}
+
+function normalizeOptions(args: MigrationOptions): {
+  directory: string;
+  log: LogFn;
+  table: string;
+  target?: string;
+} {
+  return {
+    directory: args.directory ?? "migrations",
+    log: args.log ?? ((): undefined => undefined),
+    table: args.table ?? "migration_history",
+    target: args.target,
+  };
+}
+
+export async function up(
+  clientConfig: string | pg.ClientConfig,
+  args: MigrationOptions = {},
+): Promise<void> {
+  const { directory, log, table, target } = normalizeOptions(args);
+  log("🦖 migratorosaurus up initiated!");
+
+  const disk = loadDiskMigrations(directory);
+  if (!disk.all.length) {
+    log("🌋 migratorosaurus completed! no files found.");
+    return;
   }
 
-  await client.end();
-  log("🌋 migratorosaurus completed!");
+  await withMigrationTransaction({
+    clientConfig,
+    log,
+    table,
+    run: async ({ appliedRows, client }): Promise<void> => {
+      const { latestApplied, targetMigration } = validateUpPreconditions({
+        appliedRows,
+        disk,
+        target,
+      });
+      const migrations = planUpExecution({
+        disk,
+        latestApplied,
+        targetMigration,
+      });
+
+      await executeUpPlan({ client, log, migrations, table });
+    },
+  });
+
+  log("🌋 migratorosaurus up completed!");
+}
+
+export async function down(
+  clientConfig: string | pg.ClientConfig,
+  args: MigrationOptions = {},
+): Promise<void> {
+  const { directory, log, table, target } = normalizeOptions(args);
+  log("🦖 migratorosaurus down initiated!");
+
+  const disk = loadDiskMigrations(directory);
+
+  await withMigrationTransaction({
+    clientConfig,
+    log,
+    table,
+    run: async ({ appliedRows, client }): Promise<void> => {
+      const migrations = planDownExecution({
+        appliedRows,
+        disk,
+        target,
+      });
+
+      await executeDownPlan({ client, log, migrations, table });
+    },
+  });
+
+  log("🌋 migratorosaurus down completed!");
 }

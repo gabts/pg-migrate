@@ -23,9 +23,14 @@ This package requires Node.js `>=22`.
 Use it from your app or migration runner:
 
 ```javascript
-const { migratorosaurus } = require("migratorosaurus");
+import { down, up } from "migratorosaurus";
 
-migratorosaurus("postgres://localhost:5432/database", {
+await up("postgres://localhost:5432/database", {
+  directory: `sql/migrations`,
+  table: "my_migration_history",
+});
+
+await down("postgres://localhost:5432/database", {
   directory: `sql/migrations`,
   table: "my_migration_history",
 });
@@ -94,7 +99,13 @@ The second argument is an optional configuration object:
 - **log** Function to handle logging, e.g. console.log.
 - **table** The name of the database table that stores migration history. Defaults to `"migration_history"`.
   Valid values must use conventional PostgreSQL-style names only: `table_name` or `schema_name.table_name`. Table names may only use lowercase letters, numbers, and `_`, and must start with a letter or `_`. If you use a schema-qualified name, the schema must already exist.
-- **target** A specific migration that you would like to up/down migrate. Any migrations between the last migrated migration and the target will be up/down migrated as well.
+- **target** An exact migration filename.
+
+Use `up(config, { target })` to migrate forward until that migration has been applied.
+Use `down(config)` to roll back exactly one migration.
+Use `down(config, { target })` to roll back newer migrations while leaving the target migration applied.
+
+`up()` is append-only by numeric migration index. If a lower-index migration file is added after a higher-index migration has already been applied, `up()` fails instead of silently applying it out of order.
 
 ## 🚁 Development
 

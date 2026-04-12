@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as pg from "pg";
-import { migratorosaurus } from "./main.js";
+import { down, up } from "./main.js";
 
 const databaseConfig: string | pg.ClientConfig = process.env.DATABASE_URL ?? {};
 const client = new pg.Client(databaseConfig);
@@ -93,7 +93,7 @@ async function queryTableExists(tableName: string): Promise<boolean> {
  * Select all rows in migration history table.
  */
 async function queryHistory(tableName = "migration_history"): Promise<any[]> {
-  const res = await client.query(`SELECT * FROM ${tableName};`);
+  const res = await client.query(`SELECT * FROM ${tableName} ORDER BY index;`);
   return res.rows;
 }
 
@@ -135,7 +135,7 @@ async function createMigrationHistoryTable(
     (
       index integer PRIMARY KEY,
       file text UNIQUE NOT NULL,
-      date timestamptz NOT NULL DEFAULT now()
+      date timestamptz NOT NULL
     );
   `);
 }
@@ -224,7 +224,7 @@ async function queryAssertMigration1(
   assert.equal(personRows.length, 3);
 }
 
-describe("migratorosaurus", (): void => {
+describe("up and down", (): void => {
   before(async (): Promise<void> => {
     await client.connect();
     await dropTables();
@@ -244,21 +244,21 @@ describe("migratorosaurus", (): void => {
 
   it("throws error on invalid directory", async (): Promise<void> => {
     await assertError((): Promise<void> => {
-      return migratorosaurus(databaseConfig, {
+      return up(databaseConfig, {
         directory: `${__dirname}/iñvàlïd-dîr`,
       });
     });
   });
 
   it("initializes with empty directory", async (): Promise<void> => {
-    await migratorosaurus(databaseConfig, {
+    await up(databaseConfig, {
       directory: createMigrationDirectory(),
     });
     await queryAssertMigrationDoesntExist(defaultMigrationHistoryTable);
   });
 
   it("initializes with custom table name", async (): Promise<void> => {
-    await migratorosaurus(databaseConfig, {
+    await up(databaseConfig, {
       directory: createMigrationDirectory(),
       table: customMigrationHistoryTable,
     });
@@ -266,14 +266,14 @@ describe("migratorosaurus", (): void => {
   });
 
   it("initializes and up migrates all", async (): Promise<void> => {
-    await migratorosaurus(databaseConfig, {
+    await up(databaseConfig, {
       directory: createStandardMigrationDirectory(),
     });
     await queryAssertMigration1(defaultMigrationHistoryTable);
   });
 
   it("initializes with custom table name and up migrates all", async (): Promise<void> => {
-    await migratorosaurus(databaseConfig, {
+    await up(databaseConfig, {
       directory: createStandardMigrationDirectory(),
       table: customMigrationHistoryTable,
     });
@@ -282,7 +282,7 @@ describe("migratorosaurus", (): void => {
 
   it("supports schema-qualified table names", async (): Promise<void> => {
     await createMigrationHistoryTable(qualifiedMigrationHistoryTable);
-    await migratorosaurus(databaseConfig, {
+    await up(databaseConfig, {
       directory: createStandardMigrationDirectory(),
       table: qualifiedMigrationHistoryTable,
     });
@@ -292,7 +292,7 @@ describe("migratorosaurus", (): void => {
   it("requires schema-qualified table names to use an existing schema", async (): Promise<void> => {
     await assertError(
       (): Promise<void> =>
-        migratorosaurus(databaseConfig, {
+        up(databaseConfig, {
           directory: createStandardMigrationDirectory(),
           table: missingSchemaMigrationHistoryTable,
         }),
@@ -302,7 +302,7 @@ describe("migratorosaurus", (): void => {
   it("rejects unconventional migration table names", async (): Promise<void> => {
     await assertError(
       (): Promise<void> =>
-        migratorosaurus(databaseConfig, {
+        up(databaseConfig, {
           directory: createStandardMigrationDirectory(),
           table: `custom "migration" history`,
         }),
@@ -312,7 +312,7 @@ describe("migratorosaurus", (): void => {
   it("rejects migration filenames with unexpected characters", async (): Promise<void> => {
     await assertError(
       (): Promise<void> =>
-        migratorosaurus(databaseConfig, {
+        up(databaseConfig, {
           directory: createMigrationDirectory({
             "0-create.sql": createPersonMigration,
             "1-o'hara.sql": `-- % up-migration % --
@@ -331,7 +331,7 @@ WHERE name = 'o''hara';
   it("rejects migration filenames with decimal indices", async (): Promise<void> => {
     await assertError(
       (): Promise<void> =>
-        migratorosaurus(databaseConfig, {
+        up(databaseConfig, {
           directory: createMigrationDirectory({
             "1.1-create.sql": createPersonMigration,
           }),
@@ -342,7 +342,7 @@ WHERE name = 'o''hara';
   it("rejects duplicate resolved migration indices", async (): Promise<void> => {
     await assertError(
       (): Promise<void> =>
-        migratorosaurus(databaseConfig, {
+        up(databaseConfig, {
           directory: createMigrationDirectory({
             "001-create_again.sql": `-- % up-migration % --
 CREATE TABLE company (
@@ -362,7 +362,7 @@ DROP TABLE company;
   it("rejects migration files without an up section", async (): Promise<void> => {
     await assertError(
       (): Promise<void> =>
-        migratorosaurus(databaseConfig, {
+        up(databaseConfig, {
           directory: createMigrationDirectory({
             "0-create.sql": `CREATE TABLE person (
   id SERIAL PRIMARY KEY,
@@ -380,7 +380,7 @@ DROP TABLE person;
   it("rejects migration files without a down section", async (): Promise<void> => {
     await assertError(
       (): Promise<void> =>
-        migratorosaurus(databaseConfig, {
+        up(databaseConfig, {
           directory: createMigrationDirectory({
             "0-create.sql": `-- % up-migration % --
 CREATE TABLE person (
@@ -396,7 +396,7 @@ CREATE TABLE person (
   it("throws error on invalid target", async (): Promise<void> => {
     let result = null;
     try {
-      await migratorosaurus(databaseConfig, {
+      await up(databaseConfig, {
         directory: createStandardMigrationDirectory(),
         target: "0-crëâté.skl",
       });
@@ -407,7 +407,7 @@ CREATE TABLE person (
   });
 
   it("initializes with migration target", async (): Promise<void> => {
-    await migratorosaurus(databaseConfig, {
+    await up(databaseConfig, {
       directory: createStandardMigrationDirectory(),
       target: "0-create.sql",
     });
@@ -415,43 +415,206 @@ CREATE TABLE person (
   });
 
   it("down migrates one migration", async (): Promise<void> => {
-    await migratorosaurus(databaseConfig, {
-      directory: createStandardMigrationDirectory(),
+    const directory = createStandardMigrationDirectory();
+    await up(databaseConfig, {
+      directory,
     });
-    await migratorosaurus(databaseConfig, {
-      directory: createStandardMigrationDirectory(),
-      target: "1-insert.sql",
+    await down(databaseConfig, {
+      directory,
     });
     await queryAssertMigration0(defaultMigrationHistoryTable);
   });
 
   it("up migrates all migrations then down migrates all", async (): Promise<void> => {
-    await migratorosaurus(databaseConfig, {
-      directory: createStandardMigrationDirectory(),
+    const directory = createStandardMigrationDirectory();
+    await up(databaseConfig, {
+      directory,
     });
     await queryAssertMigration1(defaultMigrationHistoryTable);
-    await migratorosaurus(databaseConfig, {
-      directory: createStandardMigrationDirectory(),
-      target: "0-create.sql",
+    await down(databaseConfig, {
+      directory,
+    });
+    await down(databaseConfig, {
+      directory,
     });
     await queryAssertMigrationEmpty(defaultMigrationHistoryTable);
   });
 
   it("down migrate one migration then up migrate same migration", async (): Promise<void> => {
-    await migratorosaurus(databaseConfig, {
-      directory: createStandardMigrationDirectory(),
+    const directory = createStandardMigrationDirectory();
+    await up(databaseConfig, {
+      directory,
     });
     await queryAssertMigration1(defaultMigrationHistoryTable);
-    await migratorosaurus(databaseConfig, {
-      directory: createStandardMigrationDirectory(),
-      target: "1-insert.sql",
+    await down(databaseConfig, {
+      directory,
     });
     await queryAssertMigration0(defaultMigrationHistoryTable);
-    await migratorosaurus(databaseConfig, {
-      directory: createStandardMigrationDirectory(),
+    await up(databaseConfig, {
+      directory,
       target: "1-insert.sql",
     });
     await queryAssertMigration1(defaultMigrationHistoryTable);
+  });
+
+  it("down migrates to target while leaving target applied", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+    await up(databaseConfig, {
+      directory,
+    });
+    await down(databaseConfig, {
+      directory,
+      target: "0-create.sql",
+    });
+    await queryAssertMigration0(defaultMigrationHistoryTable);
+  });
+
+  it("down target is no-op when target is latest applied", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+    await up(databaseConfig, {
+      directory,
+      target: "0-create.sql",
+    });
+    await down(databaseConfig, {
+      directory,
+      target: "0-create.sql",
+    });
+    await queryAssertMigration0(defaultMigrationHistoryTable);
+  });
+
+  it("down with empty history initializes and returns without changes", async (): Promise<void> => {
+    await down(databaseConfig, {
+      directory: createMigrationDirectory(),
+    });
+    await queryAssertMigrationEmpty(defaultMigrationHistoryTable);
+  });
+
+  it("up rejects out-of-order unapplied migrations", async (): Promise<void> => {
+    const firstDirectory = createMigrationDirectory({
+      "10-create.sql": createPersonMigration,
+    });
+    await up(databaseConfig, {
+      directory: firstDirectory,
+    });
+
+    const secondDirectory = createMigrationDirectory({
+      "3-backfill.sql": `-- % up-migration % --
+INSERT INTO person (name)
+VALUES ('backfill');
+
+-- % down-migration % --
+DELETE FROM person
+WHERE name = 'backfill';
+`,
+      "10-create.sql": createPersonMigration,
+    });
+    await assertError(
+      (): Promise<void> =>
+        up(databaseConfig, {
+          directory: secondDirectory,
+        }),
+    );
+  });
+
+  it("up target is no-op when target is latest applied", async (): Promise<void> => {
+    const firstDirectory = createMigrationDirectory({
+      "10-create.sql": createPersonMigration,
+    });
+    await up(databaseConfig, {
+      directory: firstDirectory,
+      target: "10-create.sql",
+    });
+
+    const secondDirectory = createMigrationDirectory({
+      "3-backfill.sql": `-- % up-migration % --
+INSERT INTO person (name)
+VALUES ('backfill');
+
+-- % down-migration % --
+DELETE FROM person
+WHERE name = 'backfill';
+`,
+      "10-create.sql": createPersonMigration,
+    });
+    await up(databaseConfig, {
+      directory: secondDirectory,
+      target: "10-create.sql",
+    });
+
+    const historyRows = await queryHistory(defaultMigrationHistoryTable);
+    assert.equal(historyRows.length, 1);
+    assert.equal(historyRows[0].file, "10-create.sql");
+  });
+
+  it("up rejects missing applied migration files", async (): Promise<void> => {
+    const firstDirectory = createStandardMigrationDirectory();
+    await up(databaseConfig, {
+      directory: firstDirectory,
+    });
+
+    const secondDirectory = createMigrationDirectory({
+      "1-insert.sql": insertPeopleMigration,
+    });
+    await assertError(
+      (): Promise<void> =>
+        up(databaseConfig, {
+          directory: secondDirectory,
+        }),
+    );
+  });
+
+  it("down rejects missing rollback files", async (): Promise<void> => {
+    const firstDirectory = createStandardMigrationDirectory();
+    await up(databaseConfig, {
+      directory: firstDirectory,
+    });
+
+    const secondDirectory = createMigrationDirectory({
+      "0-create.sql": createPersonMigration,
+    });
+    await assertError(
+      (): Promise<void> =>
+        down(databaseConfig, {
+          directory: secondDirectory,
+        }),
+    );
+  });
+
+  it("down validates every rollback file before running rollback SQL", async (): Promise<void> => {
+    const thirdMigration = `-- % up-migration % --
+    INSERT INTO person (name)
+    VALUES ('third');
+
+    -- % down-migration % --
+    DELETE FROM person
+    WHERE name = 'third';
+    `;
+    const firstDirectory = createMigrationDirectory({
+      "0-create.sql": createPersonMigration,
+      "1-insert.sql": insertPeopleMigration,
+      "2-third.sql": thirdMigration,
+    });
+    await up(databaseConfig, {
+      directory: firstDirectory,
+    });
+
+    const secondDirectory = createMigrationDirectory({
+      "0-create.sql": createPersonMigration,
+      "2-third.sql": thirdMigration,
+    });
+    const logs: string[] = [];
+    await assertError(
+      (): Promise<void> =>
+        down(databaseConfig, {
+          directory: secondDirectory,
+          log: (message: string): void => {
+            logs.push(message);
+          },
+          target: "0-create.sql",
+        }),
+    );
+
+    assert.ok(!logs.some((message): boolean => message.includes("downgrading")));
   });
 
   it("serializes concurrent runners against the same history table", async (): Promise<void> => {
@@ -473,12 +636,12 @@ CREATE TABLE person (
         defaultMigrationHistoryTable,
       ]);
 
-      firstMigration = migratorosaurus(databaseConfig, {
+      firstMigration = up(databaseConfig, {
         directory: createStandardMigrationDirectory(),
       }).finally((): void => {
         firstSettled = true;
       });
-      secondMigration = migratorosaurus(databaseConfig, {
+      secondMigration = up(databaseConfig, {
         directory: createStandardMigrationDirectory(),
       }).finally((): void => {
         secondSettled = true;
@@ -515,7 +678,7 @@ CREATE TABLE person (
 
   it("ends connection and throws error on postgres error", async (): Promise<void> => {
     try {
-      await migratorosaurus(databaseConfig, {
+      await up(databaseConfig, {
         directory: createMigrationDirectory({
           "0-break.sql": `-- % up-migration % --
 CREATE TABLE person (
