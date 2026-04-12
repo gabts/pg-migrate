@@ -1,0 +1,55 @@
+import * as assert from "assert";
+import { parseTableName, qualifyTableName } from "./table-name.js";
+
+describe("table-name", (): void => {
+  describe("parseTableName", (): void => {
+    it("parses unqualified table names", (): void => {
+      assert.deepEqual(parseTableName("migration_history"), {
+        table: "migration_history",
+      });
+    });
+
+    it("parses schema-qualified table names", (): void => {
+      assert.deepEqual(parseTableName("migratorosaurus.migration_history"), {
+        schema: "migratorosaurus",
+        table: "migration_history",
+      });
+    });
+
+    it("rejects unconventional table names", (): void => {
+      for (const tableName of [
+        "MigrationHistory",
+        "1migration_history",
+        "migration-history",
+        "migration.history.extra",
+        `custom "migration" history`,
+      ]) {
+        assert.throws(
+          (): void => {
+            parseTableName(tableName);
+          },
+          new RegExp(`Invalid migration table name: ${tableName}`),
+        );
+      }
+    });
+  });
+
+  describe("qualifyTableName", (): void => {
+    it("returns unqualified table names unchanged", (): void => {
+      assert.equal(
+        qualifyTableName({ table: "migration_history" }),
+        "migration_history",
+      );
+    });
+
+    it("joins schema and table names", (): void => {
+      assert.equal(
+        qualifyTableName({
+          schema: "migratorosaurus",
+          table: "migration_history",
+        }),
+        "migratorosaurus.migration_history",
+      );
+    });
+  });
+});
