@@ -135,9 +135,37 @@ async function createMigrationHistoryTable(
     (
       index integer PRIMARY KEY,
       file text UNIQUE NOT NULL,
-      date timestamptz NOT NULL
+      date timestamptz NOT NULL DEFAULT now()
     );
   `);
+}
+
+async function createMalformedMigrationHistoryTable(): Promise<void> {
+  await client.query(`
+    CREATE TABLE ${defaultMigrationHistoryTable}
+    (
+      index integer NOT NULL,
+      file text NOT NULL,
+      date timestamptz NOT NULL DEFAULT now()
+    );
+  `);
+}
+
+async function queryColumnDefault(
+  tableName: string,
+  columnName: string,
+): Promise<string | null> {
+  const res = await client.query(
+    `
+    SELECT column_default
+    FROM information_schema.columns
+    WHERE table_name = $1
+      AND column_name = $2;
+  `,
+    [tableName, columnName],
+  );
+
+  return res.rows[0]?.column_default ?? null;
 }
 
 /**
@@ -489,6 +517,19 @@ CREATE TABLE person (
     await queryAssertMigrationEmpty(defaultMigrationHistoryTable);
   });
 
+  it("creates migration history date column with a default timestamp", async (): Promise<void> => {
+    await down(databaseConfig, {
+      directory: createMigrationDirectory(),
+    });
+
+    const columnDefault = await queryColumnDefault(
+      defaultMigrationHistoryTable,
+      "date",
+    );
+
+    assert.ok(columnDefault?.includes("now()"));
+  });
+
   it("up rejects out-of-order unapplied migrations", async (): Promise<void> => {
     const firstDirectory = createMigrationDirectory({
       "10-create.sql": createPersonMigration,
@@ -544,6 +585,27 @@ WHERE name = 'backfill';
     const historyRows = await queryHistory(defaultMigrationHistoryTable);
     assert.equal(historyRows.length, 1);
     assert.equal(historyRows[0].file, "10-create.sql");
+  });
+
+  it("rejects duplicate applied migration files in history", async (): Promise<void> => {
+    await createMalformedMigrationHistoryTable();
+    await client.query(
+      `
+      INSERT INTO ${defaultMigrationHistoryTable} (index, file)
+      VALUES
+        (0, '0-create.sql'),
+        (0, '0-create.sql');
+    `,
+    );
+
+    await assertError(
+      (): Promise<void> =>
+        up(databaseConfig, {
+          directory: createMigrationDirectory({
+            "0-create.sql": createPersonMigration,
+          }),
+        }),
+    );
   });
 
   it("up rejects missing applied migration files", async (): Promise<void> => {
@@ -614,7 +676,9 @@ WHERE name = 'backfill';
         }),
     );
 
-    assert.ok(!logs.some((message): boolean => message.includes("downgrading")));
+    assert.ok(
+      !logs.some((message): boolean => message.includes("downgrading")),
+    );
   });
 
   it("serializes concurrent runners against the same history table", async (): Promise<void> => {
