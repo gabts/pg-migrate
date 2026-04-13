@@ -2,4 +2,9 @@
 
 const { cli } = require("../dist/cli.js");
 
-cli();
+try {
+  cli();
+} catch (err) {
+  process.stderr.write(`${err.message}\n`);
+  process.exitCode = 1;
+}
