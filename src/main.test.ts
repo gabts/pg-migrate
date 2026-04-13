@@ -5,7 +5,11 @@ import * as path from "path";
 import * as pg from "pg";
 import { down, up } from "./main.js";
 
-const databaseConfig: string | pg.ClientConfig = process.env.DATABASE_URL ?? {};
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL must be set to run integration tests");
+}
+
+const databaseConfig: string | pg.ClientConfig = process.env.DATABASE_URL;
 const client = new pg.Client(databaseConfig);
 const defaultMigrationHistoryTable = "migration_history";
 const tempMigrationDirectories: string[] = [];

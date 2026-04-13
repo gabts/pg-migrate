@@ -2,7 +2,11 @@ import * as assert from "assert";
 import * as pg from "pg";
 import { withMigrationTransaction } from "./transaction.js";
 
-const databaseConfig: string | pg.ClientConfig = process.env.DATABASE_URL ?? {};
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL must be set to run integration tests");
+}
+
+const databaseConfig: string | pg.ClientConfig = process.env.DATABASE_URL;
 const client = new pg.Client(databaseConfig);
 const defaultMigrationHistoryTable = "migration_history";
 const schemaMigrationHistorySchema = "migratorosaurus_test";
