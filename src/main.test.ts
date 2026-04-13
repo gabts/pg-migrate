@@ -143,14 +143,6 @@ describe("main", (): void => {
     }
   });
 
-  it("does not initialize migration history when up has no files", async (): Promise<void> => {
-    await up(databaseConfig, {
-      directory: createMigrationDirectory(),
-    });
-
-    assert.ok(!(await queryTableExists(defaultMigrationHistoryTable)));
-  });
-
   it("up migrates all pending migrations", async (): Promise<void> => {
     await up(databaseConfig, {
       directory: createStandardMigrationDirectory(),

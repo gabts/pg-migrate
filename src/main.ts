@@ -37,10 +37,6 @@ export async function up(
   log("🦖 migratorosaurus up initiated!");
 
   const disk = loadDiskMigrations(directory);
-  if (!disk.all.length) {
-    log("🌋 migratorosaurus completed! no files found.");
-    return;
-  }
 
   await withMigrationTransaction({
     clientConfig,

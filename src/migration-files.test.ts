@@ -151,6 +151,14 @@ describe("migration-files", (): void => {
   });
 
   describe("loadDiskMigrations", (): void => {
+    it("throws when the migration directory has no SQL files", (): void => {
+      withMigrationDirectory({}, (directory): void => {
+        assert.throws((): void => {
+          loadDiskMigrations(directory);
+        }, /No migration files found in directory/);
+      });
+    });
+
     it("throws when the migration directory does not exist", (): void => {
       const missingDirectory = path.join(
         os.tmpdir(),
@@ -159,7 +167,7 @@ describe("migration-files", (): void => {
 
       assert.throws((): void => {
         loadDiskMigrations(missingDirectory);
-      });
+      }, /Migration directory does not exist/);
     });
 
     it("loads, sorts, and indexes SQL migration files", (): void => {

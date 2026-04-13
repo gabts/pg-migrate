@@ -76,8 +76,17 @@ export function materializeSteps(
 }
 
 export function loadDiskMigrations(directory: string): LoadedMigrations {
+  if (!fs.existsSync(directory) || !fs.statSync(directory).isDirectory()) {
+    throw new Error(`Migration directory does not exist: ${directory}`);
+  }
+
   const files = fs.readdirSync(directory);
   const migrationFiles = files.filter((file): boolean => file.endsWith(".sql"));
+
+  if (!migrationFiles.length) {
+    throw new Error(`No migration files found in directory: ${directory}`);
+  }
+
   const invalidMigrationFile = migrationFiles.find(
     (file): boolean => !file.match(migrationFilePattern),
   );
