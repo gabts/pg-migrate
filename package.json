@@ -25,6 +25,11 @@
     "database",
     "migration"
   ],
+  "files": [
+    "bin/cli.js",
+    "dist/**/*",
+    "!dist/**/*.test.*"
+  ],
   "bin": {
     "migratorosaurus": "./bin/cli.js"
   },
