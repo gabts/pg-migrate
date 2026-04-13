@@ -5,6 +5,13 @@
   "author": "gabts",
   "license": "MIT",
   "main": "dist/main.js",
+  "types": "dist/main.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/main.d.ts",
+      "default": "./dist/main.js"
+    }
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/gabts/migratorosaurus.git"
