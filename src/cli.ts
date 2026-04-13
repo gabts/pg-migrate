@@ -3,6 +3,7 @@ import * as path from "path";
 import {
   migrationFilePattern,
   parseMigrationIndex,
+  POSTGRES_MAX_INDEX,
 } from "./migration-files.js";
 
 const helpText = `Usage: migratorosaurus <command> [options]
@@ -135,6 +136,12 @@ function createMigration(args: string[]): void {
     if (fileIndex >= index) {
       index = fileIndex + 1;
     }
+  }
+
+  if (index > POSTGRES_MAX_INDEX) {
+    throw new Error(
+      `Next migration index ${index} exceeds PostgreSQL integer range`,
+    );
   }
 
   const indexString =

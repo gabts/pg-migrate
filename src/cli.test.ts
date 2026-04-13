@@ -130,6 +130,17 @@ describe("cli", (): void => {
     assert.ok(fs.existsSync(createdPath));
   });
 
+  it("rejects next index beyond PostgreSQL integer range", (): void => {
+    fs.writeFileSync(
+      path.join(tempDir, "2147483647-at-limit.sql"),
+      "existing\n",
+    );
+
+    assert.throws((): void => {
+      runCli(["create", "--directory", tempDir, "--name", "overflow"]);
+    }, /exceeds PostgreSQL integer range/);
+  });
+
   it("supports customizing zero-padding width", (): void => {
     const output = runCli([
       "create",
