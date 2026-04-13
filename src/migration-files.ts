@@ -1,6 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
-import type { DiskMigration, LoadedMigrations } from "./types.js";
+import type {
+  DiskMigration,
+  LoadedMigrations,
+  MigrationStep,
+} from "./types.js";
 
 export const migrationFilePattern = /^(\d+)(?:-[A-Za-z0-9_.-]+)?\.sql$/;
 
@@ -58,6 +62,17 @@ export function parseMigration(
   }
 
   return direction === "up" ? upSql : downSql;
+}
+
+export function materializeSteps(
+  migrations: DiskMigration[],
+  direction: "up" | "down",
+): MigrationStep[] {
+  return migrations.map(({ file, index, path: filePath }) => ({
+    file,
+    index,
+    sql: parseMigration(fs.readFileSync(filePath, "utf8"), direction, file),
+  }));
 }
 
 export function loadDiskMigrations(directory: string): LoadedMigrations {

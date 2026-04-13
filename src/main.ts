@@ -1,5 +1,5 @@
 import { executeDownPlan, executeUpPlan } from "./execution.js";
-import { loadDiskMigrations } from "./migration-files.js";
+import { loadDiskMigrations, materializeSteps } from "./migration-files.js";
 import { planDownExecution, planUpExecution } from "./planning.js";
 import { withMigrationTransaction } from "./transaction.js";
 import type { ClientConfig, LogFn } from "./types.js";
@@ -59,7 +59,8 @@ export async function up(
         targetMigration,
       });
 
-      await executeUpPlan({ client, log, migrations, table });
+      const steps = materializeSteps(migrations, "up");
+      await executeUpPlan({ client, log, steps, table });
     },
   });
 
@@ -92,7 +93,8 @@ export async function down(
         targetMigration,
       });
 
-      await executeDownPlan({ client, log, migrations, table });
+      const steps = materializeSteps(migrations, "down");
+      await executeDownPlan({ client, log, steps, table });
     },
   });
 

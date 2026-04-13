@@ -11,6 +11,12 @@ export interface LoadedMigrations {
   byFile: Map<string, DiskMigration>;
 }
 
+export interface MigrationStep {
+  file: string;
+  index: number;
+  sql: string;
+}
+
 export interface AppliedRow {
   file: string;
   index: number;

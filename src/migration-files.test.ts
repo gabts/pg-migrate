@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import {
   loadDiskMigrations,
+  materializeSteps,
   parseMigration,
   parseMigrationIndex,
 } from "./migration-files.js";
@@ -102,6 +103,50 @@ describe("migration-files", (): void => {
           "0.sql",
         );
       }, /Invalid migration file contents: 0\.sql/);
+    });
+  });
+
+  describe("materializeSteps", (): void => {
+    it("reads migration files and extracts SQL for the given direction", (): void => {
+      withMigrationDirectory(
+        {
+          "0-create.sql": validMigration,
+          "1-add-column.sql": validMigration,
+        },
+        (directory): void => {
+          const disk = loadDiskMigrations(directory);
+
+          assert.deepEqual(materializeSteps(disk.all, "up"), [
+            {
+              file: "0-create.sql",
+              index: 0,
+              sql: "CREATE TABLE person (id integer);",
+            },
+            {
+              file: "1-add-column.sql",
+              index: 1,
+              sql: "CREATE TABLE person (id integer);",
+            },
+          ]);
+
+          assert.deepEqual(materializeSteps(disk.all, "down"), [
+            {
+              file: "0-create.sql",
+              index: 0,
+              sql: "DROP TABLE person;",
+            },
+            {
+              file: "1-add-column.sql",
+              index: 1,
+              sql: "DROP TABLE person;",
+            },
+          ]);
+        },
+      );
+    });
+
+    it("returns an empty array for an empty plan", (): void => {
+      assert.deepEqual(materializeSteps([], "up"), []);
     });
   });
 
