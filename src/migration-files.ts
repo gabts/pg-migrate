@@ -8,6 +8,8 @@ import type {
 
 export const migrationFilePattern = /^(\d+)(?:-[A-Za-z0-9_.-]+)?\.sql$/;
 
+const POSTGRES_MAX_INDEX = 2_147_483_647;
+
 const migrationMarkers = {
   up: "-- % up-migration % --",
   down: "-- % down-migration % --",
@@ -20,7 +22,7 @@ export function parseMigrationIndex(file: string): number {
   }
 
   const index = Number.parseInt(match[1], 10);
-  if (!Number.isInteger(index)) {
+  if (!Number.isInteger(index) || index > POSTGRES_MAX_INDEX) {
     throw new Error(`Invalid migration file name: ${file}`);
   }
 
