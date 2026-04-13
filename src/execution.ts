@@ -31,8 +31,12 @@ export async function executeDownPlan(args: {
   const qualifiedTableName = qualifyTableName(parseTableName(table));
 
   for (const { file, sql } of steps) {
-    log(`↓  downgrading > "${file}"`);
-    await client.query(sql);
+    if (sql) {
+      log(`↓  downgrading > "${file}"`);
+      await client.query(sql);
+    } else {
+      log(`↓  downgrading > "${file}" (no down section, skipping)`);
+    }
     await client.query(`DELETE FROM ${qualifiedTableName} WHERE file = $1;`, [
       file,
     ]);

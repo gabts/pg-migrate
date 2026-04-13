@@ -88,7 +88,7 @@ describe("migration-files", (): void => {
       }, /Invalid migration file contents: 0\.sql/);
     });
 
-    it("rejects empty up or down sections", (): void => {
+    it("rejects empty up sections", (): void => {
       assert.throws((): void => {
         parseMigration(
           `-- % up-migration % --\n\n-- % down-migration % --\nDROP TABLE person;`,
@@ -96,13 +96,17 @@ describe("migration-files", (): void => {
           "0.sql",
         );
       }, /Invalid migration file contents: 0\.sql/);
-      assert.throws((): void => {
+    });
+
+    it("allows empty down sections for irreversible migrations", (): void => {
+      assert.equal(
         parseMigration(
           `-- % up-migration % --\nCREATE TABLE person (id integer);\n-- % down-migration % --\n`,
           "down",
           "0.sql",
-        );
-      }, /Invalid migration file contents: 0\.sql/);
+        ),
+        "",
+      );
     });
   });
 
@@ -147,6 +151,23 @@ describe("migration-files", (): void => {
 
     it("returns an empty array for an empty plan", (): void => {
       assert.deepEqual(materializeSteps([], "up"), []);
+    });
+
+    it("materializes empty down SQL for irreversible migrations", (): void => {
+      const irreversibleMigration = `-- % up-migration % --\nINSERT INTO data SELECT generate_series(1, 1000);\n-- % down-migration % --\n`;
+
+      withMigrationDirectory(
+        {
+          "0-backfill.sql": irreversibleMigration,
+        },
+        (directory): void => {
+          const disk = loadDiskMigrations(directory);
+
+          assert.deepEqual(materializeSteps(disk.all, "down"), [
+            { file: "0-backfill.sql", index: 0, sql: "" },
+          ]);
+        },
+      );
     });
   });
 

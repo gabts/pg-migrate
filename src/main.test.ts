@@ -258,6 +258,43 @@ describe("main", (): void => {
     await assertMigration1();
   });
 
+  it("down migrates past an irreversible migration", async (): Promise<void> => {
+    const irreversibleMigration = `-- % up-migration % --
+INSERT INTO person (name)
+VALUES ('gabriel'), ('david'), ('frasse');
+
+-- % down-migration % --
+`;
+
+    const directory = createMigrationDirectory({
+      "0-create.sql": createPersonMigration,
+      "1-backfill.sql": irreversibleMigration,
+    });
+
+    const logs: string[] = [];
+    const log = (message: string): void => {
+      logs.push(message);
+    };
+
+    await up(databaseConfig, { directory });
+    await down(databaseConfig, { directory, target: "0-create.sql", log });
+
+    const historyRows = await queryHistory(defaultMigrationHistoryTable);
+    assert.equal(historyRows.length, 1);
+    assert.equal(historyRows[0].file, "0-create.sql");
+
+    const personRows = await queryPersons();
+    assert.equal(personRows.length, 3);
+
+    assert.ok(
+      logs.some(
+        (l): boolean =>
+          l.includes("1-backfill.sql") &&
+          l.includes("no down section, skipping"),
+      ),
+    );
+  });
+
   it("surfaces postgres errors and rolls back setup", async (): Promise<void> => {
     await assert.rejects(
       (): Promise<void> =>

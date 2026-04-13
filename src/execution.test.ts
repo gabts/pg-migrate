@@ -108,6 +108,34 @@ describe("execution", (): void => {
       ]);
     });
 
+    it("skips SQL execution for irreversible migrations but removes the tracking row", async (): Promise<void> => {
+      const { client, queries } = createFakeClient();
+      const logs: string[] = [];
+
+      const steps: MigrationStep[] = [
+        { file: "0-backfill.sql", index: 0, sql: "" },
+      ];
+
+      await executeDownPlan({
+        client,
+        log: (message: string): void => {
+          logs.push(message);
+        },
+        steps,
+        table: "migration_history",
+      });
+
+      assert.deepEqual(logs, [
+        '↓  downgrading > "0-backfill.sql" (no down section, skipping)',
+      ]);
+      assert.deepEqual(queries, [
+        {
+          sql: "DELETE FROM migration_history WHERE file = $1;",
+          params: ["0-backfill.sql"],
+        },
+      ]);
+    });
+
     it("does nothing for an empty down plan", async (): Promise<void> => {
       const { client, queries } = createFakeClient();
 

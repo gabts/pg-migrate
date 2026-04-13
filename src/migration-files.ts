@@ -57,7 +57,7 @@ export function parseMigration(
     .trim();
   const downSql = sql.slice(downMarkerIndex + downMarker.length).trim();
 
-  if (!upSql || !downSql) {
+  if (!upSql) {
     throw new Error(`Invalid migration file contents: ${file}`);
   }
 
