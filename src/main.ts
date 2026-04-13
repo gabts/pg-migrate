@@ -56,6 +56,12 @@ export async function up(
       });
 
       const steps = materializeSteps(migrations, "up");
+
+      if (steps.length === 0) {
+        log("No pending migrations.");
+        return;
+      }
+
       await executeUpPlan({ client, log, steps, table });
     },
   });
@@ -90,6 +96,12 @@ export async function down(
       });
 
       const steps = materializeSteps(migrations, "down");
+
+      if (steps.length === 0) {
+        log("No migrations to roll back.");
+        return;
+      }
+
       await executeDownPlan({ client, log, steps, table });
     },
   });
