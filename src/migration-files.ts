@@ -114,8 +114,9 @@ export function loadDiskMigrations(directory: string): LoadedMigrations {
   for (const migration of all) {
     const existingFile = seenIndices.get(migration.index);
     if (existingFile) {
+      const [first, second] = [existingFile, migration.file].sort();
       throw new Error(
-        `Duplicate migration index ${migration.index}: ${existingFile} and ${migration.file}`,
+        `Duplicate migration index ${migration.index}: ${first} and ${second}`,
       );
     }
 
