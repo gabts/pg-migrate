@@ -62,9 +62,7 @@ export function parseMigration(
 
 export function loadDiskMigrations(directory: string): LoadedMigrations {
   const files = fs.readdirSync(directory);
-  const migrationFiles = files
-    .filter((file): boolean => file.endsWith(".sql"))
-    .sort();
+  const migrationFiles = files.filter((file): boolean => file.endsWith(".sql"));
   const invalidMigrationFile = migrationFiles.find(
     (file): boolean => !file.match(migrationFilePattern),
   );
@@ -94,6 +92,8 @@ export function loadDiskMigrations(directory: string): LoadedMigrations {
     seenIndices.set(migration.index, migration.file);
     byFile.set(migration.file, migration);
   }
+
+  all.sort((a, b): number => a.index - b.index);
 
   return { all, byFile };
 }

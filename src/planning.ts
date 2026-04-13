@@ -8,12 +8,9 @@ export function planUpExecution(args: {
   const latestAppliedIndex = args.latestApplied?.index ?? -1;
   const targetIndex = args.targetMigration?.index ?? Number.POSITIVE_INFINITY;
 
-  return args.disk.all
-    .filter(
-      ({ index }): boolean =>
-        index > latestAppliedIndex && index <= targetIndex,
-    )
-    .sort((a, b): number => a.index - b.index);
+  return args.disk.all.filter(
+    ({ index }): boolean => index > latestAppliedIndex && index <= targetIndex,
+  );
 }
 
 export function planDownExecution(args: {
