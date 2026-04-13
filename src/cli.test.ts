@@ -208,4 +208,26 @@ describe("cli", (): void => {
       runCli(["unknown"]);
     }, /Unknown command: unknown/);
   });
+
+  it("rejects directories containing invalid SQL file names", (): void => {
+    fs.writeFileSync(path.join(tempDir, "bad name.sql"), "existing\n");
+
+    assert.throws((): void => {
+      runCli(["create", "--directory", tempDir, "--name", "create-person"]);
+    }, /Invalid migration file name: bad name\.sql/);
+  });
+
+  it("strips .sql extension from migration name", (): void => {
+    const output = runCli([
+      "create",
+      "--directory",
+      tempDir,
+      "--name",
+      "create-person.sql",
+    ]);
+    const createdPath = path.join(tempDir, "001-create-person.sql");
+
+    assert.equal(output, `${createdPath}\n`);
+    assert.ok(fs.existsSync(createdPath));
+  });
 });

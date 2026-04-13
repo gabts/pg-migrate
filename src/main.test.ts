@@ -321,4 +321,86 @@ DROP TABLE person;
     assert.equal(await queryTableExists("person"), false);
     assert.equal(await queryTableExists(defaultMigrationHistoryTable), false);
   });
+
+  it("down is a no-op when no migrations are applied", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+    const logs: string[] = [];
+    const log = (message: string): void => {
+      logs.push(message);
+    };
+
+    await down(databaseConfig, { directory, log });
+
+    assert.ok(
+      logs.some((l): boolean => l.includes("No migrations to roll back.")),
+    );
+  });
+
+  it("down is a no-op when target is the latest applied migration", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+    const logs: string[] = [];
+    const log = (message: string): void => {
+      logs.push(message);
+    };
+
+    await up(databaseConfig, { directory });
+    await down(databaseConfig, { directory, target: "1-insert.sql", log });
+
+    assert.ok(
+      logs.some((l): boolean => l.includes("No migrations to roll back.")),
+    );
+    await assertMigration1();
+  });
+
+  it("up is a no-op when target equals latest applied migration", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+    const logs: string[] = [];
+    const log = (message: string): void => {
+      logs.push(message);
+    };
+
+    await up(databaseConfig, { directory });
+    await up(databaseConfig, { directory, target: "1-insert.sql", log });
+
+    assert.ok(logs.some((l): boolean => l.includes("No pending migrations.")));
+    await assertMigration1();
+  });
+
+  it("up applies remaining migrations incrementally", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+
+    await up(databaseConfig, { directory, target: "0-create.sql" });
+    await assertMigration0();
+
+    await up(databaseConfig, { directory });
+    await assertMigration1();
+  });
+
+  it("up and down with a schema-qualified migration history table", async (): Promise<void> => {
+    const schema = "migratorosaurus_main_test";
+    const table = `${schema}.migration_history`;
+    const directory = createStandardMigrationDirectory();
+
+    try {
+      await client.query(`CREATE SCHEMA IF NOT EXISTS ${schema};`);
+
+      await up(databaseConfig, { directory, table });
+
+      assert.ok(await queryTableExists(table));
+      const historyAfterUp = await queryHistory(`${schema}.migration_history`);
+      assert.equal(historyAfterUp.length, 2);
+      const personRows = await queryPersons();
+      assert.equal(personRows.length, 3);
+
+      await down(databaseConfig, { directory, table });
+
+      const historyAfterDown = await queryHistory(
+        `${schema}.migration_history`,
+      );
+      assert.equal(historyAfterDown.length, 1);
+      assert.equal(historyAfterDown[0].file, "0-create.sql");
+    } finally {
+      await client.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE;`);
+    }
+  });
 });
