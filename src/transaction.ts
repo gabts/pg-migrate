@@ -37,6 +37,35 @@ async function initialize(
   }
 }
 
+async function withClientTransaction<T>(
+  clientConfig: ClientConfig,
+  fn: (client: pg.Client) => Promise<T>,
+): Promise<T> {
+  const client = new pg.Client(clientConfig);
+  let hasError = false;
+  try {
+    await client.connect();
+    await client.query("BEGIN;");
+    const result = await fn(client);
+    await client.query("COMMIT;");
+    return result;
+  } catch (error) {
+    hasError = true;
+    try {
+      await client.query("ROLLBACK;");
+    } catch {
+      // Ignore rollback errors and surface the original failure.
+    }
+    throw error;
+  } finally {
+    try {
+      await client.end();
+    } catch (endError) {
+      if (!hasError) throw endError;
+    }
+  }
+}
+
 export async function withMigrationTransaction<T>(args: {
   clientConfig: ClientConfig;
   log: LogFn;
@@ -44,41 +73,28 @@ export async function withMigrationTransaction<T>(args: {
   table: string;
 }): Promise<T> {
   const { clientConfig, log, run, table } = args;
-  const client = new pg.Client(clientConfig);
   const qualifiedTableName = qualifyTableName(parseTableName(table));
-  let transactionStarted = false;
 
   try {
-    await client.connect();
-    await client.query("BEGIN;");
-    transactionStarted = true;
+    return await withClientTransaction(clientConfig, async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1));", [
+        table,
+      ]);
+      await initialize(client, log, table);
+      await client.query(
+        `LOCK TABLE ${qualifiedTableName} IN EXCLUSIVE MODE;`,
+      );
 
-    await client.query("SELECT pg_advisory_xact_lock(hashtext($1));", [table]);
-    await initialize(client, log, table);
-    await client.query(`LOCK TABLE ${qualifiedTableName} IN EXCLUSIVE MODE;`);
+      const appliedRowsResult = await client.query<AppliedRow>(
+        `SELECT index, file FROM ${qualifiedTableName} ORDER BY index DESC;`,
+      );
+      const appliedRows = appliedRowsResult.rows;
+      validateAppliedHistory(appliedRows);
 
-    const appliedRowsResult = await client.query<AppliedRow>(
-      `SELECT index, file FROM ${qualifiedTableName} ORDER BY index DESC;`,
-    );
-    const appliedRows = appliedRowsResult.rows;
-    validateAppliedHistory(appliedRows);
-
-    const result = await run({ appliedRows, client });
-
-    await client.query("COMMIT;");
-    transactionStarted = false;
-    return result;
+      return run({ appliedRows, client });
+    });
   } catch (error) {
     log("☄️ migratorosaurus threw error!");
-    if (transactionStarted) {
-      try {
-        await client.query("ROLLBACK;");
-      } catch {
-        // Ignore rollback errors and surface the original failure.
-      }
-    }
     throw error;
-  } finally {
-    await client.end();
   }
 }
