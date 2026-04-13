@@ -35,20 +35,20 @@ describe("table-name", (): void => {
   });
 
   describe("qualifyTableName", (): void => {
-    it("returns unqualified table names unchanged", (): void => {
+    it("quotes unqualified table names", (): void => {
       assert.equal(
         qualifyTableName({ table: "migration_history" }),
-        "migration_history",
+        '"migration_history"',
       );
     });
 
-    it("joins schema and table names", (): void => {
+    it("quotes and joins schema and table names", (): void => {
       assert.equal(
         qualifyTableName({
           schema: "migratorosaurus",
           table: "migration_history",
         }),
-        "migratorosaurus.migration_history",
+        '"migratorosaurus"."migration_history"',
       );
     });
   });

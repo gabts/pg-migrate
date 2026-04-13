@@ -27,5 +27,5 @@ export function parseTableName(tableName: string): TableNameParts {
 }
 
 export function qualifyTableName({ schema, table }: TableNameParts): string {
-  return schema ? `${schema}.${table}` : table;
+  return schema ? `"${schema}"."${table}"` : `"${table}"`;
 }

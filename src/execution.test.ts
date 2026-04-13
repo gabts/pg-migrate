@@ -53,7 +53,7 @@ describe("execution", (): void => {
           params: undefined,
         },
         {
-          sql: "INSERT INTO migratorosaurus.migration_history ( index, file, date ) VALUES ( $1, $2, clock_timestamp() );",
+          sql: 'INSERT INTO "migratorosaurus"."migration_history" ( index, file, date ) VALUES ( $1, $2, clock_timestamp() );',
           params: [0, "0-create.sql"],
         },
       ]);
@@ -102,7 +102,7 @@ describe("execution", (): void => {
           params: undefined,
         },
         {
-          sql: "DELETE FROM migration_history WHERE file = $1;",
+          sql: 'DELETE FROM "migration_history" WHERE file = $1;',
           params: ["0-create.sql"],
         },
       ]);
@@ -130,7 +130,7 @@ describe("execution", (): void => {
       ]);
       assert.deepEqual(queries, [
         {
-          sql: "DELETE FROM migration_history WHERE file = $1;",
+          sql: 'DELETE FROM "migration_history" WHERE file = $1;',
           params: ["0-backfill.sql"],
         },
       ]);
