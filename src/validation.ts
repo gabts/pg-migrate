@@ -118,10 +118,14 @@ export function validateUpPreconditions(args: {
       };
     }
 
-    for (const migration of unappliedDiskMigrations) {
-      if (migration.index <= latestApplied.index) {
+    // Verify applied migrations are contiguous: every disk migration at or
+    // below the latest applied index must also be applied.
+    const appliedIndices = new Set(appliedRows.map(({ index }) => index));
+    for (const migration of disk.all) {
+      if (migration.index > latestApplied.index) break;
+      if (!appliedIndices.has(migration.index)) {
         throw new Error(
-          `Out-of-order migration file "${migration.file}" has index ${migration.index}, which is not above latest applied index ${latestApplied.index}`,
+          `Gap in applied migration history: "${migration.file}" (index ${migration.index}) is not applied, but migrations up to index ${latestApplied.index} have been applied`,
         );
       }
     }

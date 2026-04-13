@@ -217,13 +217,36 @@ describe("validation", (): void => {
       }, /Applied migration file is missing on disk: 9-missing\.sql/);
     });
 
-    it("rejects unapplied disk migrations at or below the latest applied index", (): void => {
+    it("rejects gaps in applied migration history", (): void => {
       assert.throws((): void => {
         validateUpPreconditions({
           appliedRows: [{ file: "2-alter.sql", index: 2 }],
           disk,
         });
-      }, /Out-of-order migration file "0-create\.sql" has index 0, which is not above latest applied index 2/);
+      }, /Gap in applied migration history: "0-create\.sql" \(index 0\) is not applied, but migrations up to index 2 have been applied/);
+    });
+
+    it("rejects non-contiguous applied migrations", (): void => {
+      const fourMigrations: DiskMigration[] = [
+        ...migrations,
+        { file: "3-drop.sql", index: 3, path: "/migrations/3-drop.sql" },
+      ];
+      const fourDisk: LoadedMigrations = {
+        all: fourMigrations,
+        byFile: new Map(
+          fourMigrations.map((m): [string, DiskMigration] => [m.file, m]),
+        ),
+      };
+
+      assert.throws((): void => {
+        validateUpPreconditions({
+          appliedRows: [
+            { file: "3-drop.sql", index: 3 },
+            { file: "1-insert.sql", index: 1 },
+          ],
+          disk: fourDisk,
+        });
+      }, /Gap in applied migration history: "0-create\.sql" \(index 0\) is not applied, but migrations up to index 3 have been applied/);
     });
 
     it("rejects targets behind the latest applied migration", (): void => {
