@@ -58,7 +58,7 @@ CREATE TABLE person (
 DROP TABLE person;
 ```
 
-Both sections must contain SQL.
+The `up` section must contain SQL. The `down` section may be left empty for irreversible migrations. During rollback, empty `down` migrations execute no SQL but are still removed from the history table, so their `up()` must be idempotent.
 
 ## 🛠️ CLI
 
