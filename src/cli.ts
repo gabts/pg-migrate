@@ -1,4 +1,8 @@
 import * as fs from "fs";
+import {
+  migrationFilePattern,
+  parseMigrationIndex,
+} from "./migration-files.js";
 
 const helpText = `Usage: migratorosaurus <command> [options]
 
@@ -125,8 +129,9 @@ function createMigration(args: string[]): void {
   const files = fs.readdirSync(opts.directory);
 
   for (const file of files) {
-    const fileIndex = Number.parseInt(file.split("-")[0] ?? "", 10);
-    if (!Number.isNaN(fileIndex) && fileIndex >= index) {
+    if (!file.match(migrationFilePattern)) continue;
+    const fileIndex = parseMigrationIndex(file);
+    if (fileIndex >= index) {
       index = fileIndex + 1;
     }
   }
