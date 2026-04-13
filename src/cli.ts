@@ -129,9 +129,17 @@ function createMigration(args: string[]): void {
 
   let index = 1;
   const files = fs.readdirSync(opts.directory);
+  const sqlFiles = files.filter((file): boolean => file.endsWith(".sql"));
 
-  for (const file of files) {
-    if (!file.match(migrationFilePattern)) continue;
+  const invalidFile = sqlFiles.find(
+    (file): boolean => !file.match(migrationFilePattern),
+  );
+
+  if (invalidFile) {
+    throw new Error(`Invalid migration file name: ${invalidFile}`);
+  }
+
+  for (const file of sqlFiles) {
     const fileIndex = parseMigrationIndex(file);
     if (fileIndex >= index) {
       index = fileIndex + 1;
