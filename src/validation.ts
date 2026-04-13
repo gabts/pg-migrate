@@ -111,13 +111,6 @@ export function validateUpPreconditions(args: {
   validateAppliedFilesExistOnDisk(appliedRows, disk);
 
   if (latestApplied) {
-    if (targetMigration?.file === latestApplied.file) {
-      return {
-        latestApplied,
-        targetMigration,
-      };
-    }
-
     // Verify applied migrations are contiguous: every disk migration at or
     // below the latest applied index must also be applied.
     const appliedIndices = new Set(appliedRows.map(({ index }) => index));
@@ -128,6 +121,13 @@ export function validateUpPreconditions(args: {
           `Gap in applied migration history: "${migration.file}" (index ${migration.index}) is not applied, but migrations up to index ${latestApplied.index} have been applied`,
         );
       }
+    }
+
+    if (targetMigration?.file === latestApplied.file) {
+      return {
+        latestApplied,
+        targetMigration,
+      };
     }
 
     if (

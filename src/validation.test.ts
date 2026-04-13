@@ -278,7 +278,11 @@ describe("validation", (): void => {
     it("allows target to equal the latest applied migration", (): void => {
       assert.deepEqual(
         validateUpPreconditions({
-          appliedRows: [{ file: "2-alter.sql", index: 2 }],
+          appliedRows: [
+            { file: "2-alter.sql", index: 2 },
+            { file: "1-insert.sql", index: 1 },
+            { file: "0-create.sql", index: 0 },
+          ],
           disk,
           target: "2-alter.sql",
         }),
@@ -287,6 +291,16 @@ describe("validation", (): void => {
           targetMigration: migrations[2],
         },
       );
+    });
+
+    it("rejects gaps even when target equals the latest applied migration", (): void => {
+      assert.throws((): void => {
+        validateUpPreconditions({
+          appliedRows: [{ file: "2-alter.sql", index: 2 }],
+          disk,
+          target: "2-alter.sql",
+        });
+      }, /Gap in applied migration history/);
     });
   });
 });
