@@ -2,6 +2,7 @@ import * as assert from "assert";
 import {
   validateAppliedFilesExistOnDisk,
   validateAppliedHistory,
+  validateDownPreconditions,
   validateUpPreconditions,
 } from "./validation.js";
 import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
@@ -93,6 +94,78 @@ describe("validation", (): void => {
           [{ file: "9-missing.sql", index: 9 }],
           disk,
         );
+      }, /Applied migration file is missing on disk: 9-missing\.sql/);
+    });
+  });
+
+  describe("validateDownPreconditions", (): void => {
+    const appliedRows: AppliedRow[] = [
+      { file: "2-alter.sql", index: 2 },
+      { file: "1-insert.sql", index: 1 },
+      { file: "0-create.sql", index: 0 },
+    ];
+
+    it("returns null target when no target is provided", (): void => {
+      assert.deepEqual(
+        validateDownPreconditions({
+          appliedRows,
+          disk,
+        }),
+        { targetMigration: null },
+      );
+    });
+
+    it("returns the resolved target migration", (): void => {
+      assert.deepEqual(
+        validateDownPreconditions({
+          appliedRows,
+          disk,
+          target: "0-create.sql",
+        }),
+        { targetMigration: migrations[0] },
+      );
+    });
+
+    it("rejects target files that do not exist on disk", (): void => {
+      assert.throws((): void => {
+        validateDownPreconditions({
+          appliedRows,
+          disk,
+          target: "3-missing.sql",
+        });
+      }, /migratorosaurus: no such target file "3-missing\.sql"/);
+    });
+
+    it("rejects target files that are not applied", (): void => {
+      assert.throws((): void => {
+        validateDownPreconditions({
+          appliedRows: [{ file: "2-alter.sql", index: 2 }],
+          disk,
+          target: "1-insert.sql",
+        });
+      }, /Target migration is not applied: 1-insert\.sql/);
+    });
+
+    it("validates rollback files exist on disk", (): void => {
+      assert.throws((): void => {
+        validateDownPreconditions({
+          appliedRows: [
+            { file: "2-alter.sql", index: 2 },
+            { file: "1-missing.sql", index: 1 },
+            { file: "0-create.sql", index: 0 },
+          ],
+          disk,
+          target: "0-create.sql",
+        });
+      }, /Applied migration file is missing on disk: 1-missing\.sql/);
+    });
+
+    it("validates the latest applied file exists on disk when no target is provided", (): void => {
+      assert.throws((): void => {
+        validateDownPreconditions({
+          appliedRows: [{ file: "9-missing.sql", index: 9 }],
+          disk,
+        });
       }, /Applied migration file is missing on disk: 9-missing\.sql/);
     });
   });

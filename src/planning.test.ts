@@ -66,6 +66,7 @@ describe("planning", (): void => {
         planDownExecution({
           appliedRows,
           disk,
+          targetMigration: null,
         }),
         [migrations[2]],
       );
@@ -76,6 +77,7 @@ describe("planning", (): void => {
         planDownExecution({
           appliedRows: [],
           disk,
+          targetMigration: null,
         }),
         [],
       );
@@ -86,44 +88,10 @@ describe("planning", (): void => {
         planDownExecution({
           appliedRows,
           disk,
-          target: "0-create.sql",
+          targetMigration: migrations[0]!,
         }),
         [migrations[2], migrations[1]],
       );
-    });
-
-    it("rejects target files that do not exist on disk", (): void => {
-      assert.throws((): void => {
-        planDownExecution({
-          appliedRows,
-          disk,
-          target: "3-missing.sql",
-        });
-      }, /migratorosaurus: no such target file "3-missing\.sql"/);
-    });
-
-    it("rejects target files that are not applied", (): void => {
-      assert.throws((): void => {
-        planDownExecution({
-          appliedRows: [{ file: "2-alter.sql", index: 2 }],
-          disk,
-          target: "1-insert.sql",
-        });
-      }, /Target migration is not applied: 1-insert\.sql/);
-    });
-
-    it("validates rollback files exist on disk before planning", (): void => {
-      assert.throws((): void => {
-        planDownExecution({
-          appliedRows: [
-            { file: "2-alter.sql", index: 2 },
-            { file: "1-missing.sql", index: 1 },
-            { file: "0-create.sql", index: 0 },
-          ],
-          disk,
-          target: "0-create.sql",
-        });
-      }, /Applied migration file is missing on disk: 1-missing\.sql/);
     });
   });
 });

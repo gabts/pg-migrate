@@ -3,7 +3,10 @@ import { loadDiskMigrations } from "./migration-files.js";
 import { planDownExecution, planUpExecution } from "./planning.js";
 import { withMigrationTransaction } from "./transaction.js";
 import type { ClientConfig, LogFn } from "./types.js";
-import { validateUpPreconditions } from "./validation.js";
+import {
+  validateDownPreconditions,
+  validateUpPreconditions,
+} from "./validation.js";
 
 export interface MigrationOptions {
   directory?: string;
@@ -49,6 +52,7 @@ export async function up(
         disk,
         target,
       });
+
       const migrations = planUpExecution({
         disk,
         latestApplied,
@@ -76,10 +80,16 @@ export async function down(
     log,
     table,
     run: async ({ appliedRows, client }): Promise<void> => {
-      const migrations = planDownExecution({
+      const { targetMigration } = validateDownPreconditions({
         appliedRows,
         disk,
         target,
+      });
+
+      const migrations = planDownExecution({
+        appliedRows,
+        disk,
+        targetMigration,
       });
 
       await executeDownPlan({ client, log, migrations, table });

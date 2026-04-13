@@ -1,5 +1,4 @@
 import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
-import { validateAppliedFilesExistOnDisk } from "./validation.js";
 
 export function planUpExecution(args: {
   disk: LoadedMigrations;
@@ -20,30 +19,20 @@ export function planUpExecution(args: {
 export function planDownExecution(args: {
   appliedRows: AppliedRow[];
   disk: LoadedMigrations;
-  target?: string;
+  targetMigration: DiskMigration | null;
 }): DiskMigration[] {
-  const { appliedRows, disk, target } = args;
+  const { appliedRows, disk, targetMigration } = args;
   let rowsToRollback: AppliedRow[];
 
-  if (!target) {
+  if (!targetMigration) {
     rowsToRollback = appliedRows[0] ? [appliedRows[0]] : [];
   } else {
-    const targetMigration = disk.byFile.get(target);
-    if (!targetMigration) {
-      throw new Error(`migratorosaurus: no such target file "${target}"`);
-    }
-
     const targetPosition = appliedRows.findIndex(
-      ({ file }): boolean => file === target,
+      ({ file }): boolean => file === targetMigration.file,
     );
-    if (targetPosition === -1) {
-      throw new Error(`Target migration is not applied: ${target}`);
-    }
-
     rowsToRollback = appliedRows.slice(0, targetPosition);
   }
 
-  validateAppliedFilesExistOnDisk(rowsToRollback, disk);
   return rowsToRollback.map(
     ({ file }): DiskMigration => disk.byFile.get(file)!,
   );

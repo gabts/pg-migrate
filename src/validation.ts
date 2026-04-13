@@ -54,6 +54,40 @@ export function validateAppliedFilesExistOnDisk(
   }
 }
 
+export function validateDownPreconditions(args: {
+  appliedRows: AppliedRow[];
+  disk: LoadedMigrations;
+  target?: string;
+}): {
+  targetMigration: DiskMigration | null;
+} {
+  const { appliedRows, disk, target } = args;
+
+  if (!target) {
+    if (appliedRows[0]) {
+      validateAppliedFilesExistOnDisk([appliedRows[0]], disk);
+    }
+    return { targetMigration: null };
+  }
+
+  const targetMigration = disk.byFile.get(target);
+  if (!targetMigration) {
+    throw new Error(`migratorosaurus: no such target file "${target}"`);
+  }
+
+  const targetPosition = appliedRows.findIndex(
+    ({ file }): boolean => file === target,
+  );
+  if (targetPosition === -1) {
+    throw new Error(`Target migration is not applied: ${target}`);
+  }
+
+  const rowsToRollback = appliedRows.slice(0, targetPosition);
+  validateAppliedFilesExistOnDisk(rowsToRollback, disk);
+
+  return { targetMigration };
+}
+
 export function validateUpPreconditions(args: {
   appliedRows: AppliedRow[];
   disk: LoadedMigrations;
