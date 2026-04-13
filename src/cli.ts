@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as path from "path";
 import {
   migrationFilePattern,
   parseMigrationIndex,
@@ -140,7 +141,7 @@ function createMigration(args: string[]): void {
     opts.padWidth === 0
       ? String(index)
       : String(index).padStart(opts.padWidth, "0");
-  const filePath = `${opts.directory}/${indexString}-${opts.name}.sql`;
+  const filePath = path.join(opts.directory, `${indexString}-${opts.name}.sql`);
   const fileContent = "-- % up-migration % --\n\n-- % down-migration % --\n";
 
   fs.writeFileSync(filePath, fileContent, { flag: "wx" });
