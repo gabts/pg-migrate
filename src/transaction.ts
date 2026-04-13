@@ -81,9 +81,7 @@ export async function withMigrationTransaction<T>(args: {
         table,
       ]);
       await initialize(client, log, table);
-      await client.query(
-        `LOCK TABLE ${qualifiedTableName} IN EXCLUSIVE MODE;`,
-      );
+      await client.query(`LOCK TABLE ${qualifiedTableName} IN EXCLUSIVE MODE;`);
 
       const appliedRowsResult = await client.query<AppliedRow>(
         `SELECT index, file FROM ${qualifiedTableName} ORDER BY index DESC;`,
