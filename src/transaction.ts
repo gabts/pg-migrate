@@ -33,26 +33,29 @@ async function withClientTransaction<T>(
   fn: (client: pg.Client) => Promise<T>,
 ): Promise<T> {
   const client = new pg.Client(clientConfig);
-  let hasError = false;
+  let committed = false;
   try {
     await client.connect();
     await client.query("BEGIN;");
     const result = await fn(client);
     await client.query("COMMIT;");
+    committed = true;
     return result;
   } catch (error) {
-    hasError = true;
-    try {
-      await client.query("ROLLBACK;");
-    } catch {
-      // Ignore rollback errors and surface the original failure.
+    if (!committed) {
+      try {
+        await client.query("ROLLBACK;");
+      } catch {
+        // Ignore rollback errors and surface the original failure.
+      }
     }
     throw error;
   } finally {
     try {
       await client.end();
-    } catch (endError) {
-      if (!hasError) throw endError;
+    } catch {
+      // Ignore cleanup errors — if the transaction committed, the work
+      // is durable; if it didn't, the original error is already being thrown.
     }
   }
 }
