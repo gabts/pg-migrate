@@ -97,11 +97,7 @@ export function validateUpPreconditions(args: {
   targetMigration: DiskMigration | null;
 } {
   const { appliedRows, disk, target } = args;
-  const appliedFiles = new Set(appliedRows.map(({ file }): string => file));
   const latestApplied = appliedRows[0] ?? null;
-  const unappliedDiskMigrations = disk.all.filter(
-    ({ file }): boolean => !appliedFiles.has(file),
-  );
   const targetMigration = target ? disk.byFile.get(target) : undefined;
 
   if (target && !targetMigration) {
