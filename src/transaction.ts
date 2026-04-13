@@ -8,20 +8,11 @@ async function initialize(
   log: LogFn,
   tableName: string,
 ): Promise<void> {
-  const tableNameParts = parseTableName(tableName);
-  const qualifiedTableName = qualifyTableName(tableNameParts);
-  const { schema, table } = tableNameParts;
+  const qualifiedTableName = qualifyTableName(parseTableName(tableName));
 
   const migrationTableQueryResult = await client.query(
-    `
-    SELECT EXISTS (
-      SELECT *
-      FROM information_schema.tables
-      WHERE table_name = $1
-      ${schema ? "AND table_schema = $2" : ""}
-    );
-  `,
-    schema ? [table, schema] : [table],
+    `SELECT to_regclass($1) IS NOT NULL AS exists;`,
+    [qualifiedTableName],
   );
 
   if (!migrationTableQueryResult.rows[0].exists) {
