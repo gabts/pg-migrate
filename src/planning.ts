@@ -30,7 +30,11 @@ export function planDownExecution(args: {
     rowsToRollback = appliedRows.slice(0, targetPosition);
   }
 
-  return rowsToRollback.map(
-    ({ file }): DiskMigration => disk.byFile.get(file)!,
-  );
+  return rowsToRollback.map(({ file }): DiskMigration => {
+    const migration = disk.byFile.get(file);
+    if (!migration) {
+      throw new Error(`Applied migration file is missing on disk: ${file}`);
+    }
+    return migration;
+  });
 }
