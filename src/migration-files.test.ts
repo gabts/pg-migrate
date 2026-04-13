@@ -98,6 +98,16 @@ describe("migration-files", (): void => {
       }, /Invalid migration file contents: 0\.sql/);
     });
 
+    it("rejects non-whitespace content before the up marker", (): void => {
+      assert.throws((): void => {
+        parseMigration(
+          `DROP TABLE important_data;\n-- % up-migration % --\nCREATE TABLE t (id int);\n-- % down-migration % --\nDROP TABLE t;`,
+          "up",
+          "0.sql",
+        );
+      }, /Unexpected content before up marker in: 0\.sql/);
+    });
+
     it("allows empty down sections for irreversible migrations", (): void => {
       assert.equal(
         parseMigration(

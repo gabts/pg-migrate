@@ -52,6 +52,10 @@ export function parseMigration(
     throw new Error(`Invalid migration file contents: ${file}`);
   }
 
+  if (sql.slice(0, upMarkerIndex).trim().length > 0) {
+    throw new Error(`Unexpected content before up marker in: ${file}`);
+  }
+
   const upSql = sql
     .slice(upMarkerIndex + upMarker.length, downMarkerIndex)
     .trim();
