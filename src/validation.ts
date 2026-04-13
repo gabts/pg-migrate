@@ -72,7 +72,7 @@ export function validateDownPreconditions(args: {
 
   const targetMigration = disk.byFile.get(target);
   if (!targetMigration) {
-    throw new Error(`migratorosaurus: no such target file "${target}"`);
+    throw new Error(`No such target file "${target}"`);
   }
 
   const targetPosition = appliedRows.findIndex(
@@ -105,7 +105,7 @@ export function validateUpPreconditions(args: {
   const targetMigration = target ? disk.byFile.get(target) : undefined;
 
   if (target && !targetMigration) {
-    throw new Error(`migratorosaurus: no such target file "${target}"`);
+    throw new Error(`No such target file "${target}"`);
   }
 
   validateAppliedFilesExistOnDisk(appliedRows, disk);

@@ -133,7 +133,7 @@ describe("validation", (): void => {
           disk,
           target: "3-missing.sql",
         });
-      }, /migratorosaurus: no such target file "3-missing\.sql"/);
+      }, /No such target file "3-missing\.sql"/);
     });
 
     it("rejects target files that are not applied", (): void => {
@@ -205,7 +205,7 @@ describe("validation", (): void => {
           disk,
           target: "9-missing.sql",
         });
-      }, /migratorosaurus: no such target file "9-missing\.sql"/);
+      }, /No such target file "9-missing\.sql"/);
     });
 
     it("rejects applied files that are missing on disk", (): void => {
