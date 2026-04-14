@@ -1,7 +1,7 @@
 import { executeDownPlan, executeUpPlan } from "./execution.js";
 import { loadDiskMigrations, materializeSteps } from "./migration-files.js";
 import { planDownExecution, planUpExecution } from "./planning.js";
-import { withMigrationTransaction } from "./transaction.js";
+import { withMigrationSession } from "./transaction.js";
 import type { ClientConfig, LogFn } from "./types.js";
 import {
   validateDownPreconditions,
@@ -38,7 +38,7 @@ export async function up(
 
   const disk = loadDiskMigrations(directory);
 
-  await withMigrationTransaction({
+  await withMigrationSession({
     clientConfig,
     log,
     table,
@@ -78,7 +78,7 @@ export async function down(
 
   const disk = loadDiskMigrations(directory);
 
-  await withMigrationTransaction({
+  await withMigrationSession({
     clientConfig,
     log,
     table,

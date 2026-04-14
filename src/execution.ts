@@ -1,5 +1,6 @@
 import type * as pg from "pg";
 import { parseTableName, qualifyTableName } from "./table-name.js";
+import { runInTransaction } from "./transaction.js";
 import type { LogFn, MigrationStep } from "./types.js";
 
 export async function executeUpPlan(args: {
@@ -13,11 +14,13 @@ export async function executeUpPlan(args: {
 
   for (const { file, index, sql } of steps) {
     log(`↑  upgrading > "${file}"`);
-    await client.query(sql);
-    await client.query(
-      `INSERT INTO ${qualifiedTableName} ( index, file, date ) VALUES ( $1, $2, clock_timestamp() );`,
-      [index, file],
-    );
+    await runInTransaction(client, async (): Promise<void> => {
+      await client.query(sql);
+      await client.query(
+        `INSERT INTO ${qualifiedTableName} ( index, file, date ) VALUES ( $1, $2, clock_timestamp() );`,
+        [index, file],
+      );
+    });
   }
 }
 
@@ -33,12 +36,21 @@ export async function executeDownPlan(args: {
   for (const { file, sql } of steps) {
     if (sql) {
       log(`↓  downgrading > "${file}"`);
-      await client.query(sql);
     } else {
       log(`↓  downgrading > "${file}" (no down section, skipping)`);
     }
-    await client.query(`DELETE FROM ${qualifiedTableName} WHERE file = $1;`, [
-      file,
-    ]);
+    if (sql) {
+      await runInTransaction(client, async (): Promise<void> => {
+        await client.query(sql);
+        await client.query(
+          `DELETE FROM ${qualifiedTableName} WHERE file = $1;`,
+          [file],
+        );
+      });
+    } else {
+      await client.query(`DELETE FROM ${qualifiedTableName} WHERE file = $1;`, [
+        file,
+      ]);
+    }
   }
 }

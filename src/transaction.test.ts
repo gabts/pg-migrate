@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import * as pg from "pg";
-import { withMigrationTransaction } from "./transaction.js";
+import { withMigrationSession } from "./transaction.js";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set to run integration tests");
@@ -117,7 +117,7 @@ describe("transaction", (): void => {
   it("creates a migration history table and returns the runner result", async (): Promise<void> => {
     const logs: string[] = [];
 
-    const result = await withMigrationTransaction({
+    const result = await withMigrationSession({
       clientConfig: databaseConfig,
       log: (message: string): void => {
         logs.push(message);
@@ -143,12 +143,12 @@ describe("transaction", (): void => {
   it("uses existing schema-qualified migration history tables", async (): Promise<void> => {
     await createMigrationHistoryTable(qualifiedMigrationHistoryTable);
 
-    await withMigrationTransaction({
+    await withMigrationSession({
       clientConfig: databaseConfig,
       log: (): void => undefined,
       table: qualifiedMigrationHistoryTable,
-      run: async ({ client: transactionClient }): Promise<void> => {
-        await transactionClient.query(
+      run: async ({ client: sessionClient }): Promise<void> => {
+        await sessionClient.query(
           `INSERT INTO ${qualifiedMigrationHistoryTable} (index, file) VALUES ($1, $2);`,
           [0, "0-create.sql"],
         );
@@ -163,7 +163,7 @@ describe("transaction", (): void => {
   it("requires missing schema-qualified migration history schemas to exist", async (): Promise<void> => {
     await assert.rejects(
       (): Promise<void> =>
-        withMigrationTransaction({
+        withMigrationSession({
           clientConfig: databaseConfig,
           log: (): void => undefined,
           table: "missing_migratorosaurus_schema.migration_history",
@@ -186,7 +186,7 @@ describe("transaction", (): void => {
     let didRun = false;
     await assert.rejects(
       (): Promise<void> =>
-        withMigrationTransaction({
+        withMigrationSession({
           clientConfig: databaseConfig,
           log: (): void => undefined,
           table: defaultMigrationHistoryTable,
@@ -199,19 +199,18 @@ describe("transaction", (): void => {
     assert.equal(didRun, false);
   });
 
-  it("rolls back runner changes and logs when the runner fails", async (): Promise<void> => {
+  it("logs when the runner throws and keeps setup committed", async (): Promise<void> => {
     const logs: string[] = [];
 
     await assert.rejects(
       (): Promise<void> =>
-        withMigrationTransaction({
+        withMigrationSession({
           clientConfig: databaseConfig,
           log: (message: string): void => {
             logs.push(message);
           },
           table: defaultMigrationHistoryTable,
-          run: async ({ client: transactionClient }): Promise<void> => {
-            await transactionClient.query("CREATE TABLE person (id integer);");
+          run: async (): Promise<void> => {
             throw new Error("runner failed");
           },
         }),
@@ -222,40 +221,11 @@ describe("transaction", (): void => {
       "🥚 performing first time setup",
       "☄️ migratorosaurus threw error!",
     ]);
-    assert.equal(await queryTableExists("person"), false);
-    assert.equal(await queryTableExists(defaultMigrationHistoryTable), false);
-  });
-
-  it("rolls back runner changes and logs when postgres rejects a query", async (): Promise<void> => {
-    const logs: string[] = [];
-
-    await assert.rejects(
-      (): Promise<void> =>
-        withMigrationTransaction({
-          clientConfig: databaseConfig,
-          log: (message: string): void => {
-            logs.push(message);
-          },
-          table: defaultMigrationHistoryTable,
-          run: async ({ client: transactionClient }): Promise<void> => {
-            await transactionClient.query("CREATE TABLE person (id integer);");
-            await transactionClient.query(`
-              CREATE TABLE broken_person (
-                id SERIALXXXXX PRIMARY KEY
-              );
-            `);
-          },
-        }),
-      /type "serialxxxxx" does not exist/i,
-    );
-
-    assert.deepEqual(logs, [
-      "🥚 performing first time setup",
-      "☄️ migratorosaurus threw error!",
-    ]);
-    assert.equal(await queryTableExists("person"), false);
-    assert.equal(await queryTableExists("broken_person"), false);
-    assert.equal(await queryTableExists(defaultMigrationHistoryTable), false);
+    // The history table is created in its own transaction and survives
+    // runner failures — only the failing migration's transaction is rolled
+    // back, not the session setup.
+    assert.equal(await queryTableExists(defaultMigrationHistoryTable), true);
+    assert.deepEqual(await queryHistory(), []);
   });
 
   it("serializes concurrent runners against the same history table", async (): Promise<void> => {
@@ -277,7 +247,7 @@ describe("transaction", (): void => {
         defaultMigrationHistoryTable,
       ]);
 
-      firstRun = withMigrationTransaction({
+      firstRun = withMigrationSession({
         clientConfig: databaseConfig,
         log: (): void => undefined,
         table: defaultMigrationHistoryTable,
@@ -285,10 +255,80 @@ describe("transaction", (): void => {
       }).finally((): void => {
         firstSettled = true;
       });
-      secondRun = withMigrationTransaction({
+      secondRun = withMigrationSession({
         clientConfig: databaseConfig,
         log: (): void => undefined,
         table: defaultMigrationHistoryTable,
+        run: async (): Promise<void> => undefined,
+      }).finally((): void => {
+        secondSettled = true;
+      });
+
+      await delay(100);
+      assert.equal(firstSettled, false);
+      assert.equal(secondSettled, false);
+
+      await lockClient.query("COMMIT;");
+      lockTransactionOpen = false;
+
+      const results = await Promise.allSettled([firstRun, secondRun]);
+
+      assert.deepEqual(
+        results.map((result): string => result.status),
+        ["fulfilled", "fulfilled"],
+      );
+    } finally {
+      if (lockTransactionOpen) {
+        await lockClient.query("ROLLBACK;");
+      }
+      await lockClient.end();
+      if (firstRun && secondRun) {
+        await Promise.allSettled([firstRun, secondRun]);
+      }
+    }
+  });
+
+  it("serializes concurrent runners referencing the same table by different spellings", async (): Promise<void> => {
+    // The bare unqualified table name is used as the lock key, so
+    // "migration_history" and "public.migration_history" (or any
+    // <schema>.migration_history) all hash to the same advisory lock.
+    await createMigrationHistoryTable();
+
+    const currentSchemaResult = await client.query<{ schema: string }>(
+      "SELECT current_schema() AS schema;",
+    );
+    const qualifiedAlias = `${currentSchemaResult.rows[0]!.schema}.${defaultMigrationHistoryTable}`;
+
+    const lockClient = new pg.Client(databaseConfig);
+    await lockClient.connect();
+
+    let firstSettled = false;
+    let secondSettled = false;
+    let lockTransactionOpen = false;
+    let firstRun;
+    let secondRun;
+
+    try {
+      await lockClient.query("BEGIN;");
+      lockTransactionOpen = true;
+      await lockClient.query("SELECT pg_advisory_xact_lock(hashtext($1));", [
+        defaultMigrationHistoryTable,
+      ]);
+
+      // First runner uses the bare table name; second uses the schema-qualified
+      // alias. Both lock on the same unqualified key.
+      firstRun = withMigrationSession({
+        clientConfig: databaseConfig,
+        log: (): void => undefined,
+        table: defaultMigrationHistoryTable,
+        run: async (): Promise<void> => undefined,
+      }).finally((): void => {
+        firstSettled = true;
+      });
+      secondRun = withMigrationSession({
+        clientConfig: databaseConfig,
+        log: (): void => undefined,
+        table: qualifiedAlias,
         run: async (): Promise<void> => undefined,
       }).finally((): void => {
         secondSettled = true;

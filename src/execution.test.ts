@@ -8,7 +8,10 @@ interface QueryCall {
   params?: unknown[];
 }
 
-function createFakeClient(): { client: pg.Client; queries: QueryCall[] } {
+function createFakeClient(): {
+  client: pg.Client;
+  queries: QueryCall[];
+} {
   const queries: QueryCall[] = [];
   const client = {
     query: async (
@@ -25,7 +28,7 @@ function createFakeClient(): { client: pg.Client; queries: QueryCall[] } {
 
 describe("execution", (): void => {
   describe("executeUpPlan", (): void => {
-    it("runs up SQL and records migrations in the history table", async (): Promise<void> => {
+    it("runs each migration in its own transaction and records it in the history table", async (): Promise<void> => {
       const { client, queries } = createFakeClient();
       const logs: string[] = [];
 
@@ -34,6 +37,11 @@ describe("execution", (): void => {
           file: "0-create.sql",
           index: 0,
           sql: "CREATE TABLE person (id integer);",
+        },
+        {
+          file: "1-insert.sql",
+          index: 1,
+          sql: "INSERT INTO person VALUES (1);",
         },
       ];
 
@@ -46,8 +54,12 @@ describe("execution", (): void => {
         table: "migratorosaurus.migration_history",
       });
 
-      assert.deepEqual(logs, ['↑  upgrading > "0-create.sql"']);
+      assert.deepEqual(logs, [
+        '↑  upgrading > "0-create.sql"',
+        '↑  upgrading > "1-insert.sql"',
+      ]);
       assert.deepEqual(queries, [
+        { sql: "BEGIN;", params: undefined },
         {
           sql: "CREATE TABLE person (id integer);",
           params: undefined,
@@ -56,7 +68,69 @@ describe("execution", (): void => {
           sql: 'INSERT INTO "migratorosaurus"."migration_history" ( index, file, date ) VALUES ( $1, $2, clock_timestamp() );',
           params: [0, "0-create.sql"],
         },
+        { sql: "COMMIT;", params: undefined },
+        { sql: "BEGIN;", params: undefined },
+        {
+          sql: "INSERT INTO person VALUES (1);",
+          params: undefined,
+        },
+        {
+          sql: 'INSERT INTO "migratorosaurus"."migration_history" ( index, file, date ) VALUES ( $1, $2, clock_timestamp() );',
+          params: [1, "1-insert.sql"],
+        },
+        { sql: "COMMIT;", params: undefined },
       ]);
+    });
+
+    it("rolls back the failing migration but leaves earlier migrations committed", async (): Promise<void> => {
+      const queries: QueryCall[] = [];
+      const client = {
+        query: async (
+          sql: string,
+          params?: unknown[],
+        ): Promise<{ rows: unknown[] }> => {
+          queries.push({ sql, params });
+          if (sql === "BROKEN SQL;") {
+            throw new Error("syntax error at BROKEN");
+          }
+          return { rows: [] };
+        },
+      } as unknown as pg.Client;
+
+      const steps: MigrationStep[] = [
+        { file: "0-create.sql", index: 0, sql: "CREATE TABLE person;" },
+        { file: "1-break.sql", index: 1, sql: "BROKEN SQL;" },
+        { file: "2-never.sql", index: 2, sql: "CREATE TABLE never_run;" },
+      ];
+
+      await assert.rejects(
+        (): Promise<void> =>
+          executeUpPlan({
+            client,
+            log: (): void => undefined,
+            steps,
+            table: "migration_history",
+          }),
+        /syntax error at BROKEN/,
+      );
+
+      const transactionBoundaries = queries
+        .filter(
+          (q): boolean =>
+            q.sql === "BEGIN;" || q.sql === "COMMIT;" || q.sql === "ROLLBACK;",
+        )
+        .map((q): string => q.sql);
+      assert.deepEqual(transactionBoundaries, [
+        "BEGIN;",
+        "COMMIT;",
+        "BEGIN;",
+        "ROLLBACK;",
+      ]);
+
+      assert.ok(queries.some((q): boolean => q.sql === "CREATE TABLE person;"));
+      assert.ok(
+        !queries.some((q): boolean => q.sql === "CREATE TABLE never_run;"),
+      );
     });
 
     it("does nothing for an empty up plan", async (): Promise<void> => {
@@ -74,7 +148,7 @@ describe("execution", (): void => {
   });
 
   describe("executeDownPlan", (): void => {
-    it("runs down SQL and removes migrations from the history table", async (): Promise<void> => {
+    it("runs each down migration in its own transaction and removes it from the history table", async (): Promise<void> => {
       const { client, queries } = createFakeClient();
       const logs: string[] = [];
 
@@ -97,6 +171,7 @@ describe("execution", (): void => {
 
       assert.deepEqual(logs, ['↓  downgrading > "0-create.sql"']);
       assert.deepEqual(queries, [
+        { sql: "BEGIN;", params: undefined },
         {
           sql: "DROP TABLE person;",
           params: undefined,
@@ -105,6 +180,7 @@ describe("execution", (): void => {
           sql: 'DELETE FROM "migration_history" WHERE file = $1;',
           params: ["0-create.sql"],
         },
+        { sql: "COMMIT;", params: undefined },
       ]);
     });
 

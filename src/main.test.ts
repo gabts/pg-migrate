@@ -299,7 +299,7 @@ VALUES ('gabriel'), ('david'), ('frasse');
     );
   });
 
-  it("surfaces postgres errors and rolls back setup", async (): Promise<void> => {
+  it("surfaces postgres errors and rolls back the failing migration", async (): Promise<void> => {
     await assert.rejects(
       (): Promise<void> =>
         up(databaseConfig, {
@@ -318,8 +318,45 @@ DROP TABLE person;
       /type "serialxxxxx" does not exist/i,
     );
 
+    // The failing migration's transaction rolls back, so person is not
+    // created. The history table is set up in its own transaction and
+    // survives the failure with no rows recorded.
     assert.equal(await queryTableExists("person"), false);
-    assert.equal(await queryTableExists(defaultMigrationHistoryTable), false);
+    assert.equal(await queryTableExists(defaultMigrationHistoryTable), true);
+    assert.deepEqual(await queryHistory(), []);
+  });
+
+  it("commits earlier migrations and rolls back only the failing one", async (): Promise<void> => {
+    const directory = createMigrationDirectory({
+      "0-create.sql": createPersonMigration,
+      "1-insert.sql": insertPeopleMigration,
+      "2-break.sql": `-- % up-migration % --
+CREATE TABLE broken (
+  id SERIALXXXXX PRIMARY KEY
+);
+
+-- % down-migration % --
+DROP TABLE broken;
+`,
+    });
+
+    await assert.rejects(
+      (): Promise<void> => up(databaseConfig, { directory }),
+      /type "serialxxxxx" does not exist/i,
+    );
+
+    // Migrations 0 and 1 committed in their own transactions; only
+    // migration 2 rolled back.
+    assert.ok(await queryTableExists("person"));
+    assert.equal(await queryTableExists("broken"), false);
+
+    const historyRows = await queryHistory(defaultMigrationHistoryTable);
+    assert.equal(historyRows.length, 2);
+    assert.equal(historyRows[0].file, "0-create.sql");
+    assert.equal(historyRows[1].file, "1-insert.sql");
+
+    const personRows = await queryPersons();
+    assert.equal(personRows.length, 3);
   });
 
   it("down is a no-op when no migrations are applied", async (): Promise<void> => {

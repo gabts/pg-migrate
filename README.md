@@ -107,6 +107,10 @@ Use `down(config, { target })` to roll back newer migrations while leaving the t
 
 `up()` is append-only by numeric migration index. If a lower-index migration file is added after a higher-index migration has already been applied, `up()` fails instead of silently applying it out of order.
 
+## 🧫 Transactions
+
+Each migration file runs in its own transaction. If one migration fails, earlier successful migrations stay committed and the failing migration is rolled back. Concurrent runners are serialized with a PostgreSQL advisory lock keyed on the unqualified history table name — `migration_history` and `public.migration_history` share the same lock, so runners against same-named tables in different schemas will also serialize. Use distinct table names if that matters.
+
 ## 🚁 Development
 
 Clone the repository and install dependencies:
