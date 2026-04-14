@@ -159,7 +159,16 @@ function createMigration(args: string[]): void {
   const filePath = path.join(opts.directory, `${indexString}-${opts.name}.sql`);
   const fileContent = "-- % up-migration % --\n\n-- % down-migration % --\n";
 
-  fs.writeFileSync(filePath, fileContent, { flag: "wx" });
+  try {
+    fs.writeFileSync(filePath, fileContent, { flag: "wx" });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new Error(
+        `Migration file already exists: ${filePath}. Another create may have run concurrently.`,
+      );
+    }
+    throw error;
+  }
   process.stdout.write(`${filePath}\n`);
 }
 
