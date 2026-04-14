@@ -43,15 +43,16 @@ export async function up(
     log,
     table,
     run: async ({ appliedRows, client }): Promise<void> => {
-      const { latestApplied, targetMigration } = validateUpPreconditions({
-        appliedRows,
-        disk,
-        target,
-      });
+      const { latestAppliedMigration, targetMigration } =
+        validateUpPreconditions({
+          appliedRows,
+          disk,
+          target,
+        });
 
       const migrations = planUpExecution({
         disk,
-        latestApplied,
+        latestAppliedMigration,
         targetMigration,
       });
 

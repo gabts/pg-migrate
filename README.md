@@ -38,12 +38,11 @@ await down("postgres://localhost:5432/database", {
 
 ## 📁 Migration Files
 
-Migration files must use the pattern `<index>-<name>.sql`, for example `1-create.sql` or `001-create-person.sql`.
+Every `.sql` file in the migration directory is treated as a migration file. Files are applied in alphabetical filename order.
 
-- `<index>` must be a whole number and may include leading zeros, for example `1` or `001`
-- `<name>` may use letters, numbers, `_`, `-`, and `.`
-- Any `.sql` file in the directory that does not match this pattern will cause migration to fail
-- Duplicate resolved indices such as `1-create.sql` and `001-create-again.sql` will cause migration to fail
+- Name migration files however you like, for example `20260414153000-create-person.sql` or `00001.sql`
+- Non-`.sql` files in the directory are ignored
+- Alphabetical order is plain filename order, so zero-padding still matters if you use numeric prefixes
 
 Each file must contain exactly one `up` marker and one `down` marker, in this order:
 
@@ -70,23 +69,20 @@ The built-in CLI currently supports one command:
 
 - `create` creates a new migration file
 
-The CLI creates the next available whole-number index starting at `1` and zero-pads it to 3 digits by default.
+The CLI creates a filename with a UTC timestamp prefix in `YYYYMMDDHHMMSS` format.
 
 Useful commands:
 
 ```sh
 migratorosaurus create --help
 migratorosaurus create --directory sql/migrations --name add-users
-migratorosaurus create --directory sql/migrations --pad-width 5 --name add-users
-migratorosaurus create --directory sql/migrations --pad-width 0 --name add-users
 ```
 
 `create` command rules:
 
 - `--name` is required
-- CLI-generated migration names may only use letters, numbers, `_`, and `-`
+- CLI-generated migration names may not contain path separators or NUL
 - `--directory` defaults to `"migrations"`
-- `--pad-width` defaults to `3` and must be an integer from `0` to `7`
 - `--help` and `-h` are boolean flags
 - Unknown commands and unknown flags cause the CLI to fail
 
@@ -105,7 +101,7 @@ Use `up(config, { target })` to migrate forward until that migration has been ap
 Use `down(config)` to roll back exactly one migration.
 Use `down(config, { target })` to roll back newer migrations while leaving the target migration applied.
 
-`up()` is append-only by numeric migration index. If a lower-index migration file is added after a higher-index migration has already been applied, `up()` fails instead of silently applying it out of order.
+`up()` is append-only by alphabetical migration order. If a migration file is added alphabetically before the latest applied migration after that later migration has already been applied, `up()` fails instead of silently applying it out of order.
 
 ## 🧫 Transactions
 

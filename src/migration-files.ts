@@ -6,28 +6,10 @@ import type {
   MigrationStep,
 } from "./types.js";
 
-export const migrationFilePattern = /^(\d+)(?:-[A-Za-z0-9_.-]+)?\.sql$/;
-
-export const POSTGRES_MAX_INDEX = 2_147_483_647;
-
 const migrationMarkers = {
   up: "-- % up-migration % --",
   down: "-- % down-migration % --",
 };
-
-export function parseMigrationIndex(file: string): number {
-  const match = file.match(migrationFilePattern);
-  if (!match?.[1]) {
-    throw new Error(`Invalid migration file name: ${file}`);
-  }
-
-  const index = Number.parseInt(match[1], 10);
-  if (!Number.isInteger(index) || index > POSTGRES_MAX_INDEX) {
-    throw new Error(`Invalid migration file name: ${file}`);
-  }
-
-  return index;
-}
 
 export function parseMigration(
   sql: string,
@@ -74,9 +56,8 @@ export function materializeSteps(
   migrations: DiskMigration[],
   direction: "up" | "down",
 ): MigrationStep[] {
-  return migrations.map(({ file, index, path: filePath }) => ({
+  return migrations.map(({ file, path: filePath }) => ({
     file,
-    index,
     sql: parseMigration(fs.readFileSync(filePath, "utf8"), direction, file),
   }));
 }
@@ -93,38 +74,17 @@ export function loadDiskMigrations(directory: string): LoadedMigrations {
     throw new Error(`No migration files found in directory: ${directory}`);
   }
 
-  const invalidMigrationFile = migrationFiles.find(
-    (file): boolean => !file.match(migrationFilePattern),
-  );
-
-  if (invalidMigrationFile) {
-    throw new Error(`Invalid migration file name: ${invalidMigrationFile}`);
-  }
-
-  const all = migrationFiles.map(
+  const all = migrationFiles.sort().map(
     (file): DiskMigration => ({
       file,
-      index: parseMigrationIndex(file),
       path: path.join(directory, file),
     }),
   );
   const byFile = new Map<string, DiskMigration>();
-  const seenIndices = new Map<number, string>();
 
   for (const migration of all) {
-    const existingFile = seenIndices.get(migration.index);
-    if (existingFile) {
-      const [first, second] = [existingFile, migration.file].sort();
-      throw new Error(
-        `Duplicate migration index ${migration.index}: ${first} and ${second}`,
-      );
-    }
-
-    seenIndices.set(migration.index, migration.file);
     byFile.set(migration.file, migration);
   }
-
-  all.sort((a, b): number => a.index - b.index);
 
   return { all, byFile };
 }

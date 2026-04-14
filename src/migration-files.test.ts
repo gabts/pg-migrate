@@ -6,7 +6,6 @@ import {
   loadDiskMigrations,
   materializeSteps,
   parseMigration,
-  parseMigrationIndex,
 } from "./migration-files.js";
 
 const validMigration = `-- % up-migration % --
@@ -36,26 +35,6 @@ function withMigrationDirectory(
 }
 
 describe("migration-files", (): void => {
-  describe("parseMigrationIndex", (): void => {
-    it("parses the leading integer from valid migration file names", (): void => {
-      assert.equal(parseMigrationIndex("001-create-person.sql"), 1);
-      assert.equal(parseMigrationIndex("10.sql"), 10);
-      assert.equal(parseMigrationIndex("000-name.with.dots.sql"), 0);
-    });
-
-    it("rejects invalid migration file names", (): void => {
-      assert.throws((): void => {
-        parseMigrationIndex("1.1-create.sql");
-      }, /Invalid migration file name: 1\.1-create\.sql/);
-      assert.throws((): void => {
-        parseMigrationIndex("1-create person's.sql");
-      }, /Invalid migration file name: 1-create person's\.sql/);
-      assert.throws((): void => {
-        parseMigrationIndex("create.sql");
-      }, /Invalid migration file name: create\.sql/);
-    });
-  });
-
   describe("parseMigration", (): void => {
     it("extracts up and down SQL from a migration file", (): void => {
       assert.equal(
@@ -133,12 +112,10 @@ describe("migration-files", (): void => {
           assert.deepEqual(materializeSteps(disk.all, "up"), [
             {
               file: "0-create.sql",
-              index: 0,
               sql: "CREATE TABLE person (id integer);",
             },
             {
               file: "1-add-column.sql",
-              index: 1,
               sql: "CREATE TABLE person (id integer);",
             },
           ]);
@@ -146,12 +123,10 @@ describe("migration-files", (): void => {
           assert.deepEqual(materializeSteps(disk.all, "down"), [
             {
               file: "0-create.sql",
-              index: 0,
               sql: "DROP TABLE person;",
             },
             {
               file: "1-add-column.sql",
-              index: 1,
               sql: "DROP TABLE person;",
             },
           ]);
@@ -174,7 +149,7 @@ describe("migration-files", (): void => {
           const disk = loadDiskMigrations(directory);
 
           assert.deepEqual(materializeSteps(disk.all, "down"), [
-            { file: "0-backfill.sql", index: 0, sql: "" },
+            { file: "0-backfill.sql", sql: "" },
           ]);
         },
       );
@@ -201,11 +176,12 @@ describe("migration-files", (): void => {
       }, /Migration directory does not exist/);
     });
 
-    it("loads, sorts, and indexes SQL migration files", (): void => {
+    it("loads SQL migration files in alphabetical order", (): void => {
       withMigrationDirectory(
         {
           "2-second.sql": validMigration,
-          "1-first.sql": validMigration,
+          "10-first.sql": validMigration,
+          "create person's table.sql": validMigration,
           "notes.txt": "ignored",
         },
         (directory): void => {
@@ -215,55 +191,31 @@ describe("migration-files", (): void => {
             disk.all.map(
               ({
                 file,
-                index,
                 path: migrationPath,
-              }): { file: string; index: number; path: string } => ({
+              }): { file: string; path: string } => ({
                 file,
-                index,
                 path: migrationPath,
               }),
             ),
             [
               {
-                file: "1-first.sql",
-                index: 1,
-                path: path.join(directory, "1-first.sql"),
+                file: "10-first.sql",
+                path: path.join(directory, "10-first.sql"),
               },
               {
                 file: "2-second.sql",
-                index: 2,
                 path: path.join(directory, "2-second.sql"),
+              },
+              {
+                file: "create person's table.sql",
+                path: path.join(directory, "create person's table.sql"),
               },
             ],
           );
-          assert.equal(disk.byFile.get("1-first.sql")?.index, 1);
-        },
-      );
-    });
-
-    it("rejects invalid SQL migration file names", (): void => {
-      withMigrationDirectory(
-        {
-          "1.1-create.sql": validMigration,
-        },
-        (directory): void => {
-          assert.throws((): void => {
-            loadDiskMigrations(directory);
-          }, /Invalid migration file name: 1\.1-create\.sql/);
-        },
-      );
-    });
-
-    it("rejects duplicate resolved migration indices", (): void => {
-      withMigrationDirectory(
-        {
-          "001-create.sql": validMigration,
-          "1-create-again.sql": validMigration,
-        },
-        (directory): void => {
-          assert.throws((): void => {
-            loadDiskMigrations(directory);
-          }, /Duplicate migration index 1: 001-create\.sql and 1-create-again\.sql/);
+          assert.equal(
+            disk.byFile.get("create person's table.sql")?.path,
+            path.join(directory, "create person's table.sql"),
+          );
         },
       );
     });

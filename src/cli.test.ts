@@ -18,6 +18,26 @@ function runCli(args: string[]): string {
   return result.stdout;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function assertCreatedMigrationPath(
+  output: string,
+  directory: string,
+  name: string,
+): string {
+  const createdPath = output.trim();
+
+  assert.equal(path.dirname(createdPath), directory);
+  assert.match(
+    path.basename(createdPath),
+    new RegExp(`^\\d{14}-${escapeRegExp(name)}\\.sql$`),
+  );
+
+  return createdPath;
+}
+
 describe("cli", (): void => {
   let tempDir: string;
 
@@ -37,9 +57,12 @@ describe("cli", (): void => {
       "--name",
       "create-person",
     ]);
-    const createdPath = path.join(tempDir, "001-create-person.sql");
+    const createdPath = assertCreatedMigrationPath(
+      output,
+      tempDir,
+      "create-person",
+    );
 
-    assert.equal(output, `${createdPath}\n`);
     assert.equal(
       fs.readFileSync(createdPath, "utf8"),
       "-- % up-migration % --\n\n-- % down-migration % --\n",
@@ -64,10 +87,21 @@ describe("cli", (): void => {
     assert.ok(output.length > 0);
   });
 
-  it("rejects migration names with unexpected characters", (): void => {
-    assert.throws((): void => {
-      runCli(["create", "--directory", tempDir, "--name", "create person's"]);
-    }, /Migration name may only use letters, numbers, _ and -/);
+  it("accepts migration names with spaces and punctuation", (): void => {
+    const output = runCli([
+      "create",
+      "--directory",
+      tempDir,
+      "--name",
+      "create.person+table",
+    ]);
+    const createdPath = assertCreatedMigrationPath(
+      output,
+      tempDir,
+      "create.person+table",
+    );
+
+    assert.ok(fs.existsSync(createdPath));
   });
 
   it("accepts migration names that start with a hyphen", (): void => {
@@ -78,9 +112,12 @@ describe("cli", (): void => {
       "--name",
       "-create-person",
     ]);
-    const createdPath = path.join(tempDir, "001--create-person.sql");
+    const createdPath = assertCreatedMigrationPath(
+      output,
+      tempDir,
+      "-create-person",
+    );
 
-    assert.equal(output, `${createdPath}\n`);
     assert.ok(fs.existsSync(createdPath));
   });
 
@@ -113,9 +150,9 @@ describe("cli", (): void => {
     }, /Directory flag \(\-\-directory, -d\) requires a value/);
   });
 
-  it("creates the next whole-number index after existing files", (): void => {
+  it("creates a timestamped migration without inspecting existing SQL names", (): void => {
     fs.writeFileSync(path.join(tempDir, "000-initial.sql"), "existing\n");
-    fs.writeFileSync(path.join(tempDir, "2-existing.sql"), "existing\n");
+    fs.writeFileSync(path.join(tempDir, "bad name.sql"), "existing\n");
 
     const output = runCli([
       "create",
@@ -124,72 +161,22 @@ describe("cli", (): void => {
       "--name",
       "create-person",
     ]);
-    const createdPath = path.join(tempDir, "003-create-person.sql");
-
-    assert.equal(output, `${createdPath}\n`);
-    assert.ok(fs.existsSync(createdPath));
-  });
-
-  it("rejects next index beyond PostgreSQL integer range", (): void => {
-    fs.writeFileSync(
-      path.join(tempDir, "2147483647-at-limit.sql"),
-      "existing\n",
+    const createdPath = assertCreatedMigrationPath(
+      output,
+      tempDir,
+      "create-person",
     );
 
-    assert.throws((): void => {
-      runCli(["create", "--directory", tempDir, "--name", "overflow"]);
-    }, /exceeds PostgreSQL integer range/);
-  });
-
-  it("supports customizing zero-padding width", (): void => {
-    const output = runCli([
-      "create",
-      "--directory",
-      tempDir,
-      "--pad-width",
-      "5",
-      "--name",
-      "create-person",
-    ]);
-    const createdPath = path.join(tempDir, "00001-create-person.sql");
-
-    assert.equal(output, `${createdPath}\n`);
     assert.ok(fs.existsSync(createdPath));
   });
 
-  it("supports disabling zero-padding", (): void => {
-    fs.writeFileSync(path.join(tempDir, "000-initial.sql"), "existing\n");
-
-    const output = runCli([
-      "create",
-      "--directory",
-      tempDir,
-      "--pad-width",
-      "0",
-      "--name",
-      "create-person",
-    ]);
-    const createdPath = path.join(tempDir, "1-create-person.sql");
-
-    assert.equal(output, `${createdPath}\n`);
-    assert.ok(fs.existsSync(createdPath));
-  });
-
-  it("rejects invalid zero-padding widths", (): void => {
+  it("rejects path separators in migration names", (): void => {
     assert.throws((): void => {
-      runCli([
-        "create",
-        "--directory",
-        tempDir,
-        "--pad-width",
-        "8",
-        "--name",
-        "create-person",
-      ]);
-    }, /Pad width flag \(\-\-pad-width, -p\) must be an integer from 0 to 7/);
+      runCli(["create", "--directory", tempDir, "--name", "../create-person"]);
+    }, /Migration name may not contain path separators or NUL/);
   });
 
-  it("rejects zero-padding widths with trailing characters", (): void => {
+  it("rejects removed zero-padding options", (): void => {
     assert.throws((): void => {
       runCli([
         "create",
@@ -200,21 +187,13 @@ describe("cli", (): void => {
         "--name",
         "create-person",
       ]);
-    }, /Pad width flag \(\-\-pad-width, -p\) must be an integer from 0 to 7/);
+    }, /Unknown argument: --pad-width/);
   });
 
   it("rejects unknown commands", (): void => {
     assert.throws((): void => {
       runCli(["unknown"]);
     }, /Unknown command: unknown/);
-  });
-
-  it("rejects directories containing invalid SQL file names", (): void => {
-    fs.writeFileSync(path.join(tempDir, "bad name.sql"), "existing\n");
-
-    assert.throws((): void => {
-      runCli(["create", "--directory", tempDir, "--name", "create-person"]);
-    }, /Invalid migration file name: bad name\.sql/);
   });
 
   it("strips .sql extension from migration name", (): void => {
@@ -225,9 +204,12 @@ describe("cli", (): void => {
       "--name",
       "create-person.sql",
     ]);
-    const createdPath = path.join(tempDir, "001-create-person.sql");
+    const createdPath = assertCreatedMigrationPath(
+      output,
+      tempDir,
+      "create-person",
+    );
 
-    assert.equal(output, `${createdPath}\n`);
     assert.ok(fs.existsSync(createdPath));
   });
 });

@@ -3,9 +3,9 @@ import { planDownExecution, planUpExecution } from "./planning.js";
 import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
 
 const migrations: DiskMigration[] = [
-  { file: "0-create.sql", index: 0, path: "/migrations/0-create.sql" },
-  { file: "1-insert.sql", index: 1, path: "/migrations/1-insert.sql" },
-  { file: "2-alter.sql", index: 2, path: "/migrations/2-alter.sql" },
+  { file: "0-create.sql", path: "/migrations/0-create.sql" },
+  { file: "1-insert.sql", path: "/migrations/1-insert.sql" },
+  { file: "2-alter.sql", path: "/migrations/2-alter.sql" },
 ];
 
 const disk: LoadedMigrations = {
@@ -24,7 +24,7 @@ describe("planning", (): void => {
       assert.deepEqual(
         planUpExecution({
           disk,
-          latestApplied: null,
+          latestAppliedMigration: null,
           targetMigration: null,
         }),
         migrations,
@@ -35,7 +35,7 @@ describe("planning", (): void => {
       assert.deepEqual(
         planUpExecution({
           disk,
-          latestApplied: { file: "0-create.sql", index: 0 },
+          latestAppliedMigration: migrations[0]!,
           targetMigration: null,
         }),
         migrations.slice(1),
@@ -46,7 +46,7 @@ describe("planning", (): void => {
       assert.deepEqual(
         planUpExecution({
           disk,
-          latestApplied: { file: "0-create.sql", index: 0 },
+          latestAppliedMigration: migrations[0]!,
           targetMigration: migrations[1]!,
         }),
         [migrations[1]],
@@ -56,9 +56,9 @@ describe("planning", (): void => {
 
   describe("planDownExecution", (): void => {
     const appliedRows: AppliedRow[] = [
-      { file: "2-alter.sql", index: 2 },
-      { file: "1-insert.sql", index: 1 },
-      { file: "0-create.sql", index: 0 },
+      { file: "2-alter.sql" },
+      { file: "1-insert.sql" },
+      { file: "0-create.sql" },
     ];
 
     it("plans the latest applied migration when no target is provided", (): void => {
@@ -91,6 +91,29 @@ describe("planning", (): void => {
           targetMigration: migrations[0]!,
         }),
         [migrations[2], migrations[1]],
+      );
+    });
+
+    it("plans nothing when the target migration is not applied", (): void => {
+      const unappliedMigration: DiskMigration = {
+        file: "3-drop.sql",
+        path: "/migrations/3-drop.sql",
+      };
+      const diskWithUnappliedMigration: LoadedMigrations = {
+        all: [...migrations, unappliedMigration],
+        byFile: new Map([
+          ...disk.byFile,
+          [unappliedMigration.file, unappliedMigration],
+        ]),
+      };
+
+      assert.deepEqual(
+        planDownExecution({
+          appliedRows,
+          disk: diskWithUnappliedMigration,
+          targetMigration: unappliedMigration,
+        }),
+        [],
       );
     });
   });

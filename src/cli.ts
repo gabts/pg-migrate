@@ -1,10 +1,5 @@
 import * as fs from "fs";
 import * as path from "path";
-import {
-  migrationFilePattern,
-  parseMigrationIndex,
-  POSTGRES_MAX_INDEX,
-} from "./migration-files.js";
 
 const helpText = `Usage: migratorosaurus <command> [options]
 
@@ -17,15 +12,13 @@ Run "migratorosaurus <command> --help" for command-specific usage.
 const createHelpText = `Usage: migratorosaurus create --name <migration-name> [options]
 
 Options:
-  -n, --name       Migration name, letters/numbers/_/-
+  -n, --name       Migration name
   -d, --directory  Target directory, defaults to migrations
-  -p, --pad-width  Zero-pad index width, 0-7, defaults to 3
   -h, --help       Show this help text
 `;
 
 interface CreateOptions {
   directory: string;
-  padWidth: number;
   name?: string;
 }
 
@@ -50,7 +43,6 @@ function getFlagValue(
 function parseCreateArgs(args: string[]): CreateOptions {
   const opts: CreateOptions = {
     directory: "migrations",
-    padWidth: 3,
   };
 
   if (args.slice(3).includes("-h") || args.slice(3).includes("--help")) {
@@ -74,39 +66,23 @@ function parseCreateArgs(args: string[]): CreateOptions {
         );
         i += 2;
         break;
-      case "-p":
-      case "--pad-width": {
-        const padWidthValue = getFlagValue(
-          "Pad width",
-          "--pad-width, -p",
-          args,
-          i,
-        );
-
-        if (!padWidthValue.match(/^(0|[1-9][0-9]*)$/)) {
-          throw new Error(
-            "Pad width flag (--pad-width, -p) must be an integer from 0 to 7",
-          );
-        }
-
-        const padWidth = Number.parseInt(padWidthValue, 10);
-
-        if (!Number.isInteger(padWidth) || padWidth < 0 || padWidth > 7) {
-          throw new Error(
-            "Pad width flag (--pad-width, -p) must be an integer from 0 to 7",
-          );
-        }
-
-        opts.padWidth = padWidth;
-        i += 2;
-        break;
-      }
       default:
         throw new Error(`Unknown argument: ${args[i]}`);
     }
   }
 
   return opts;
+}
+
+function formatTimestamp(date = new Date()): string {
+  const year = String(date.getUTCFullYear()).padStart(4, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const hour = String(date.getUTCHours()).padStart(2, "0");
+  const minute = String(date.getUTCMinutes()).padStart(2, "0");
+  const second = String(date.getUTCSeconds()).padStart(2, "0");
+
+  return `${year}${month}${day}${hour}${minute}${second}`;
 }
 
 function createMigration(args: string[]): void {
@@ -116,8 +92,12 @@ function createMigration(args: string[]): void {
     throw new Error("Name flag (--name, -n) is required");
   }
 
-  if (!opts.name.match(/^[A-Za-z0-9_-]+$/)) {
-    throw new Error("Migration name may only use letters, numbers, _ and -");
+  if (
+    opts.name.includes("/") ||
+    opts.name.includes("\\") ||
+    opts.name.includes("\0")
+  ) {
+    throw new Error("Migration name may not contain path separators or NUL");
   }
 
   if (
@@ -127,36 +107,10 @@ function createMigration(args: string[]): void {
     throw new Error(`Migration directory does not exist: ${opts.directory}`);
   }
 
-  let index = 1;
-  const files = fs.readdirSync(opts.directory);
-  const sqlFiles = files.filter((file): boolean => file.endsWith(".sql"));
-
-  const invalidFile = sqlFiles.find(
-    (file): boolean => !file.match(migrationFilePattern),
+  const filePath = path.join(
+    opts.directory,
+    `${formatTimestamp()}-${opts.name}.sql`,
   );
-
-  if (invalidFile) {
-    throw new Error(`Invalid migration file name: ${invalidFile}`);
-  }
-
-  for (const file of sqlFiles) {
-    const fileIndex = parseMigrationIndex(file);
-    if (fileIndex >= index) {
-      index = fileIndex + 1;
-    }
-  }
-
-  if (index > POSTGRES_MAX_INDEX) {
-    throw new Error(
-      `Next migration index ${index} exceeds PostgreSQL integer range`,
-    );
-  }
-
-  const indexString =
-    opts.padWidth === 0
-      ? String(index)
-      : String(index).padStart(opts.padWidth, "0");
-  const filePath = path.join(opts.directory, `${indexString}-${opts.name}.sql`);
   const fileContent = "-- % up-migration % --\n\n-- % down-migration % --\n";
 
   try {

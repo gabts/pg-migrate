@@ -1,45 +1,18 @@
-import {
-  migrationFilePattern,
-  parseMigrationIndex,
-} from "./migration-files.js";
 import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
 
 export function validateAppliedHistory(rows: AppliedRow[]): void {
-  let previousIndex: number | null = null;
   const seenFiles = new Set<string>();
-  const seenIndexes = new Set<number>();
 
-  for (const { file, index } of rows) {
-    if (!Number.isInteger(index)) {
-      throw new Error(`Invalid applied migration index for ${file}: ${index}`);
-    }
-
-    if (!file.match(migrationFilePattern)) {
-      throw new Error(`Invalid applied migration file name: ${file}`);
-    }
-
-    const parsedIndex = parseMigrationIndex(file);
-    if (index !== parsedIndex) {
-      throw new Error(
-        `Applied migration index mismatch for ${file}: expected ${parsedIndex}, found ${index}`,
-      );
+  for (const { file } of rows) {
+    if (typeof file !== "string" || file.length === 0) {
+      throw new Error(`Invalid applied migration file: ${file}`);
     }
 
     if (seenFiles.has(file)) {
       throw new Error(`Duplicate applied migration file: ${file}`);
     }
 
-    if (seenIndexes.has(index)) {
-      throw new Error(`Duplicate applied migration index: ${index}`);
-    }
-
-    if (previousIndex !== null && index >= previousIndex) {
-      throw new Error("Applied migration history is not strictly descending");
-    }
-
     seenFiles.add(file);
-    seenIndexes.add(index);
-    previousIndex = index;
   }
 }
 
@@ -54,6 +27,26 @@ export function validateAppliedFilesExistOnDisk(
   }
 }
 
+function getAppliedFiles(appliedRows: AppliedRow[]): Set<string> {
+  return new Set(appliedRows.map(({ file }) => file));
+}
+
+function getLatestAppliedMigration(
+  appliedRows: AppliedRow[],
+  disk: LoadedMigrations,
+): DiskMigration | null {
+  const appliedFiles = getAppliedFiles(appliedRows);
+  let latestApplied: DiskMigration | null = null;
+
+  for (const migration of disk.all) {
+    if (appliedFiles.has(migration.file)) {
+      latestApplied = migration;
+    }
+  }
+
+  return latestApplied;
+}
+
 export function validateDownPreconditions(args: {
   appliedRows: AppliedRow[];
   disk: LoadedMigrations;
@@ -64,9 +57,7 @@ export function validateDownPreconditions(args: {
   const { appliedRows, disk, target } = args;
 
   if (!target) {
-    if (appliedRows[0]) {
-      validateAppliedFilesExistOnDisk([appliedRows[0]], disk);
-    }
+    validateAppliedFilesExistOnDisk(appliedRows, disk);
     return { targetMigration: null };
   }
 
@@ -75,15 +66,12 @@ export function validateDownPreconditions(args: {
     throw new Error(`No such target file "${target}"`);
   }
 
-  const targetPosition = appliedRows.findIndex(
-    ({ file }): boolean => file === target,
-  );
-  if (targetPosition === -1) {
+  validateAppliedFilesExistOnDisk(appliedRows, disk);
+
+  const appliedFiles = getAppliedFiles(appliedRows);
+  if (!appliedFiles.has(target)) {
     throw new Error(`Target migration is not applied: ${target}`);
   }
-
-  const rowsToRollback = appliedRows.slice(0, targetPosition);
-  validateAppliedFilesExistOnDisk(rowsToRollback, disk);
 
   return { targetMigration };
 }
@@ -93,11 +81,12 @@ export function validateUpPreconditions(args: {
   disk: LoadedMigrations;
   target?: string;
 }): {
-  latestApplied: AppliedRow | null;
+  latestAppliedMigration: DiskMigration | null;
   targetMigration: DiskMigration | null;
 } {
   const { appliedRows, disk, target } = args;
-  const latestApplied = appliedRows[0] ?? null;
+  const appliedFiles = getAppliedFiles(appliedRows);
+  const latestAppliedMigration = getLatestAppliedMigration(appliedRows, disk);
   const targetMigration = target ? disk.byFile.get(target) : undefined;
 
   if (target && !targetMigration) {
@@ -106,39 +95,39 @@ export function validateUpPreconditions(args: {
 
   validateAppliedFilesExistOnDisk(appliedRows, disk);
 
-  if (latestApplied) {
+  if (latestAppliedMigration) {
     // Verify applied migrations are contiguous: every disk migration at or
-    // below the latest applied index must also be applied.
-    const appliedIndices = new Set(appliedRows.map(({ index }) => index));
+    // before the latest applied migration must also be applied.
     for (const migration of disk.all) {
-      if (migration.index > latestApplied.index) break;
-      if (!appliedIndices.has(migration.index)) {
+      if (!appliedFiles.has(migration.file)) {
         throw new Error(
-          `Gap in applied migration history: "${migration.file}" (index ${migration.index}) is not applied, but migrations up to index ${latestApplied.index} have been applied`,
+          `Gap in applied migration history: "${migration.file}" is not applied, but migrations up to "${latestAppliedMigration.file}" have been applied`,
         );
       }
+
+      if (migration === latestAppliedMigration) break;
     }
 
-    if (targetMigration?.file === latestApplied.file) {
+    if (targetMigration === latestAppliedMigration) {
       return {
-        latestApplied,
+        latestAppliedMigration,
         targetMigration,
       };
     }
 
     if (
       targetMigration &&
-      targetMigration.file !== latestApplied.file &&
-      targetMigration.index < latestApplied.index
+      disk.all.indexOf(targetMigration) <
+        disk.all.indexOf(latestAppliedMigration)
     ) {
       throw new Error(
-        `Target migration "${targetMigration.file}" is behind latest applied migration "${latestApplied.file}"`,
+        `Target migration "${targetMigration.file}" is behind latest applied migration "${latestAppliedMigration.file}"`,
       );
     }
   }
 
   return {
-    latestApplied,
+    latestAppliedMigration,
     targetMigration: targetMigration ?? null,
   };
 }

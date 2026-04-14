@@ -34,7 +34,7 @@ async function queryTableExists(tableName: string): Promise<boolean> {
 async function queryHistory(
   tableName = defaultMigrationHistoryTable,
 ): Promise<any[]> {
-  const res = await client.query(`SELECT * FROM ${tableName} ORDER BY index;`);
+  const res = await client.query(`SELECT * FROM ${tableName} ORDER BY file;`);
   return res.rows;
 }
 
@@ -76,8 +76,7 @@ async function createMigrationHistoryTable(
   await client.query(`
     CREATE TABLE ${tableName}
     (
-      index integer PRIMARY KEY,
-      file text UNIQUE NOT NULL,
+      file text PRIMARY KEY,
       date timestamptz NOT NULL DEFAULT now()
     );
   `);
@@ -87,7 +86,6 @@ async function createMalformedMigrationHistoryTable(): Promise<void> {
   await client.query(`
     CREATE TABLE ${defaultMigrationHistoryTable}
     (
-      index integer NOT NULL,
       file text NOT NULL,
       date timestamptz NOT NULL DEFAULT now()
     );
@@ -149,8 +147,8 @@ describe("transaction", (): void => {
       table: qualifiedMigrationHistoryTable,
       run: async ({ client: sessionClient }): Promise<void> => {
         await sessionClient.query(
-          `INSERT INTO ${qualifiedMigrationHistoryTable} (index, file) VALUES ($1, $2);`,
-          [0, "0-create.sql"],
+          `INSERT INTO ${qualifiedMigrationHistoryTable} (file) VALUES ($1);`,
+          ["0-create.sql"],
         );
       },
     });
@@ -176,10 +174,10 @@ describe("transaction", (): void => {
     await createMalformedMigrationHistoryTable();
     await client.query(
       `
-      INSERT INTO ${defaultMigrationHistoryTable} (index, file)
+      INSERT INTO ${defaultMigrationHistoryTable} (file)
       VALUES
-        (0, '0-create.sql'),
-        (0, '0-create.sql');
+        ('0-create.sql'),
+        ('0-create.sql');
     `,
     );
 

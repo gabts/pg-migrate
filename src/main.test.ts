@@ -82,7 +82,7 @@ async function queryTableExists(tableName: string): Promise<boolean> {
 }
 
 async function queryHistory(tableName = "migration_history"): Promise<any[]> {
-  const res = await client.query(`SELECT * FROM ${tableName} ORDER BY index;`);
+  const res = await client.query(`SELECT * FROM ${tableName} ORDER BY file;`);
   return res.rows;
 }
 
@@ -111,7 +111,6 @@ async function assertMigration0(): Promise<void> {
   const personRows = await queryPersons();
 
   assert.equal(historyRows.length, 1);
-  assert.equal(historyRows[0].index, 0);
   assert.equal(historyRows[0].file, "0-create.sql");
   assert.equal(personRows.length, 0);
 }
@@ -122,8 +121,6 @@ async function assertMigration1(): Promise<void> {
   const personRows = await queryPersons();
 
   assert.equal(historyRows.length, 2);
-  assert.equal(historyRows[0].index, 0);
-  assert.equal(historyRows[1].index, 1);
   assert.equal(historyRows[0].file, "0-create.sql");
   assert.equal(historyRows[1].file, "1-insert.sql");
   assert.equal(personRows.length, 3);

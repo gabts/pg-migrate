@@ -12,13 +12,13 @@ export async function executeUpPlan(args: {
   const { client, log, steps, table } = args;
   const qualifiedTableName = qualifyTableName(parseTableName(table));
 
-  for (const { file, index, sql } of steps) {
+  for (const { file, sql } of steps) {
     log(`↑  upgrading > "${file}"`);
     await runInTransaction(client, async (): Promise<void> => {
       await client.query(sql);
       await client.query(
-        `INSERT INTO ${qualifiedTableName} ( index, file, date ) VALUES ( $1, $2, clock_timestamp() );`,
-        [index, file],
+        `INSERT INTO ${qualifiedTableName} ( file, date ) VALUES ( $1, clock_timestamp() );`,
+        [file],
       );
     });
   }

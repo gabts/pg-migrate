@@ -20,8 +20,7 @@ async function initialize(
     await client.query(`
       CREATE TABLE ${qualifiedTableName}
       (
-        index integer PRIMARY KEY,
-        file text UNIQUE NOT NULL,
+        file text PRIMARY KEY,
         date timestamptz NOT NULL DEFAULT now()
       );
     `);
@@ -82,8 +81,9 @@ export async function withMigrationSession<T>(args: {
       await initialize(client, log, table);
     });
 
+    // Order is irrelevant: disk.all is the canonical migration order.
     const appliedRowsResult = await client.query<AppliedRow>(
-      `SELECT index, file FROM ${qualifiedTableName} ORDER BY index DESC;`,
+      `SELECT file FROM ${qualifiedTableName};`,
     );
     const appliedRows = appliedRowsResult.rows;
     validateAppliedHistory(appliedRows);

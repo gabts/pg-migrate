@@ -35,12 +35,10 @@ describe("execution", (): void => {
       const steps: MigrationStep[] = [
         {
           file: "0-create.sql",
-          index: 0,
           sql: "CREATE TABLE person (id integer);",
         },
         {
           file: "1-insert.sql",
-          index: 1,
           sql: "INSERT INTO person VALUES (1);",
         },
       ];
@@ -65,8 +63,8 @@ describe("execution", (): void => {
           params: undefined,
         },
         {
-          sql: 'INSERT INTO "migratorosaurus"."migration_history" ( index, file, date ) VALUES ( $1, $2, clock_timestamp() );',
-          params: [0, "0-create.sql"],
+          sql: 'INSERT INTO "migratorosaurus"."migration_history" ( file, date ) VALUES ( $1, clock_timestamp() );',
+          params: ["0-create.sql"],
         },
         { sql: "COMMIT;", params: undefined },
         { sql: "BEGIN;", params: undefined },
@@ -75,8 +73,8 @@ describe("execution", (): void => {
           params: undefined,
         },
         {
-          sql: 'INSERT INTO "migratorosaurus"."migration_history" ( index, file, date ) VALUES ( $1, $2, clock_timestamp() );',
-          params: [1, "1-insert.sql"],
+          sql: 'INSERT INTO "migratorosaurus"."migration_history" ( file, date ) VALUES ( $1, clock_timestamp() );',
+          params: ["1-insert.sql"],
         },
         { sql: "COMMIT;", params: undefined },
       ]);
@@ -98,9 +96,9 @@ describe("execution", (): void => {
       } as unknown as pg.Client;
 
       const steps: MigrationStep[] = [
-        { file: "0-create.sql", index: 0, sql: "CREATE TABLE person;" },
-        { file: "1-break.sql", index: 1, sql: "BROKEN SQL;" },
-        { file: "2-never.sql", index: 2, sql: "CREATE TABLE never_run;" },
+        { file: "0-create.sql", sql: "CREATE TABLE person;" },
+        { file: "1-break.sql", sql: "BROKEN SQL;" },
+        { file: "2-never.sql", sql: "CREATE TABLE never_run;" },
       ];
 
       await assert.rejects(
@@ -155,7 +153,6 @@ describe("execution", (): void => {
       const steps: MigrationStep[] = [
         {
           file: "0-create.sql",
-          index: 0,
           sql: "DROP TABLE person;",
         },
       ];
@@ -188,9 +185,7 @@ describe("execution", (): void => {
       const { client, queries } = createFakeClient();
       const logs: string[] = [];
 
-      const steps: MigrationStep[] = [
-        { file: "0-backfill.sql", index: 0, sql: "" },
-      ];
+      const steps: MigrationStep[] = [{ file: "0-backfill.sql", sql: "" }];
 
       await executeDownPlan({
         client,

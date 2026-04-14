@@ -8,9 +8,9 @@ import {
 import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
 
 const migrations: DiskMigration[] = [
-  { file: "0-create.sql", index: 0, path: "/migrations/0-create.sql" },
-  { file: "1-insert.sql", index: 1, path: "/migrations/1-insert.sql" },
-  { file: "2-alter.sql", index: 2, path: "/migrations/2-alter.sql" },
+  { file: "0-create.sql", path: "/migrations/0-create.sql" },
+  { file: "1-insert.sql", path: "/migrations/1-insert.sql" },
+  { file: "2-alter.sql", path: "/migrations/2-alter.sql" },
 ];
 
 const disk: LoadedMigrations = {
@@ -25,84 +25,51 @@ const disk: LoadedMigrations = {
 
 describe("validation", (): void => {
   describe("validateAppliedHistory", (): void => {
-    it("accepts a strictly descending applied migration history", (): void => {
+    it("accepts applied migration files", (): void => {
       assert.doesNotThrow((): void => {
         validateAppliedHistory([
-          { file: "2-alter.sql", index: 2 },
-          { file: "1-insert.sql", index: 1 },
-          { file: "0-create.sql", index: 0 },
+          { file: "create person's table.sql" },
+          { file: "1-insert.sql" },
+          { file: "0-create.sql" },
         ]);
       });
     });
 
-    it("rejects invalid applied migration indices", (): void => {
+    it("rejects invalid applied migration files", (): void => {
       assert.throws((): void => {
-        validateAppliedHistory([{ file: "1-insert.sql", index: 1.5 }]);
-      }, /Invalid applied migration index for 1-insert\.sql: 1\.5/);
+        validateAppliedHistory([{ file: "" }]);
+      }, /Invalid applied migration file:/);
     });
 
-    it("rejects invalid applied migration file names", (): void => {
-      assert.throws((): void => {
-        validateAppliedHistory([{ file: "1-insert person's.sql", index: 1 }]);
-      }, /Invalid applied migration file name: 1-insert person's\.sql/);
-    });
-
-    it("rejects applied migration index mismatches", (): void => {
-      assert.throws((): void => {
-        validateAppliedHistory([{ file: "2-alter.sql", index: 1 }]);
-      }, /Applied migration index mismatch for 2-alter\.sql: expected 2, found 1/);
-    });
-
-    it("rejects duplicate applied migration files and indices", (): void => {
+    it("rejects duplicate applied migration files", (): void => {
       assert.throws((): void => {
         validateAppliedHistory([
-          { file: "1-insert.sql", index: 1 },
-          { file: "1-insert.sql", index: 1 },
+          { file: "1-insert.sql" },
+          { file: "1-insert.sql" },
         ]);
       }, /Duplicate applied migration file: 1-insert\.sql/);
-      assert.throws((): void => {
-        validateAppliedHistory([
-          { file: "001-create.sql", index: 1 },
-          { file: "1-insert.sql", index: 1 },
-        ]);
-      }, /Duplicate applied migration index: 1/);
-    });
-
-    it("rejects histories that are not strictly descending", (): void => {
-      assert.throws((): void => {
-        validateAppliedHistory([
-          { file: "0-create.sql", index: 0 },
-          { file: "1-insert.sql", index: 1 },
-        ]);
-      }, /Applied migration history is not strictly descending/);
     });
   });
 
   describe("validateAppliedFilesExistOnDisk", (): void => {
     it("accepts applied files that exist on disk", (): void => {
       assert.doesNotThrow((): void => {
-        validateAppliedFilesExistOnDisk(
-          [{ file: "0-create.sql", index: 0 }],
-          disk,
-        );
+        validateAppliedFilesExistOnDisk([{ file: "0-create.sql" }], disk);
       });
     });
 
     it("rejects applied files that are missing on disk", (): void => {
       assert.throws((): void => {
-        validateAppliedFilesExistOnDisk(
-          [{ file: "9-missing.sql", index: 9 }],
-          disk,
-        );
+        validateAppliedFilesExistOnDisk([{ file: "9-missing.sql" }], disk);
       }, /Applied migration file is missing on disk: 9-missing\.sql/);
     });
   });
 
   describe("validateDownPreconditions", (): void => {
     const appliedRows: AppliedRow[] = [
-      { file: "2-alter.sql", index: 2 },
-      { file: "1-insert.sql", index: 1 },
-      { file: "0-create.sql", index: 0 },
+      { file: "2-alter.sql" },
+      { file: "1-insert.sql" },
+      { file: "0-create.sql" },
     ];
 
     it("returns null target when no target is provided", (): void => {
@@ -139,7 +106,7 @@ describe("validation", (): void => {
     it("rejects target files that are not applied", (): void => {
       assert.throws((): void => {
         validateDownPreconditions({
-          appliedRows: [{ file: "2-alter.sql", index: 2 }],
+          appliedRows: [{ file: "2-alter.sql" }],
           disk,
           target: "1-insert.sql",
         });
@@ -150,9 +117,9 @@ describe("validation", (): void => {
       assert.throws((): void => {
         validateDownPreconditions({
           appliedRows: [
-            { file: "2-alter.sql", index: 2 },
-            { file: "1-missing.sql", index: 1 },
-            { file: "0-create.sql", index: 0 },
+            { file: "2-alter.sql" },
+            { file: "1-missing.sql" },
+            { file: "0-create.sql" },
           ],
           disk,
           target: "0-create.sql",
@@ -163,7 +130,7 @@ describe("validation", (): void => {
     it("validates the latest applied file exists on disk when no target is provided", (): void => {
       assert.throws((): void => {
         validateDownPreconditions({
-          appliedRows: [{ file: "9-missing.sql", index: 9 }],
+          appliedRows: [{ file: "9-missing.sql" }],
           disk,
         });
       }, /Applied migration file is missing on disk: 9-missing\.sql/);
@@ -174,12 +141,12 @@ describe("validation", (): void => {
     it("returns latest applied and target migrations for valid input", (): void => {
       assert.deepEqual(
         validateUpPreconditions({
-          appliedRows: [{ file: "0-create.sql", index: 0 }],
+          appliedRows: [{ file: "0-create.sql" }],
           disk,
           target: "2-alter.sql",
         }),
         {
-          latestApplied: { file: "0-create.sql", index: 0 },
+          latestAppliedMigration: migrations[0],
           targetMigration: migrations[2],
         },
       );
@@ -192,7 +159,7 @@ describe("validation", (): void => {
           disk,
         }),
         {
-          latestApplied: null,
+          latestAppliedMigration: null,
           targetMigration: null,
         },
       );
@@ -211,7 +178,7 @@ describe("validation", (): void => {
     it("rejects applied files that are missing on disk", (): void => {
       assert.throws((): void => {
         validateUpPreconditions({
-          appliedRows: [{ file: "9-missing.sql", index: 9 }],
+          appliedRows: [{ file: "9-missing.sql" }],
           disk,
         });
       }, /Applied migration file is missing on disk: 9-missing\.sql/);
@@ -220,16 +187,16 @@ describe("validation", (): void => {
     it("rejects gaps in applied migration history", (): void => {
       assert.throws((): void => {
         validateUpPreconditions({
-          appliedRows: [{ file: "2-alter.sql", index: 2 }],
+          appliedRows: [{ file: "2-alter.sql" }],
           disk,
         });
-      }, /Gap in applied migration history: "0-create\.sql" \(index 0\) is not applied, but migrations up to index 2 have been applied/);
+      }, /Gap in applied migration history: "0-create\.sql" is not applied, but migrations up to "2-alter\.sql" have been applied/);
     });
 
     it("rejects non-contiguous applied migrations", (): void => {
       const fourMigrations: DiskMigration[] = [
         ...migrations,
-        { file: "3-drop.sql", index: 3, path: "/migrations/3-drop.sql" },
+        { file: "3-drop.sql", path: "/migrations/3-drop.sql" },
       ];
       const fourDisk: LoadedMigrations = {
         all: fourMigrations,
@@ -240,13 +207,10 @@ describe("validation", (): void => {
 
       assert.throws((): void => {
         validateUpPreconditions({
-          appliedRows: [
-            { file: "3-drop.sql", index: 3 },
-            { file: "1-insert.sql", index: 1 },
-          ],
+          appliedRows: [{ file: "3-drop.sql" }, { file: "1-insert.sql" }],
           disk: fourDisk,
         });
-      }, /Gap in applied migration history: "0-create\.sql" \(index 0\) is not applied, but migrations up to index 3 have been applied/);
+      }, /Gap in applied migration history: "0-create\.sql" is not applied, but migrations up to "3-drop\.sql" have been applied/);
     });
 
     it("rejects targets behind the latest applied migration", (): void => {
@@ -265,10 +229,7 @@ describe("validation", (): void => {
 
       assert.throws((): void => {
         validateUpPreconditions({
-          appliedRows: [
-            { file: "1-insert.sql", index: 1 },
-            { file: "0-create.sql", index: 0 },
-          ],
+          appliedRows: [{ file: "1-insert.sql" }, { file: "0-create.sql" }],
           disk: diskWithoutGaps,
           target: "0-create.sql",
         });
@@ -279,15 +240,15 @@ describe("validation", (): void => {
       assert.deepEqual(
         validateUpPreconditions({
           appliedRows: [
-            { file: "2-alter.sql", index: 2 },
-            { file: "1-insert.sql", index: 1 },
-            { file: "0-create.sql", index: 0 },
+            { file: "2-alter.sql" },
+            { file: "1-insert.sql" },
+            { file: "0-create.sql" },
           ],
           disk,
           target: "2-alter.sql",
         }),
         {
-          latestApplied: { file: "2-alter.sql", index: 2 },
+          latestAppliedMigration: migrations[2],
           targetMigration: migrations[2],
         },
       );
@@ -296,7 +257,7 @@ describe("validation", (): void => {
     it("rejects gaps even when target equals the latest applied migration", (): void => {
       assert.throws((): void => {
         validateUpPreconditions({
-          appliedRows: [{ file: "2-alter.sql", index: 2 }],
+          appliedRows: [{ file: "2-alter.sql" }],
           disk,
           target: "2-alter.sql",
         });

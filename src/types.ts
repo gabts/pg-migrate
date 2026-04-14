@@ -2,7 +2,6 @@ import type * as pg from "pg";
 
 export interface DiskMigration {
   file: string;
-  index: number;
   path: string;
 }
 
@@ -13,13 +12,11 @@ export interface LoadedMigrations {
 
 export interface MigrationStep {
   file: string;
-  index: number;
   sql: string;
 }
 
 export interface AppliedRow {
   file: string;
-  index: number;
 }
 
 export type ClientConfig = string | pg.ClientConfig;
