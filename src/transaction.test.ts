@@ -77,7 +77,7 @@ async function createMigrationHistoryTable(
     CREATE TABLE ${tableName}
     (
       file text PRIMARY KEY,
-      date timestamptz NOT NULL DEFAULT now()
+      applied_at timestamptz NOT NULL DEFAULT now()
     );
   `);
 }
@@ -87,7 +87,7 @@ async function createMalformedMigrationHistoryTable(): Promise<void> {
     CREATE TABLE ${defaultMigrationHistoryTable}
     (
       file text NOT NULL,
-      date timestamptz NOT NULL DEFAULT now()
+      applied_at timestamptz NOT NULL DEFAULT now()
     );
   `);
 }
@@ -133,7 +133,7 @@ describe("transaction", (): void => {
     assert.deepEqual(await queryHistory(), []);
     assert.ok(
       (
-        await queryColumnDefault(defaultMigrationHistoryTable, "date")
+        await queryColumnDefault(defaultMigrationHistoryTable, "applied_at")
       )?.includes("now()"),
     );
   });

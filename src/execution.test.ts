@@ -63,7 +63,7 @@ describe("execution", (): void => {
           params: undefined,
         },
         {
-          sql: 'INSERT INTO "migratorosaurus"."migration_history" ( file, date ) VALUES ( $1, clock_timestamp() );',
+          sql: 'INSERT INTO "migratorosaurus"."migration_history" ( file, applied_at ) VALUES ( $1, clock_timestamp() );',
           params: ["0-create.sql"],
         },
         { sql: "COMMIT;", params: undefined },
@@ -73,7 +73,7 @@ describe("execution", (): void => {
           params: undefined,
         },
         {
-          sql: 'INSERT INTO "migratorosaurus"."migration_history" ( file, date ) VALUES ( $1, clock_timestamp() );',
+          sql: 'INSERT INTO "migratorosaurus"."migration_history" ( file, applied_at ) VALUES ( $1, clock_timestamp() );',
           params: ["1-insert.sql"],
         },
         { sql: "COMMIT;", params: undefined },

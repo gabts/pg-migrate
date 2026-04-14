@@ -21,7 +21,7 @@ async function initialize(
       CREATE TABLE ${qualifiedTableName}
       (
         file text PRIMARY KEY,
-        date timestamptz NOT NULL DEFAULT now()
+        applied_at timestamptz NOT NULL DEFAULT now()
       );
     `);
   }

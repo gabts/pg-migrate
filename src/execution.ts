@@ -17,7 +17,7 @@ export async function executeUpPlan(args: {
     await runInTransaction(client, async (): Promise<void> => {
       await client.query(sql);
       await client.query(
-        `INSERT INTO ${qualifiedTableName} ( file, date ) VALUES ( $1, clock_timestamp() );`,
+        `INSERT INTO ${qualifiedTableName} ( file, applied_at ) VALUES ( $1, clock_timestamp() );`,
         [file],
       );
     });
