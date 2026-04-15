@@ -1,4 +1,5 @@
 import * as pg from "pg";
+import { messages } from "./log-messages.js";
 import { parseTableName, qualifyTableName } from "./table-name.js";
 import type { AppliedRow, ClientConfig, LogFn } from "./types.js";
 import { validateAppliedHistory } from "./validation.js";
@@ -16,7 +17,7 @@ async function initialize(
   );
 
   if (!migrationTableQueryResult.rows[0].exists) {
-    log("🥚 performing first time setup");
+    log(messages.creatingTable());
     await client.query(`
       CREATE TABLE ${qualifiedTableName}
       (
@@ -49,6 +50,8 @@ export async function runInTransaction<T>(
   }
 }
 
+// Errors thrown from `run` (or from session setup) propagate unchanged —
+// callers are responsible for logging aborted-run messages around the call.
 export async function withMigrationSession<T>(args: {
   clientConfig: ClientConfig;
   log: LogFn;
@@ -89,9 +92,6 @@ export async function withMigrationSession<T>(args: {
     validateAppliedHistory(appliedRows);
 
     return await run({ appliedRows, client });
-  } catch (error) {
-    log("☄️ migratorosaurus threw error!");
-    throw error;
   } finally {
     if (lockKey !== null) {
       try {

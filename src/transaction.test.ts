@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import * as pg from "pg";
+import { messages } from "./log-messages.js";
 import { withMigrationSession } from "./transaction.js";
 
 if (!process.env.DATABASE_URL) {
@@ -128,7 +129,7 @@ describe("transaction", (): void => {
     });
 
     assert.equal(result, "done");
-    assert.deepEqual(logs, ["🥚 performing first time setup"]);
+    assert.deepEqual(logs, [messages.creatingTable()]);
     assert.ok(await queryTableExists(defaultMigrationHistoryTable));
     assert.deepEqual(await queryHistory(), []);
     assert.ok(
@@ -197,7 +198,7 @@ describe("transaction", (): void => {
     assert.equal(didRun, false);
   });
 
-  it("logs when the runner throws and keeps setup committed", async (): Promise<void> => {
+  it("propagates runner errors and keeps setup committed", async (): Promise<void> => {
     const logs: string[] = [];
 
     await assert.rejects(
@@ -215,10 +216,7 @@ describe("transaction", (): void => {
       /runner failed/,
     );
 
-    assert.deepEqual(logs, [
-      "🥚 performing first time setup",
-      "☄️ migratorosaurus threw error!",
-    ]);
+    assert.deepEqual(logs, [messages.creatingTable()]);
     // The history table is created in its own transaction and survives
     // runner failures — only the failing migration's transaction is rolled
     // back, not the session setup.

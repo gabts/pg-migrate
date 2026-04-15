@@ -1,7 +1,12 @@
 import * as assert from "assert";
 import type * as pg from "pg";
 import { executeDownPlan, executeUpPlan } from "./execution.js";
+import { messages } from "./log-messages.js";
 import type { MigrationStep } from "./types.js";
+
+function normalizeMs(s: string): string {
+  return s.replace(/\d+ms/, "<ms>");
+}
 
 interface QueryCall {
   sql: string;
@@ -52,10 +57,17 @@ describe("execution", (): void => {
         table: "migratorosaurus.migration_history",
       });
 
-      assert.deepEqual(logs, [
-        '↑  upgrading > "0-create.sql"',
-        '↑  upgrading > "1-insert.sql"',
-      ]);
+      assert.deepEqual(
+        logs.map(normalizeMs),
+        [
+          "",
+          messages.applying("0-create.sql"),
+          messages.applied("0-create.sql", 0),
+          "",
+          messages.applying("1-insert.sql"),
+          messages.applied("1-insert.sql", 0),
+        ].map(normalizeMs),
+      );
       assert.deepEqual(queries, [
         { sql: "BEGIN;", params: undefined },
         {
@@ -89,7 +101,9 @@ describe("execution", (): void => {
         ): Promise<{ rows: unknown[] }> => {
           queries.push({ sql, params });
           if (sql === "BROKEN SQL;") {
-            throw new Error("syntax error at BROKEN");
+            throw Object.assign(new Error("syntax error at BROKEN"), {
+              code: "42601",
+            });
           }
           return { rows: [] };
         },
@@ -101,11 +115,14 @@ describe("execution", (): void => {
         { file: "2-never.sql", sql: "CREATE TABLE never_run;" },
       ];
 
+      const logs: string[] = [];
       await assert.rejects(
         (): Promise<void> =>
           executeUpPlan({
             client,
-            log: (): void => undefined,
+            log: (message: string): void => {
+              logs.push(message);
+            },
             steps,
             table: "migration_history",
           }),
@@ -128,6 +145,24 @@ describe("execution", (): void => {
       assert.ok(queries.some((q): boolean => q.sql === "CREATE TABLE person;"));
       assert.ok(
         !queries.some((q): boolean => q.sql === "CREATE TABLE never_run;"),
+      );
+
+      assert.deepEqual(
+        logs.map(normalizeMs),
+        [
+          "",
+          messages.applying("0-create.sql"),
+          messages.applied("0-create.sql", 0),
+          "",
+          messages.applying("1-break.sql"),
+          messages.failed("1-break.sql", 0),
+          messages.errorDetails(
+            Object.assign(new Error("syntax error at BROKEN"), {
+              code: "42601",
+            }),
+          ),
+          messages.failureRolledBack(),
+        ].map(normalizeMs),
       );
     });
 
@@ -166,7 +201,14 @@ describe("execution", (): void => {
         table: "migration_history",
       });
 
-      assert.deepEqual(logs, ['↓  downgrading > "0-create.sql"']);
+      assert.deepEqual(
+        logs.map(normalizeMs),
+        [
+          "",
+          messages.reverting("0-create.sql", true),
+          messages.reverted("0-create.sql", 0),
+        ].map(normalizeMs),
+      );
       assert.deepEqual(queries, [
         { sql: "BEGIN;", params: undefined },
         {
@@ -196,15 +238,92 @@ describe("execution", (): void => {
         table: "migration_history",
       });
 
-      assert.deepEqual(logs, [
-        '↓  downgrading > "0-backfill.sql" (no down section, skipping)',
-      ]);
+      assert.deepEqual(
+        logs.map(normalizeMs),
+        [
+          "",
+          messages.reverting("0-backfill.sql", false),
+          messages.reverted("0-backfill.sql", 0),
+        ].map(normalizeMs),
+      );
       assert.deepEqual(queries, [
         {
           sql: 'DELETE FROM "migration_history" WHERE file = $1;',
           params: ["0-backfill.sql"],
         },
       ]);
+    });
+
+    it("logs a rollback for a reversible down failure", async (): Promise<void> => {
+      const client = {
+        query: async (sql: string): Promise<{ rows: unknown[] }> => {
+          if (sql === "DROP TABLE person;") {
+            throw new Error("cannot drop");
+          }
+          return { rows: [] };
+        },
+      } as unknown as pg.Client;
+
+      const steps: MigrationStep[] = [
+        { file: "0-create.sql", sql: "DROP TABLE person;" },
+      ];
+      const logs: string[] = [];
+      await assert.rejects(
+        (): Promise<void> =>
+          executeDownPlan({
+            client,
+            log: (message: string): void => {
+              logs.push(message);
+            },
+            steps,
+            table: "migration_history",
+          }),
+        /cannot drop/,
+      );
+
+      assert.deepEqual(
+        logs.map(normalizeMs),
+        [
+          "",
+          messages.reverting("0-create.sql", true),
+          messages.failed("0-create.sql", 0),
+          messages.errorDetails(new Error("cannot drop")),
+          messages.failureRolledBack(),
+        ].map(normalizeMs),
+      );
+    });
+
+    it("does not log failureRolledBack when an irreversible down step fails", async (): Promise<void> => {
+      const client = {
+        query: async (): Promise<{ rows: unknown[] }> => {
+          throw new Error("history write failed");
+        },
+      } as unknown as pg.Client;
+
+      const steps: MigrationStep[] = [{ file: "0-backfill.sql", sql: "" }];
+      const logs: string[] = [];
+      await assert.rejects(
+        (): Promise<void> =>
+          executeDownPlan({
+            client,
+            log: (message: string): void => {
+              logs.push(message);
+            },
+            steps,
+            table: "migration_history",
+          }),
+        /history write failed/,
+      );
+
+      assert.deepEqual(
+        logs.map(normalizeMs),
+        [
+          "",
+          messages.reverting("0-backfill.sql", false),
+          messages.failed("0-backfill.sql", 0),
+          messages.errorDetails(new Error("history write failed")),
+        ].map(normalizeMs),
+      );
     });
 
     it("does nothing for an empty down plan", async (): Promise<void> => {

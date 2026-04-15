@@ -3,10 +3,15 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as pg from "pg";
+import { messages } from "./log-messages.js";
 import { down, up } from "./main.js";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set to run integration tests");
+}
+
+function normalizeMs(s: string): string {
+  return s.replace(/\d+ms/, "<ms>");
 }
 
 const databaseConfig: string | pg.ClientConfig = process.env.DATABASE_URL;
@@ -190,16 +195,27 @@ describe("main", (): void => {
     await up(databaseConfig, { directory, log });
     await down(databaseConfig, { directory, log });
 
-    assert.deepEqual(logs, [
-      "🦖 migratorosaurus up initiated!",
-      "🥚 performing first time setup",
-      '↑  upgrading > "0-create.sql"',
-      '↑  upgrading > "1-insert.sql"',
-      "🌋 migratorosaurus up completed!",
-      "🦖 migratorosaurus down initiated!",
-      '↓  downgrading > "1-insert.sql"',
-      "🌋 migratorosaurus down completed!",
-    ]);
+    const normalized = logs.map(normalizeMs);
+    assert.deepEqual(
+      normalized,
+      [
+        messages.startedUp(),
+        messages.creatingTable(),
+        messages.pending(2),
+        "",
+        messages.applying("0-create.sql"),
+        messages.applied("0-create.sql", 0),
+        "",
+        messages.applying("1-insert.sql"),
+        messages.applied("1-insert.sql", 0),
+        messages.completedUp(),
+        messages.startedDown(),
+        "",
+        messages.reverting("1-insert.sql", true),
+        messages.reverted("1-insert.sql", 0),
+        messages.completedDown(),
+      ].map(normalizeMs),
+    );
   });
 
   it("serializes concurrent up runners against the same history table", async (): Promise<void> => {
@@ -289,9 +305,7 @@ VALUES ('gabriel'), ('david'), ('frasse');
 
     assert.ok(
       logs.some(
-        (l): boolean =>
-          l.includes("1-backfill.sql") &&
-          l.includes("no down section, skipping"),
+        (l): boolean => l === messages.reverting("1-backfill.sql", false),
       ),
     );
   });
@@ -365,9 +379,7 @@ DROP TABLE broken;
 
     await down(databaseConfig, { directory, log });
 
-    assert.ok(
-      logs.some((l): boolean => l.includes("No migrations to roll back.")),
-    );
+    assert.ok(logs.some((l): boolean => l === messages.nothingToRollback()));
   });
 
   it("down is a no-op when target is the latest applied migration", async (): Promise<void> => {
@@ -380,9 +392,7 @@ DROP TABLE broken;
     await up(databaseConfig, { directory });
     await down(databaseConfig, { directory, target: "1-insert.sql", log });
 
-    assert.ok(
-      logs.some((l): boolean => l.includes("No migrations to roll back.")),
-    );
+    assert.ok(logs.some((l): boolean => l === messages.nothingToRollback()));
     await assertMigration1();
   });
 
@@ -396,7 +406,7 @@ DROP TABLE broken;
     await up(databaseConfig, { directory });
     await up(databaseConfig, { directory, target: "1-insert.sql", log });
 
-    assert.ok(logs.some((l): boolean => l.includes("No pending migrations.")));
+    assert.ok(logs.some((l): boolean => l === messages.pending(0)));
     await assertMigration1();
   });
 

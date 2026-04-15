@@ -1,4 +1,5 @@
 import { executeDownPlan, executeUpPlan } from "./execution.js";
+import { messages } from "./log-messages.js";
 import { loadDiskMigrations, materializeSteps } from "./migration-files.js";
 import { planDownExecution, planUpExecution } from "./planning.js";
 import { withMigrationSession } from "./transaction.js";
@@ -34,40 +35,49 @@ export async function up(
   args: MigrationOptions = {},
 ): Promise<void> {
   const { directory, log, table, target } = normalizeOptions(args);
-  log("🦖 migratorosaurus up initiated!");
+  log(messages.startedUp());
+  if (target) {
+    log(messages.target(target));
+  }
 
-  const disk = loadDiskMigrations(directory);
+  try {
+    const disk = loadDiskMigrations(directory);
 
-  await withMigrationSession({
-    clientConfig,
-    log,
-    table,
-    run: async ({ appliedRows, client }): Promise<void> => {
-      const { latestAppliedMigration, targetMigration } =
-        validateUpPreconditions({
-          appliedRows,
+    await withMigrationSession({
+      clientConfig,
+      log,
+      table,
+      run: async ({ appliedRows, client }): Promise<void> => {
+        const { latestAppliedMigration, targetMigration } =
+          validateUpPreconditions({
+            appliedRows,
+            disk,
+            target,
+          });
+
+        const migrations = planUpExecution({
           disk,
-          target,
+          latestAppliedMigration,
+          targetMigration,
         });
 
-      const migrations = planUpExecution({
-        disk,
-        latestAppliedMigration,
-        targetMigration,
-      });
+        const steps = materializeSteps(migrations, "up");
 
-      const steps = materializeSteps(migrations, "up");
+        log(messages.pending(steps.length));
 
-      if (steps.length === 0) {
-        log("No pending migrations.");
-        return;
-      }
+        if (steps.length === 0) {
+          return;
+        }
 
-      await executeUpPlan({ client, log, steps, table });
-    },
-  });
+        await executeUpPlan({ client, log, steps, table });
+      },
+    });
 
-  log("🌋 migratorosaurus up completed!");
+    log(messages.completedUp());
+  } catch (error) {
+    log(messages.abortedUp());
+    throw error;
+  }
 }
 
 export async function down(
@@ -75,37 +85,45 @@ export async function down(
   args: MigrationOptions = {},
 ): Promise<void> {
   const { directory, log, table, target } = normalizeOptions(args);
-  log("🦖 migratorosaurus down initiated!");
+  log(messages.startedDown());
+  if (target) {
+    log(messages.target(target));
+  }
 
-  const disk = loadDiskMigrations(directory);
+  try {
+    const disk = loadDiskMigrations(directory);
 
-  await withMigrationSession({
-    clientConfig,
-    log,
-    table,
-    run: async ({ appliedRows, client }): Promise<void> => {
-      const { targetMigration } = validateDownPreconditions({
-        appliedRows,
-        disk,
-        target,
-      });
+    await withMigrationSession({
+      clientConfig,
+      log,
+      table,
+      run: async ({ appliedRows, client }): Promise<void> => {
+        const { targetMigration } = validateDownPreconditions({
+          appliedRows,
+          disk,
+          target,
+        });
 
-      const migrations = planDownExecution({
-        appliedRows,
-        disk,
-        targetMigration,
-      });
+        const migrations = planDownExecution({
+          appliedRows,
+          disk,
+          targetMigration,
+        });
 
-      const steps = materializeSteps(migrations, "down");
+        const steps = materializeSteps(migrations, "down");
 
-      if (steps.length === 0) {
-        log("No migrations to roll back.");
-        return;
-      }
+        if (steps.length === 0) {
+          log(messages.nothingToRollback());
+          return;
+        }
 
-      await executeDownPlan({ client, log, steps, table });
-    },
-  });
+        await executeDownPlan({ client, log, steps, table });
+      },
+    });
 
-  log("🌋 migratorosaurus down completed!");
+    log(messages.completedDown());
+  } catch (error) {
+    log(messages.abortedDown());
+    throw error;
+  }
 }

@@ -1,0 +1,64 @@
+function displayName(file: string): string {
+  return file.replace(/\.sql$/, "");
+}
+
+export const messages = {
+  startedUp: (): string => {
+    return "🦖 started migration run";
+  },
+  startedDown: (): string => {
+    return "🦖 started rollback";
+  },
+  completedUp: (): string => {
+    return "🌋 migration run complete";
+  },
+  completedDown: (): string => {
+    return "🌋 rollback complete";
+  },
+  abortedUp: (): string => {
+    return "☄️ migration run aborted";
+  },
+  abortedDown: (): string => {
+    return "☄️ rollback aborted";
+  },
+  nothingToRollback: (): string => {
+    return "- no migrations to roll back";
+  },
+  failureRolledBack: (): string => {
+    return "🦴 current migration rolled back";
+  },
+  creatingTable: (): string => {
+    return "🥚 creating migration history table";
+  },
+  pending: (count: number): string => {
+    return `🧬 pending migrations: ${count}`;
+  },
+  target: (file: string): string => {
+    return `- target version: "${displayName(file)}"`;
+  },
+  applying: (file: string): string => {
+    return `↑ applying "${displayName(file)}" (up)`;
+  },
+  applied: (file: string, ms: number): string => {
+    return `✓ applied "${displayName(file)}" in ${ms}ms`;
+  },
+  reverting: (file: string, hasSql: boolean): string => {
+    return `↓ reverting "${displayName(file)}" (down${hasSql ? "" : ", no SQL"})`;
+  },
+  reverted: (file: string, ms: number): string => {
+    return `⟲ reverted "${displayName(file)}" in ${ms}ms`;
+  },
+  failed: (file: string, ms: number): string => {
+    return `✗ failed "${displayName(file)}" after ${ms}ms`;
+  },
+  errorDetails: (error: unknown): string => {
+    const parts: string[] = ["☄️"];
+    const code = (error as { code?: unknown })?.code;
+    if (code !== undefined && code !== null && code !== "") {
+      parts.push(`sqlstate=${String(code)}`);
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    parts.push(`message=${JSON.stringify(message)}`);
+    return parts.join(" ");
+  },
+};
