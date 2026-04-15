@@ -5,12 +5,17 @@ describe("log-messages", (): void => {
   describe("lifecycle", (): void => {
     it("formats migration-run lifecycle", (): void => {
       assert.equal(messages.startedUp(), "🦖 started migration run");
+      assert.equal(
+        messages.startedUp(true),
+        "🦖 started migration run (dry run)",
+      );
       assert.equal(messages.completedUp(), "🌋 migration run complete");
       assert.equal(messages.abortedUp(), "☄️ migration run aborted");
     });
 
     it("formats rollback lifecycle", (): void => {
       assert.equal(messages.startedDown(), "🦖 started rollback");
+      assert.equal(messages.startedDown(true), "🦖 started rollback (dry run)");
       assert.equal(messages.completedDown(), "🌋 rollback complete");
       assert.equal(messages.abortedDown(), "☄️ rollback aborted");
     });

@@ -210,6 +210,7 @@ describe("main", (): void => {
         messages.applied("1-insert.sql", 0),
         messages.completedUp(),
         messages.startedDown(),
+        messages.pending(1),
         "",
         messages.reverting("1-insert.sql", true),
         messages.reverted("1-insert.sql", 0),
@@ -379,6 +380,7 @@ DROP TABLE broken;
 
     await down(databaseConfig, { directory, log });
 
+    assert.ok(logs.some((l): boolean => l === messages.pending(0)));
     assert.ok(logs.some((l): boolean => l === messages.nothingToRollback()));
   });
 
@@ -392,8 +394,98 @@ DROP TABLE broken;
     await up(databaseConfig, { directory });
     await down(databaseConfig, { directory, target: "1-insert.sql", log });
 
+    assert.ok(logs.some((l): boolean => l === messages.pending(0)));
     assert.ok(logs.some((l): boolean => l === messages.nothingToRollback()));
     await assertMigration1();
+  });
+
+  it("up dry run runs SQL but rolls back all changes", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+    const logs: string[] = [];
+    const log = (message: string): void => {
+      logs.push(message);
+    };
+
+    await up(databaseConfig, { directory, dryRun: true, log });
+
+    assert.ok(logs.some((l): boolean => l === messages.startedUp(true)));
+    assert.ok(
+      logs.some((l): boolean => l === messages.applying("0-create.sql")),
+    );
+    assert.ok(
+      logs.some((l): boolean => l === messages.applying("1-insert.sql")),
+    );
+    assert.ok(logs.some((l): boolean => l === messages.completedUp()));
+    assert.equal(await queryTableExists(defaultMigrationHistoryTable), false);
+    assert.equal(await queryTableExists("person"), false);
+  });
+
+  it("up dry run keeps existing history table and rows unchanged", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+    const logs: string[] = [];
+    const log = (message: string): void => {
+      logs.push(message);
+    };
+
+    await up(databaseConfig, { directory, target: "0-create.sql" });
+    await up(databaseConfig, { directory, dryRun: true, log });
+
+    assert.ok(logs.some((l): boolean => l === messages.startedUp(true)));
+    assert.ok(
+      logs.some((l): boolean => l === messages.applying("1-insert.sql")),
+    );
+    assert.ok(logs.some((l): boolean => l === messages.completedUp()));
+
+    assert.ok(await queryTableExists(defaultMigrationHistoryTable));
+    const historyRows = await queryHistory(defaultMigrationHistoryTable);
+    assert.equal(historyRows.length, 1);
+    assert.equal(historyRows[0].file, "0-create.sql");
+    const personRows = await queryPersons();
+    assert.equal(personRows.length, 0);
+  });
+
+  it("down dry run runs SQL but rolls back all changes", async (): Promise<void> => {
+    const updateNamesMigration = `-- % up-migration % --
+UPDATE person SET name = upper(name);
+
+-- % down-migration % --
+UPDATE person SET name = lower(name);
+`;
+    const directory = createMigrationDirectory({
+      "0-create.sql": createPersonMigration,
+      "1-insert.sql": insertPeopleMigration,
+      "2-update.sql": updateNamesMigration,
+    });
+    const logs: string[] = [];
+    const log = (message: string): void => {
+      logs.push(message);
+    };
+
+    await up(databaseConfig, { directory });
+    await down(databaseConfig, {
+      directory,
+      dryRun: true,
+      target: "0-create.sql",
+      log,
+    });
+
+    assert.ok(logs.some((l): boolean => l === messages.startedDown(true)));
+    assert.ok(logs.some((l): boolean => l === messages.pending(2)));
+    assert.ok(
+      logs.some((l): boolean => l === messages.reverting("2-update.sql", true)),
+    );
+    assert.ok(
+      logs.some((l): boolean => l === messages.reverting("1-insert.sql", true)),
+    );
+    assert.ok(logs.some((l): boolean => l === messages.completedDown()));
+
+    const historyRows = await queryHistory();
+    assert.equal(historyRows.length, 3);
+    const personRows = await queryPersons();
+    assert.deepEqual(
+      personRows.map((r): string => r.name),
+      ["GABRIEL", "DAVID", "FRASSE"],
+    );
   });
 
   it("up is a no-op when target equals latest applied migration", async (): Promise<void> => {

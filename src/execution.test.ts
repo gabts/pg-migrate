@@ -180,6 +180,240 @@ describe("execution", (): void => {
     });
   });
 
+  describe("executeUpPlan (dryRun)", (): void => {
+    it("runs each step directly, leaving outer transaction management to the caller", async (): Promise<void> => {
+      const { client, queries } = createFakeClient();
+      const logs: string[] = [];
+
+      const steps: MigrationStep[] = [
+        { file: "0-create.sql", sql: "CREATE TABLE person (id integer);" },
+        { file: "1-insert.sql", sql: "INSERT INTO person VALUES (1);" },
+      ];
+
+      await executeUpPlan({
+        client,
+        dryRun: true,
+        log: (message: string): void => {
+          logs.push(message);
+        },
+        steps,
+        table: "migration_history",
+      });
+
+      assert.deepEqual(
+        logs.map(normalizeMs),
+        [
+          "",
+          messages.applying("0-create.sql"),
+          messages.applied("0-create.sql", 0),
+          "",
+          messages.applying("1-insert.sql"),
+          messages.applied("1-insert.sql", 0),
+        ].map(normalizeMs),
+      );
+      assert.deepEqual(queries, [
+        { sql: "CREATE TABLE person (id integer);", params: undefined },
+        {
+          sql: 'INSERT INTO "migration_history" ( file, applied_at ) VALUES ( $1, clock_timestamp() );',
+          params: ["0-create.sql"],
+        },
+        { sql: "INSERT INTO person VALUES (1);", params: undefined },
+        {
+          sql: 'INSERT INTO "migration_history" ( file, applied_at ) VALUES ( $1, clock_timestamp() );',
+          params: ["1-insert.sql"],
+        },
+      ]);
+    });
+
+    it("rethrows on step failure and leaves transaction boundaries to the caller", async (): Promise<void> => {
+      const queries: QueryCall[] = [];
+      const client = {
+        query: async (
+          sql: string,
+          params?: unknown[],
+        ): Promise<{ rows: unknown[] }> => {
+          queries.push({ sql, params });
+          if (sql === "BROKEN SQL;") {
+            throw Object.assign(new Error("syntax error"), { code: "42601" });
+          }
+          return { rows: [] };
+        },
+      } as unknown as pg.Client;
+
+      const steps: MigrationStep[] = [
+        { file: "0-create.sql", sql: "CREATE TABLE person;" },
+        { file: "1-break.sql", sql: "BROKEN SQL;" },
+      ];
+
+      await assert.rejects(
+        (): Promise<void> =>
+          executeUpPlan({
+            client,
+            dryRun: true,
+            log: (): void => undefined,
+            steps,
+            table: "migration_history",
+          }),
+        /syntax error/,
+      );
+
+      const boundaries = queries
+        .filter(
+          (q): boolean =>
+            q.sql === "BEGIN;" ||
+            q.sql === "ROLLBACK;" ||
+            q.sql.startsWith("SAVEPOINT") ||
+            q.sql.startsWith("RELEASE SAVEPOINT") ||
+            q.sql.startsWith("ROLLBACK TO SAVEPOINT"),
+        )
+        .map((q): string => q.sql);
+      assert.deepEqual(boundaries, []);
+    });
+  });
+
+  describe("executeDownPlan (dryRun)", (): void => {
+    it("runs each step directly, leaving outer transaction management to the caller", async (): Promise<void> => {
+      const { client, queries } = createFakeClient();
+      const logs: string[] = [];
+
+      const steps: MigrationStep[] = [
+        { file: "1-insert.sql", sql: "DELETE FROM person;" },
+      ];
+
+      await executeDownPlan({
+        client,
+        dryRun: true,
+        log: (message: string): void => {
+          logs.push(message);
+        },
+        steps,
+        table: "migration_history",
+      });
+
+      assert.deepEqual(
+        logs.map(normalizeMs),
+        [
+          "",
+          messages.reverting("1-insert.sql", true),
+          messages.reverted("1-insert.sql", 0),
+        ].map(normalizeMs),
+      );
+      assert.deepEqual(queries, [
+        { sql: "DELETE FROM person;", params: undefined },
+        {
+          sql: 'DELETE FROM "migration_history" WHERE file = $1;',
+          params: ["1-insert.sql"],
+        },
+      ]);
+    });
+
+    it("handles irreversible steps in dry run", async (): Promise<void> => {
+      const { client, queries } = createFakeClient();
+
+      const steps: MigrationStep[] = [{ file: "0-backfill.sql", sql: "" }];
+
+      await executeDownPlan({
+        client,
+        dryRun: true,
+        log: (): void => undefined,
+        steps,
+        table: "migration_history",
+      });
+
+      assert.deepEqual(queries, [
+        {
+          sql: 'DELETE FROM "migration_history" WHERE file = $1;',
+          params: ["0-backfill.sql"],
+        },
+      ]);
+    });
+
+    it("rethrows on step failure and leaves transaction boundaries to the caller", async (): Promise<void> => {
+      const queries: QueryCall[] = [];
+      const client = {
+        query: async (
+          sql: string,
+          params?: unknown[],
+        ): Promise<{ rows: unknown[] }> => {
+          queries.push({ sql, params });
+          if (sql === "DROP TABLE person;") {
+            throw Object.assign(new Error("table does not exist"), {
+              code: "42P01",
+            });
+          }
+          return { rows: [] };
+        },
+      } as unknown as pg.Client;
+
+      const steps: MigrationStep[] = [
+        { file: "1-insert.sql", sql: "DELETE FROM person;" },
+        { file: "0-create.sql", sql: "DROP TABLE person;" },
+      ];
+
+      await assert.rejects(
+        (): Promise<void> =>
+          executeDownPlan({
+            client,
+            dryRun: true,
+            log: (): void => undefined,
+            steps,
+            table: "migration_history",
+          }),
+        /table does not exist/,
+      );
+
+      const boundaries = queries
+        .filter(
+          (q): boolean =>
+            q.sql === "BEGIN;" ||
+            q.sql === "ROLLBACK;" ||
+            q.sql.startsWith("SAVEPOINT") ||
+            q.sql.startsWith("RELEASE SAVEPOINT") ||
+            q.sql.startsWith("ROLLBACK TO SAVEPOINT"),
+        )
+        .map((q): string => q.sql);
+      assert.deepEqual(boundaries, []);
+    });
+
+    it("logs failureRolledBack for an irreversible step failure", async (): Promise<void> => {
+      const client = {
+        query: async (sql: string): Promise<{ rows: unknown[] }> => {
+          if (
+            sql.startsWith('DELETE FROM "migration_history"') &&
+            sql.includes("$1")
+          ) {
+            throw Object.assign(new Error("constraint violation"), {
+              code: "23505",
+            });
+          }
+          return { rows: [] };
+        },
+      } as unknown as pg.Client;
+
+      const logs: string[] = [];
+      const steps: MigrationStep[] = [{ file: "0-backfill.sql", sql: "" }];
+
+      await assert.rejects(
+        (): Promise<void> =>
+          executeDownPlan({
+            client,
+            dryRun: true,
+            log: (message: string): void => {
+              logs.push(message);
+            },
+            steps,
+            table: "migration_history",
+          }),
+        /constraint violation/,
+      );
+
+      assert.ok(
+        logs.some((l): boolean => l === messages.failureRolledBack()),
+        "expected failureRolledBack to be logged for irreversible step in dry run",
+      );
+    });
+  });
+
   describe("executeDownPlan", (): void => {
     it("runs each down migration in its own transaction and removes it from the history table", async (): Promise<void> => {
       const { client, queries } = createFakeClient();

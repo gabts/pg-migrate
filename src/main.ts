@@ -11,6 +11,7 @@ import {
 
 export interface MigrationOptions {
   directory?: string;
+  dryRun?: boolean;
   log?: LogFn;
   table?: string;
   target?: string;
@@ -18,12 +19,14 @@ export interface MigrationOptions {
 
 function normalizeOptions(args: MigrationOptions): {
   directory: string;
+  dryRun: boolean;
   log: LogFn;
   table: string;
   target?: string;
 } {
   return {
     directory: args.directory ?? "migrations",
+    dryRun: args.dryRun ?? false,
     log: args.log ?? ((): undefined => undefined),
     table: args.table ?? "migration_history",
     target: args.target,
@@ -34,8 +37,9 @@ export async function up(
   clientConfig: ClientConfig,
   args: MigrationOptions = {},
 ): Promise<void> {
-  const { directory, log, table, target } = normalizeOptions(args);
-  log(messages.startedUp());
+  const { directory, dryRun, log, table, target } = normalizeOptions(args);
+
+  log(messages.startedUp(dryRun));
   if (target) {
     log(messages.target(target));
   }
@@ -45,6 +49,7 @@ export async function up(
 
     await withMigrationSession({
       clientConfig,
+      dryRun,
       log,
       table,
       run: async ({ appliedRows, client }): Promise<void> => {
@@ -62,14 +67,13 @@ export async function up(
         });
 
         const steps = materializeSteps(migrations, "up");
-
         log(messages.pending(steps.length));
 
         if (steps.length === 0) {
           return;
         }
 
-        await executeUpPlan({ client, log, steps, table });
+        await executeUpPlan({ client, dryRun, log, steps, table });
       },
     });
 
@@ -84,8 +88,9 @@ export async function down(
   clientConfig: ClientConfig,
   args: MigrationOptions = {},
 ): Promise<void> {
-  const { directory, log, table, target } = normalizeOptions(args);
-  log(messages.startedDown());
+  const { directory, dryRun, log, table, target } = normalizeOptions(args);
+
+  log(messages.startedDown(dryRun));
   if (target) {
     log(messages.target(target));
   }
@@ -95,6 +100,7 @@ export async function down(
 
     await withMigrationSession({
       clientConfig,
+      dryRun,
       log,
       table,
       run: async ({ appliedRows, client }): Promise<void> => {
@@ -111,13 +117,14 @@ export async function down(
         });
 
         const steps = materializeSteps(migrations, "down");
+        log(messages.pending(steps.length));
 
         if (steps.length === 0) {
           log(messages.nothingToRollback());
           return;
         }
 
-        await executeDownPlan({ client, log, steps, table });
+        await executeDownPlan({ client, dryRun, log, steps, table });
       },
     });
 

@@ -50,16 +50,73 @@ export async function runInTransaction<T>(
   }
 }
 
-// Errors thrown from `run` (or from session setup) propagate unchanged —
-// callers are responsible for logging aborted-run messages around the call.
+async function readAppliedRows(
+  client: pg.Client,
+  qualifiedTableName: string,
+): Promise<AppliedRow[]> {
+  // Order is irrelevant: disk.all is the canonical migration order.
+  const appliedRowsResult = await client.query<AppliedRow>(
+    `SELECT file FROM ${qualifiedTableName};`,
+  );
+  const appliedRows = appliedRowsResult.rows;
+  validateAppliedHistory(appliedRows);
+  return appliedRows;
+}
+
+async function withMigrationSessionNormal<T>(args: {
+  client: pg.Client;
+  log: LogFn;
+  qualifiedTableName: string;
+  run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
+  table: string;
+}): Promise<T> {
+  const { client, log, qualifiedTableName, run, table } = args;
+
+  await runInTransaction(
+    client,
+    (): Promise<void> => initialize(client, log, table),
+  );
+
+  const appliedRows = await readAppliedRows(client, qualifiedTableName);
+  return await run({ appliedRows, client });
+}
+
+async function withMigrationSessionDryRun<T>(args: {
+  client: pg.Client;
+  log: LogFn;
+  qualifiedTableName: string;
+  run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
+  table: string;
+}): Promise<T> {
+  const { client, log, qualifiedTableName, run, table } = args;
+
+  await client.query("BEGIN;");
+  try {
+    await initialize(client, log, table);
+    const appliedRows = await readAppliedRows(client, qualifiedTableName);
+    return await run({ appliedRows, client });
+  } finally {
+    try {
+      // Always rollback; dry run must never commit.
+      await client.query("ROLLBACK;");
+    } catch {
+      // Ignore rollback errors; session ending will release transaction state.
+    }
+  }
+}
+
+// Errors thrown from `run` (or from session setup) propagate unchanged.
+// Callers are responsible for logging aborted-run messages around the call.
 export async function withMigrationSession<T>(args: {
   clientConfig: ClientConfig;
+  dryRun?: boolean;
   log: LogFn;
   run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
   table: string;
 }): Promise<T> {
-  const { clientConfig, log, run, table } = args;
-  const qualifiedTableName = qualifyTableName(parseTableName(table));
+  const { clientConfig, dryRun = false, log, run, table } = args;
+  const parsedTableName = parseTableName(table);
+  const qualifiedTableName = qualifyTableName(parsedTableName);
   const client = new pg.Client(clientConfig);
   let lockKey: string | null = null;
 
@@ -70,28 +127,33 @@ export async function withMigrationSession<T>(args: {
     // whole run so we can use one transaction per migration while still
     // preventing interleaved writes to the history table. The key is the
     // unqualified table name so "migration_history" and
-    // "public.migration_history" hash to the same lock — runners against
+    // "public.migration_history" hash to the same lock - runners against
     // same-named tables in different schemas will serialize; use distinct
     // table names when that concurrency matters. Only mark lockKey after the
     // query succeeds so `finally` does not issue an unlock we never acquired.
-    const computedLockKey = parseTableName(table).table;
+    const computedLockKey = parsedTableName.table;
     await client.query("SELECT pg_advisory_lock(hashtext($1));", [
       computedLockKey,
     ]);
     lockKey = computedLockKey;
 
-    await runInTransaction(client, async (): Promise<void> => {
-      await initialize(client, log, table);
+    if (dryRun) {
+      return await withMigrationSessionDryRun({
+        client,
+        log,
+        qualifiedTableName,
+        run,
+        table,
+      });
+    }
+
+    return await withMigrationSessionNormal({
+      client,
+      log,
+      qualifiedTableName,
+      run,
+      table,
     });
-
-    // Order is irrelevant: disk.all is the canonical migration order.
-    const appliedRowsResult = await client.query<AppliedRow>(
-      `SELECT file FROM ${qualifiedTableName};`,
-    );
-    const appliedRows = appliedRowsResult.rows;
-    validateAppliedHistory(appliedRows);
-
-    return await run({ appliedRows, client });
   } finally {
     if (lockKey !== null) {
       try {
@@ -106,7 +168,7 @@ export async function withMigrationSession<T>(args: {
     try {
       await client.end();
     } catch {
-      // Ignore cleanup errors — committed work is durable and any failure
+      // Ignore cleanup errors - committed work is durable and any failure
       // is already propagating.
     }
   }

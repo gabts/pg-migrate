@@ -2,12 +2,16 @@ function displayName(file: string): string {
   return file.replace(/\.sql$/, "");
 }
 
+function dryRunSuffix(dryRun?: boolean): string {
+  return dryRun ? " (dry run)" : "";
+}
+
 export const messages = {
-  startedUp: (): string => {
-    return "🦖 started migration run";
+  startedUp: (dryRun?: boolean): string => {
+    return `🦖 started migration run${dryRunSuffix(dryRun)}`;
   },
-  startedDown: (): string => {
-    return "🦖 started rollback";
+  startedDown: (dryRun?: boolean): string => {
+    return `🦖 started rollback${dryRunSuffix(dryRun)}`;
   },
   completedUp: (): string => {
     return "🌋 migration run complete";
