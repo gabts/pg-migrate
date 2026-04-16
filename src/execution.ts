@@ -1,5 +1,6 @@
 import type * as pg from "pg";
 import { messages } from "./log-messages.js";
+import { getMigrationVersion } from "./migration-naming.js";
 import { parseTableName, qualifyTableName } from "./table-name.js";
 import { runInTransaction } from "./transaction.js";
 import type { LogFn, MigrationStep } from "./types.js";
@@ -15,6 +16,7 @@ async function executeUpPlanNormal(args: ExecutePlanArgs): Promise<void> {
   const { client, log, qualifiedTableName, steps } = args;
 
   for (const { file, sql } of steps) {
+    const version = getMigrationVersion(file);
     log("");
     log(messages.applying(file));
     const started = Date.now();
@@ -23,8 +25,8 @@ async function executeUpPlanNormal(args: ExecutePlanArgs): Promise<void> {
       await runInTransaction(client, async (): Promise<void> => {
         await client.query(sql);
         await client.query(
-          `INSERT INTO ${qualifiedTableName} ( file, applied_at ) VALUES ( $1, clock_timestamp() );`,
-          [file],
+          `INSERT INTO ${qualifiedTableName} ( filename, version, applied_at ) VALUES ( $1, $2, clock_timestamp() );`,
+          [file, version],
         );
       });
 
@@ -42,6 +44,7 @@ async function executeUpPlanDryRun(args: ExecutePlanArgs): Promise<void> {
   const { client, log, qualifiedTableName, steps } = args;
 
   for (const { file, sql } of steps) {
+    const version = getMigrationVersion(file);
     log("");
     log(messages.applying(file));
     const started = Date.now();
@@ -49,8 +52,8 @@ async function executeUpPlanDryRun(args: ExecutePlanArgs): Promise<void> {
     try {
       await client.query(sql);
       await client.query(
-        `INSERT INTO ${qualifiedTableName} ( file, applied_at ) VALUES ( $1, clock_timestamp() );`,
-        [file],
+        `INSERT INTO ${qualifiedTableName} ( filename, version, applied_at ) VALUES ( $1, $2, clock_timestamp() );`,
+        [file, version],
       );
 
       log(messages.applied(file, Date.now() - started));
@@ -77,13 +80,13 @@ async function executeDownPlanNormal(args: ExecutePlanArgs): Promise<void> {
         await runInTransaction(client, async (): Promise<void> => {
           await client.query(sql);
           await client.query(
-            `DELETE FROM ${qualifiedTableName} WHERE file = $1;`,
+            `DELETE FROM ${qualifiedTableName} WHERE filename = $1;`,
             [file],
           );
         });
       } else {
         await client.query(
-          `DELETE FROM ${qualifiedTableName} WHERE file = $1;`,
+          `DELETE FROM ${qualifiedTableName} WHERE filename = $1;`,
           [file],
         );
       }
@@ -113,9 +116,10 @@ async function executeDownPlanDryRun(args: ExecutePlanArgs): Promise<void> {
       if (hasSql) {
         await client.query(sql);
       }
-      await client.query(`DELETE FROM ${qualifiedTableName} WHERE file = $1;`, [
-        file,
-      ]);
+      await client.query(
+        `DELETE FROM ${qualifiedTableName} WHERE filename = $1;`,
+        [file],
+      );
 
       log(messages.reverted(file, Date.now() - started));
     } catch (error) {

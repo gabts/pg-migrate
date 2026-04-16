@@ -93,7 +93,9 @@ async function queryTableExists(tableName: string): Promise<boolean> {
 }
 
 async function queryHistory(tableName = "migration_history"): Promise<any[]> {
-  const res = await client.query(`SELECT * FROM ${tableName} ORDER BY file;`);
+  const res = await client.query(
+    `SELECT filename AS file, version, applied_at FROM ${tableName} ORDER BY filename;`,
+  );
   return res.rows;
 }
 

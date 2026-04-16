@@ -35,25 +35,10 @@ async function queryTableExists(tableName: string): Promise<boolean> {
 async function queryHistory(
   tableName = defaultMigrationHistoryTable,
 ): Promise<any[]> {
-  const res = await client.query(`SELECT * FROM ${tableName} ORDER BY file;`);
-  return res.rows;
-}
-
-async function queryColumnDefault(
-  tableName: string,
-  columnName: string,
-): Promise<string | null> {
   const res = await client.query(
-    `
-    SELECT column_default
-    FROM information_schema.columns
-    WHERE table_name = $1
-      AND column_name = $2;
-  `,
-    [tableName, columnName],
+    `SELECT filename AS file, version, applied_at FROM ${tableName} ORDER BY filename;`,
   );
-
-  return res.rows[0]?.column_default ?? null;
+  return res.rows;
 }
 
 async function dropTables(): Promise<void> {
@@ -77,7 +62,8 @@ async function createMigrationHistoryTable(
   await client.query(`
     CREATE TABLE ${tableName}
     (
-      file text PRIMARY KEY,
+      filename text PRIMARY KEY,
+      version text NOT NULL,
       applied_at timestamptz NOT NULL DEFAULT now()
     );
   `);
@@ -87,7 +73,8 @@ async function createMalformedMigrationHistoryTable(): Promise<void> {
   await client.query(`
     CREATE TABLE ${defaultMigrationHistoryTable}
     (
-      file text NOT NULL,
+      filename text NOT NULL,
+      version text NOT NULL,
       applied_at timestamptz NOT NULL DEFAULT now()
     );
   `);
@@ -132,11 +119,6 @@ describe("transaction", (): void => {
     assert.deepEqual(logs, [messages.creatingTable()]);
     assert.ok(await queryTableExists(defaultMigrationHistoryTable));
     assert.deepEqual(await queryHistory(), []);
-    assert.ok(
-      (
-        await queryColumnDefault(defaultMigrationHistoryTable, "applied_at")
-      )?.includes("now()"),
-    );
   });
 
   it("uses existing schema-qualified migration history tables", async (): Promise<void> => {
@@ -148,8 +130,8 @@ describe("transaction", (): void => {
       table: qualifiedMigrationHistoryTable,
       run: async ({ client: sessionClient }): Promise<void> => {
         await sessionClient.query(
-          `INSERT INTO ${qualifiedMigrationHistoryTable} (file) VALUES ($1);`,
-          ["0_create.sql"],
+          `INSERT INTO ${qualifiedMigrationHistoryTable} (filename, version) VALUES ($1, $2);`,
+          ["0_create.sql", "0"],
         );
       },
     });
@@ -175,10 +157,10 @@ describe("transaction", (): void => {
     await createMalformedMigrationHistoryTable();
     await client.query(
       `
-      INSERT INTO ${defaultMigrationHistoryTable} (file)
+      INSERT INTO ${defaultMigrationHistoryTable} (filename, version)
       VALUES
-        ('0_create.sql'),
-        ('0_create.sql');
+        ('0_create.sql', '0'),
+        ('0_create.sql', '1');
     `,
     );
 

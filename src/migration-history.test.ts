@@ -1,0 +1,134 @@
+import * as assert from "assert";
+import type * as pg from "pg";
+import { messages } from "./log-messages.js";
+import {
+  ensureMigrationHistory,
+  readAppliedRows,
+} from "./migration-history.js";
+
+interface EnsurePlan {
+  tableExists: boolean;
+}
+
+function createEnsureFakeClient(plan: EnsurePlan): {
+  client: pg.Client;
+  queries: Array<{ sql: string; params?: unknown[] }>;
+} {
+  const queries: Array<{ sql: string; params?: unknown[] }> = [];
+
+  const client = {
+    query: async (
+      sql: string,
+      params?: unknown[],
+    ): Promise<{ rows: unknown[] }> => {
+      queries.push({ sql, params });
+
+      if (sql.includes("SELECT to_regclass")) {
+        return { rows: [{ exists: plan.tableExists }] };
+      }
+
+      return { rows: [] };
+    },
+  } as unknown as pg.Client;
+
+  return { client, queries };
+}
+
+describe("migration-history", (): void => {
+  describe("ensureMigrationHistory", (): void => {
+    it("creates the history table with filename/version columns and logs creation", async (): Promise<void> => {
+      const { client, queries } = createEnsureFakeClient({
+        tableExists: false,
+      });
+      const logs: string[] = [];
+
+      await ensureMigrationHistory({
+        client,
+        log: (message: string): void => {
+          logs.push(message);
+        },
+        qualifiedTableName: '"migration_history"',
+      });
+
+      assert.deepEqual(logs, [messages.creatingTable()]);
+      assert.ok(
+        queries.some(
+          ({ sql }): boolean =>
+            sql.includes('CREATE TABLE "migration_history"') &&
+            sql.includes("filename text PRIMARY KEY") &&
+            sql.includes("version text NOT NULL"),
+        ),
+      );
+      assert.equal(
+        queries.some(({ sql }): boolean => sql.includes("ALTER TABLE")),
+        false,
+      );
+    });
+
+    it("does nothing when the history table already exists", async (): Promise<void> => {
+      const { client, queries } = createEnsureFakeClient({
+        tableExists: true,
+      });
+      const logs: string[] = [];
+
+      await ensureMigrationHistory({
+        client,
+        log: (message: string): void => {
+          logs.push(message);
+        },
+        qualifiedTableName: '"migration_history"',
+      });
+
+      assert.deepEqual(logs, []);
+      assert.equal(
+        queries.some(({ sql }): boolean => sql.includes("CREATE TABLE")),
+        false,
+      );
+      assert.equal(
+        queries.some(({ sql }): boolean => sql.includes("ALTER TABLE")),
+        false,
+      );
+    });
+  });
+
+  describe("readAppliedRows", (): void => {
+    it("loads rows from filename column and maps to applied file shape", async (): Promise<void> => {
+      const queries: string[] = [];
+      const client = {
+        query: async (sql: string): Promise<{ rows: unknown[] }> => {
+          queries.push(sql);
+          return {
+            rows: [{ file: "20260416090000_create.sql" }],
+          };
+        },
+      } as unknown as pg.Client;
+
+      const rows = await readAppliedRows(client, '"migration_history"');
+
+      assert.deepEqual(rows, [{ file: "20260416090000_create.sql" }]);
+      assert.ok(
+        queries.some((sql): boolean =>
+          sql.includes(`SELECT filename AS file FROM "migration_history"`),
+        ),
+      );
+    });
+
+    it("validates and rejects duplicate applied rows", async (): Promise<void> => {
+      const client = {
+        query: async (): Promise<{ rows: unknown[] }> => {
+          return {
+            rows: [
+              { file: "20260416090000_create.sql" },
+              { file: "20260416090000_create.sql" },
+            ],
+          };
+        },
+      } as unknown as pg.Client;
+
+      await assert.rejects(
+        (): Promise<unknown> => readAppliedRows(client, '"migration_history"'),
+        /Duplicate applied migration file: 20260416090000_create\.sql/,
+      );
+    });
+  });
+});
