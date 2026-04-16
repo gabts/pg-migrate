@@ -47,20 +47,13 @@ describe("migration-files", (): void => {
       );
     });
 
-    it("rejects missing up, duplicated markers, or reversed markers", (): void => {
+    it("rejects missing up or duplicated markers", (): void => {
       assert.throws((): void => {
         parseMigration("CREATE TABLE person (id integer);", "up", "0.sql");
       }, /Invalid migration file contents: 0\.sql/);
       assert.throws((): void => {
         parseMigration(
           `${validMigration}\n-- migrate:up\nSELECT 1;`,
-          "up",
-          "0.sql",
-        );
-      }, /Invalid migration file contents: 0\.sql/);
-      assert.throws((): void => {
-        parseMigration(
-          `-- migrate:down\nDROP TABLE person;\n-- migrate:up\nCREATE TABLE person (id integer);`,
           "up",
           "0.sql",
         );
@@ -74,6 +67,23 @@ describe("migration-files", (): void => {
       }, /Invalid migration file contents: 0\.sql/);
     });
 
+    it("extracts up and down SQL when down marker appears before up marker", (): void => {
+      const downBeforeUp = `-- migrate:down
+DROP TABLE person;
+-- migrate:up
+CREATE TABLE person (id integer);
+`;
+
+      assert.equal(
+        parseMigration(downBeforeUp, "up", "0-create.sql"),
+        "CREATE TABLE person (id integer);",
+      );
+      assert.equal(
+        parseMigration(downBeforeUp, "down", "0-create.sql"),
+        "DROP TABLE person;",
+      );
+    });
+
     it("rejects empty up sections", (): void => {
       assert.throws((): void => {
         parseMigration(
@@ -84,7 +94,7 @@ describe("migration-files", (): void => {
       }, /Invalid migration file contents: 0\.sql/);
     });
 
-    it("rejects non-whitespace content before the up marker", (): void => {
+    it("rejects non-comment content before the first marker", (): void => {
       assert.throws((): void => {
         parseMigration(
           `DROP TABLE important_data;\n-- migrate:up\nCREATE TABLE t (id int);\n-- migrate:down\nDROP TABLE t;`,
@@ -92,6 +102,23 @@ describe("migration-files", (): void => {
           "0.sql",
         );
       }, /Unexpected content before up marker in: 0\.sql/);
+    });
+
+    it("allows comments and whitespace before the up marker", (): void => {
+      assert.equal(
+        parseMigration(
+          `-- header comment
+-- migrate:custom-tag
+/* internal note */
+
+-- migrate:up
+CREATE TABLE person (id integer);
+`,
+          "up",
+          "0.sql",
+        ),
+        "CREATE TABLE person (id integer);",
+      );
     });
 
     it("allows empty down sections for irreversible migrations", (): void => {
@@ -152,6 +179,30 @@ describe("migration-files", (): void => {
 
     it("returns an empty array for an empty plan", (): void => {
       assert.deepEqual(materializeSteps([], "up"), []);
+    });
+
+    it("materializes SQL when down marker appears before up marker", (): void => {
+      const downBeforeUp = `-- migrate:down
+DROP TABLE person;
+-- migrate:up
+CREATE TABLE person (id integer);
+`;
+
+      withMigrationDirectory(
+        {
+          "0-create.sql": downBeforeUp,
+        },
+        (directory): void => {
+          const disk = loadDiskMigrations(directory);
+
+          assert.deepEqual(materializeSteps(disk.all, "up"), [
+            { file: "0-create.sql", sql: "CREATE TABLE person (id integer);" },
+          ]);
+          assert.deepEqual(materializeSteps(disk.all, "down"), [
+            { file: "0-create.sql", sql: "DROP TABLE person;" },
+          ]);
+        },
+      );
     });
 
     it("materializes empty down SQL for irreversible migrations", (): void => {

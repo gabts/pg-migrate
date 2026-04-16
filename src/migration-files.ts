@@ -11,6 +11,12 @@ const migrationMarkers = {
   down: "-- migrate:down",
 };
 
+function hasOnlyCommentsAndWhitespace(sql: string): boolean {
+  const commentOrWhitespacePattern =
+    /^(?:\s|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)*$/;
+  return commentOrWhitespacePattern.test(sql);
+}
+
 export function parseMigration(
   sql: string,
   direction: "up" | "down",
@@ -33,20 +39,29 @@ export function parseMigration(
     throw new Error(`Invalid migration file contents: ${file}`);
   }
 
-  if (downMarkerIndex !== -1 && upMarkerIndex > downMarkerIndex) {
-    throw new Error(`Invalid migration file contents: ${file}`);
-  }
+  const firstMarkerIndex =
+    downMarkerIndex === -1
+      ? upMarkerIndex
+      : Math.min(upMarkerIndex, downMarkerIndex);
 
-  if (sql.slice(0, upMarkerIndex).trim().length > 0) {
+  if (!hasOnlyCommentsAndWhitespace(sql.slice(0, firstMarkerIndex))) {
     throw new Error(`Unexpected content before up marker in: ${file}`);
   }
 
-  const upSectionEnd = downMarkerIndex === -1 ? sql.length : downMarkerIndex;
+  const upSectionEnd =
+    downMarkerIndex !== -1 && downMarkerIndex > upMarkerIndex
+      ? downMarkerIndex
+      : sql.length;
   const upSql = sql.slice(upMarkerIndex + upMarker.length, upSectionEnd).trim();
   const downSql =
     downMarkerIndex === -1
       ? ""
-      : sql.slice(downMarkerIndex + downMarker.length).trim();
+      : sql
+          .slice(
+            downMarkerIndex + downMarker.length,
+            upMarkerIndex > downMarkerIndex ? upMarkerIndex : sql.length,
+          )
+          .trim();
 
   if (!upSql) {
     throw new Error(`Invalid migration file contents: ${file}`);
