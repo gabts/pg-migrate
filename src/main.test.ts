@@ -112,12 +112,6 @@ async function dropTables(): Promise<void> {
   `);
 }
 
-async function delay(ms: number): Promise<void> {
-  await new Promise<void>((resolve): void => {
-    setTimeout(resolve, ms);
-  });
-}
-
 async function assertMigration0(): Promise<void> {
   assert.ok(await queryTableExists(defaultMigrationHistoryTable));
   const historyRows = await queryHistory(defaultMigrationHistoryTable);
@@ -227,15 +221,11 @@ describe("main", (): void => {
     );
   });
 
-  it("serializes concurrent up runners against the same history table", async (): Promise<void> => {
+  it("fails fast when concurrent up cannot acquire advisory lock", async (): Promise<void> => {
     const lockClient = new pg.Client(databaseConfig);
     await lockClient.connect();
 
-    let firstSettled = false;
-    let secondSettled = false;
     let lockTransactionOpen = false;
-    let firstMigration: Promise<void> | undefined;
-    let secondMigration: Promise<void> | undefined;
 
     try {
       await lockClient.query("BEGIN;");
@@ -244,44 +234,19 @@ describe("main", (): void => {
         defaultMigrationHistoryTable,
       ]);
 
-      firstMigration = up(databaseConfig, {
-        directory: createStandardMigrationDirectory(),
-      }).finally((): void => {
-        firstSettled = true;
-      });
-      secondMigration = up(databaseConfig, {
-        directory: createStandardMigrationDirectory(),
-      }).finally((): void => {
-        secondSettled = true;
-      });
-
-      await delay(100);
-      assert.equal(firstSettled, false);
-      assert.equal(secondSettled, false);
-
-      await lockClient.query("COMMIT;");
-      lockTransactionOpen = false;
-
-      const results = await Promise.allSettled([
-        firstMigration,
-        secondMigration,
-      ]);
-
-      assert.deepEqual(
-        results.map((result): string => result.status),
-        ["fulfilled", "fulfilled"],
+      await assert.rejects(
+        (): Promise<void> =>
+          up(databaseConfig, {
+            directory: createStandardMigrationDirectory(),
+          }),
+        /Could not acquire advisory lock for migration table "migration_history"/,
       );
     } finally {
       if (lockTransactionOpen) {
         await lockClient.query("ROLLBACK;");
       }
       await lockClient.end();
-      if (firstMigration && secondMigration) {
-        await Promise.allSettled([firstMigration, secondMigration]);
-      }
     }
-
-    await assertMigration1();
   });
 
   it("down migrates past an irreversible migration", async (): Promise<void> => {

@@ -80,12 +80,6 @@ async function createMalformedMigrationHistoryTable(): Promise<void> {
   `);
 }
 
-async function delay(ms: number): Promise<void> {
-  await new Promise<void>((resolve): void => {
-    setTimeout(resolve, ms);
-  });
-}
-
 describe("transaction", (): void => {
   before(async (): Promise<void> => {
     await client.connect();
@@ -206,17 +200,13 @@ describe("transaction", (): void => {
     assert.deepEqual(await queryHistory(), []);
   });
 
-  it("serializes concurrent runners against the same history table", async (): Promise<void> => {
+  it("fails fast when the advisory lock is already held", async (): Promise<void> => {
     await createMigrationHistoryTable();
     const lockClient = new pg.Client(databaseConfig);
 
     await lockClient.connect();
 
-    let firstSettled = false;
-    let secondSettled = false;
     let lockTransactionOpen = false;
-    let firstRun;
-    let secondRun;
 
     try {
       await lockClient.query("BEGIN;");
@@ -225,48 +215,25 @@ describe("transaction", (): void => {
         defaultMigrationHistoryTable,
       ]);
 
-      firstRun = withMigrationSession({
-        clientConfig: databaseConfig,
-        log: (): void => undefined,
-        table: defaultMigrationHistoryTable,
-        run: async (): Promise<void> => undefined,
-      }).finally((): void => {
-        firstSettled = true;
-      });
-      secondRun = withMigrationSession({
-        clientConfig: databaseConfig,
-        log: (): void => undefined,
-        table: defaultMigrationHistoryTable,
-        run: async (): Promise<void> => undefined,
-      }).finally((): void => {
-        secondSettled = true;
-      });
-
-      await delay(100);
-      assert.equal(firstSettled, false);
-      assert.equal(secondSettled, false);
-
-      await lockClient.query("COMMIT;");
-      lockTransactionOpen = false;
-
-      const results = await Promise.allSettled([firstRun, secondRun]);
-
-      assert.deepEqual(
-        results.map((result): string => result.status),
-        ["fulfilled", "fulfilled"],
+      await assert.rejects(
+        (): Promise<void> =>
+          withMigrationSession({
+            clientConfig: databaseConfig,
+            log: (): void => undefined,
+            table: defaultMigrationHistoryTable,
+            run: async (): Promise<void> => undefined,
+          }),
+        /Could not acquire advisory lock for migration table "migration_history"/,
       );
     } finally {
       if (lockTransactionOpen) {
         await lockClient.query("ROLLBACK;");
       }
       await lockClient.end();
-      if (firstRun && secondRun) {
-        await Promise.allSettled([firstRun, secondRun]);
-      }
     }
   });
 
-  it("serializes concurrent runners referencing the same table by different spellings", async (): Promise<void> => {
+  it("fails fast for schema-qualified aliases when the same lock key is held", async (): Promise<void> => {
     // The bare unqualified table name is used as the lock key, so
     // "migration_history" and "public.migration_history" (or any
     // <schema>.migration_history) all hash to the same advisory lock.
@@ -280,11 +247,7 @@ describe("transaction", (): void => {
     const lockClient = new pg.Client(databaseConfig);
     await lockClient.connect();
 
-    let firstSettled = false;
-    let secondSettled = false;
     let lockTransactionOpen = false;
-    let firstRun;
-    let secondRun;
 
     try {
       await lockClient.query("BEGIN;");
@@ -293,46 +256,26 @@ describe("transaction", (): void => {
         defaultMigrationHistoryTable,
       ]);
 
-      // First runner uses the bare table name; second uses the schema-qualified
-      // alias. Both lock on the same unqualified key.
-      firstRun = withMigrationSession({
-        clientConfig: databaseConfig,
-        log: (): void => undefined,
-        table: defaultMigrationHistoryTable,
-        run: async (): Promise<void> => undefined,
-      }).finally((): void => {
-        firstSettled = true;
-      });
-      secondRun = withMigrationSession({
-        clientConfig: databaseConfig,
-        log: (): void => undefined,
-        table: qualifiedAlias,
-        run: async (): Promise<void> => undefined,
-      }).finally((): void => {
-        secondSettled = true;
-      });
-
-      await delay(100);
-      assert.equal(firstSettled, false);
-      assert.equal(secondSettled, false);
-
-      await lockClient.query("COMMIT;");
-      lockTransactionOpen = false;
-
-      const results = await Promise.allSettled([firstRun, secondRun]);
-
-      assert.deepEqual(
-        results.map((result): string => result.status),
-        ["fulfilled", "fulfilled"],
+      await assert.rejects(
+        (): Promise<void> =>
+          withMigrationSession({
+            clientConfig: databaseConfig,
+            log: (): void => undefined,
+            table: qualifiedAlias,
+            run: async (): Promise<void> => undefined,
+          }),
+        (error: unknown): boolean => {
+          assert.ok(error instanceof Error);
+          return error.message.includes(
+            `Could not acquire advisory lock for migration table "${qualifiedAlias}"`,
+          );
+        },
       );
     } finally {
       if (lockTransactionOpen) {
         await lockClient.query("ROLLBACK;");
       }
       await lockClient.end();
-      if (firstRun && secondRun) {
-        await Promise.allSettled([firstRun, secondRun]);
-      }
     }
   });
 });

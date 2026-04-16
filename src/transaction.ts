@@ -95,18 +95,24 @@ export async function withMigrationSession<T>(args: {
   try {
     await client.connect();
 
-    // Session-level advisory lock serializes concurrent runners across the
+    // Session-level advisory lock guards validation and execution for the
     // whole run so we can use one transaction per migration while still
     // preventing interleaved writes to the history table. The key is the
     // unqualified table name so "migration_history" and
     // "public.migration_history" hash to the same lock - runners against
-    // same-named tables in different schemas will serialize; use distinct
-    // table names when that concurrency matters. Only mark lockKey after the
-    // query succeeds so `finally` does not issue an unlock we never acquired.
+    // same-named tables in different schemas will contend; use distinct table
+    // names when that concurrency matters. Only mark lockKey after the lock
+    // is acquired so `finally` does not issue an unlock we never acquired.
     const computedLockKey = parsedTableName.table;
-    await client.query("SELECT pg_advisory_lock(hashtext($1));", [
-      computedLockKey,
-    ]);
+    const lockResult = await client.query<{ acquired: boolean }>(
+      "SELECT pg_try_advisory_lock(hashtext($1)) AS acquired;",
+      [computedLockKey],
+    );
+    if (!lockResult.rows[0]?.acquired) {
+      throw new Error(
+        `Could not acquire advisory lock for migration table "${table}". Another migratorosaurus process may already be running.`,
+      );
+    }
     lockKey = computedLockKey;
 
     if (dryRun) {
