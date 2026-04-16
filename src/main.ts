@@ -1,6 +1,10 @@
 import { executeDownPlan, executeUpPlan } from "./execution.js";
 import { messages } from "./log-messages.js";
-import { loadDiskMigrations, materializeSteps } from "./migration-files.js";
+import {
+  loadDiskMigrations,
+  materializeStepsFromSql,
+  readMigrationSqlByFile,
+} from "./migration-files.js";
 import { planDownExecution, planUpExecution } from "./planning.js";
 import { withMigrationSession } from "./transaction.js";
 import type { ClientConfig, LogFn } from "./types.js";
@@ -46,6 +50,9 @@ export async function up(
 
   try {
     const disk = loadDiskMigrations(directory);
+    // Validate and parse the full migration set before opening a DB session
+    // or running any SQL.
+    const sqlByFile = readMigrationSqlByFile(disk.all);
 
     await withMigrationSession({
       clientConfig,
@@ -66,7 +73,7 @@ export async function up(
           targetMigration,
         });
 
-        const steps = materializeSteps(migrations, "up");
+        const steps = materializeStepsFromSql(migrations, "up", sqlByFile);
         log(messages.pending(steps.length));
 
         if (steps.length === 0) {
@@ -97,6 +104,9 @@ export async function down(
 
   try {
     const disk = loadDiskMigrations(directory);
+    // Validate and parse the full migration set before opening a DB session
+    // or running any SQL.
+    const sqlByFile = readMigrationSqlByFile(disk.all);
 
     await withMigrationSession({
       clientConfig,
@@ -116,7 +126,7 @@ export async function down(
           targetMigration,
         });
 
-        const steps = materializeSteps(migrations, "down");
+        const steps = materializeStepsFromSql(migrations, "down", sqlByFile);
         log(messages.pending(steps.length));
 
         if (steps.length === 0) {

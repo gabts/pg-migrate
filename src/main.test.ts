@@ -282,6 +282,37 @@ VALUES ('gabriel'), ('david'), ('frasse');
     );
   });
 
+  it("validates the full migration set before running any SQL for up", async (): Promise<void> => {
+    const invalidFile = "20260416090200_invalid.sql";
+    const directory = createMigrationDirectory({
+      [standardCreateFile]: createPersonMigration,
+      [standardInsertFile]: insertPeopleMigration,
+      [invalidFile]: "SELECT 1;",
+    });
+
+    await assert.rejects(
+      (): Promise<void> => up(databaseConfig, { directory }),
+      /Invalid migration file contents: 20260416090200_invalid\.sql/,
+    );
+
+    assert.equal(await queryTableExists(defaultMigrationHistoryTable), false);
+    assert.equal(await queryTableExists("person"), false);
+  });
+
+  it("validates the full migration set before running any SQL for down", async (): Promise<void> => {
+    const invalidFile = "20260416090200_invalid.sql";
+    const directory = createStandardMigrationDirectory();
+    await up(databaseConfig, { directory });
+    fs.writeFileSync(path.join(directory, invalidFile), "SELECT 1;");
+
+    await assert.rejects(
+      (): Promise<void> => down(databaseConfig, { directory }),
+      /Invalid migration file contents: 20260416090200_invalid\.sql/,
+    );
+
+    await assertMigration1();
+  });
+
   it("surfaces postgres errors and rolls back the failing migration", async (): Promise<void> => {
     await assert.rejects(
       (): Promise<void> =>

@@ -7,7 +7,9 @@ import {
 import type {
   DiskMigration,
   LoadedMigrations,
+  MigrationDirection,
   MigrationStep,
+  ParsedMigrationSql,
 } from "./types.js";
 
 const migrationMarkers = {
@@ -21,11 +23,7 @@ function hasOnlyCommentsAndWhitespace(sql: string): boolean {
   return commentOrWhitespacePattern.test(sql);
 }
 
-export function parseMigration(
-  sql: string,
-  direction: "up" | "down",
-  file: string,
-): string {
+function parseMigrationSections(sql: string, file: string): ParsedMigrationSql {
   const upMarker = migrationMarkers.up;
   const downMarker = migrationMarkers.down;
   const upMarkerIndex = sql.indexOf(upMarker);
@@ -71,17 +69,57 @@ export function parseMigration(
     throw new Error(`Invalid migration file contents: ${file}`);
   }
 
-  return direction === "up" ? upSql : downSql;
+  return { down: downSql, up: upSql };
+}
+
+export function parseMigration(
+  sql: string,
+  direction: MigrationDirection,
+  file: string,
+): string {
+  const sections = parseMigrationSections(sql, file);
+  return direction === "up" ? sections.up : sections.down;
+}
+
+export function readMigrationSqlByFile(
+  migrations: DiskMigration[],
+): Map<string, ParsedMigrationSql> {
+  const sqlByFile = new Map<string, ParsedMigrationSql>();
+
+  for (const { file, path: filePath } of migrations) {
+    const sql = fs.readFileSync(filePath, "utf8");
+    sqlByFile.set(file, parseMigrationSections(sql, file));
+  }
+
+  return sqlByFile;
+}
+
+export function materializeStepsFromSql(
+  migrations: DiskMigration[],
+  direction: MigrationDirection,
+  sqlByFile: Map<string, ParsedMigrationSql>,
+): MigrationStep[] {
+  return migrations.map(({ file }) => {
+    const parsedSql = sqlByFile.get(file);
+    if (!parsedSql) {
+      throw new Error(`Missing parsed migration SQL for file: ${file}`);
+    }
+    return {
+      file,
+      sql: direction === "up" ? parsedSql.up : parsedSql.down,
+    };
+  });
 }
 
 export function materializeSteps(
   migrations: DiskMigration[],
-  direction: "up" | "down",
+  direction: MigrationDirection,
 ): MigrationStep[] {
-  return migrations.map(({ file, path: filePath }) => ({
-    file,
-    sql: parseMigration(fs.readFileSync(filePath, "utf8"), direction, file),
-  }));
+  return materializeStepsFromSql(
+    migrations,
+    direction,
+    readMigrationSqlByFile(migrations),
+  );
 }
 
 export function loadDiskMigrations(directory: string): LoadedMigrations {

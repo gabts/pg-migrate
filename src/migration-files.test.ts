@@ -5,7 +5,9 @@ import * as path from "path";
 import {
   loadDiskMigrations,
   materializeSteps,
+  materializeStepsFromSql,
   parseMigration,
+  readMigrationSqlByFile,
 } from "./migration-files.js";
 
 const validMigration = `-- migrate:up
@@ -241,6 +243,60 @@ CREATE TABLE person (id integer);
           assert.deepEqual(materializeSteps(disk.all, "down"), [
             { file: "20260416090000_backfill.sql", sql: "" },
           ]);
+        },
+      );
+    });
+  });
+
+  describe("cached materialization", (): void => {
+    it("reuses parsed SQL across directions", (): void => {
+      withMigrationDirectory(
+        {
+          "20260416090000_create_person.sql": validMigration,
+          "20260416090100_add_column.sql": validMigration,
+        },
+        (directory): void => {
+          const disk = loadDiskMigrations(directory);
+          const sqlByFile = readMigrationSqlByFile(disk.all);
+
+          assert.deepEqual(materializeStepsFromSql(disk.all, "up", sqlByFile), [
+            {
+              file: "20260416090000_create_person.sql",
+              sql: "CREATE TABLE person (id integer);",
+            },
+            {
+              file: "20260416090100_add_column.sql",
+              sql: "CREATE TABLE person (id integer);",
+            },
+          ]);
+
+          assert.deepEqual(
+            materializeStepsFromSql(disk.all, "down", sqlByFile),
+            [
+              {
+                file: "20260416090000_create_person.sql",
+                sql: "DROP TABLE person;",
+              },
+              {
+                file: "20260416090100_add_column.sql",
+                sql: "DROP TABLE person;",
+              },
+            ],
+          );
+        },
+      );
+    });
+
+    it("throws when cached SQL is missing for a planned file", (): void => {
+      withMigrationDirectory(
+        {
+          "20260416090000_create_person.sql": validMigration,
+        },
+        (directory): void => {
+          const disk = loadDiskMigrations(directory);
+          assert.throws((): void => {
+            materializeStepsFromSql(disk.all, "up", new Map());
+          }, /Missing parsed migration SQL for file: 20260416090000_create_person\.sql/);
         },
       );
     });

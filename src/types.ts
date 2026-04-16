@@ -15,6 +15,13 @@ export interface MigrationStep {
   sql: string;
 }
 
+export type MigrationDirection = "up" | "down";
+
+export interface ParsedMigrationSql {
+  down: string;
+  up: string;
+}
+
 export interface AppliedRow {
   file: string;
 }
