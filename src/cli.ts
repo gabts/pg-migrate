@@ -111,7 +111,7 @@ function createMigration(args: string[]): void {
     opts.directory,
     `${formatTimestamp()}-${opts.name}.sql`,
   );
-  const fileContent = "-- % up-migration % --\n\n-- % down-migration % --\n";
+  const fileContent = "-- migrate:up\n\n-- migrate:down\n";
 
   try {
     fs.writeFileSync(filePath, fileContent, { flag: "wx" });

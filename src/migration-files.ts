@@ -7,8 +7,8 @@ import type {
 } from "./types.js";
 
 const migrationMarkers = {
-  up: "-- % up-migration % --",
-  down: "-- % down-migration % --",
+  up: "-- migrate:up",
+  down: "-- migrate:down",
 };
 
 export function parseMigration(
@@ -21,18 +21,19 @@ export function parseMigration(
   const upMarkerIndex = sql.indexOf(upMarker);
   const downMarkerIndex = sql.indexOf(downMarker);
 
-  if (upMarkerIndex === -1 || downMarkerIndex === -1) {
+  if (upMarkerIndex === -1) {
     throw new Error(`Invalid migration file contents: ${file}`);
   }
 
   if (
     sql.indexOf(upMarker, upMarkerIndex + upMarker.length) !== -1 ||
-    sql.indexOf(downMarker, downMarkerIndex + downMarker.length) !== -1
+    (downMarkerIndex !== -1 &&
+      sql.indexOf(downMarker, downMarkerIndex + downMarker.length) !== -1)
   ) {
     throw new Error(`Invalid migration file contents: ${file}`);
   }
 
-  if (upMarkerIndex > downMarkerIndex) {
+  if (downMarkerIndex !== -1 && upMarkerIndex > downMarkerIndex) {
     throw new Error(`Invalid migration file contents: ${file}`);
   }
 
@@ -40,10 +41,12 @@ export function parseMigration(
     throw new Error(`Unexpected content before up marker in: ${file}`);
   }
 
-  const upSql = sql
-    .slice(upMarkerIndex + upMarker.length, downMarkerIndex)
-    .trim();
-  const downSql = sql.slice(downMarkerIndex + downMarker.length).trim();
+  const upSectionEnd = downMarkerIndex === -1 ? sql.length : downMarkerIndex;
+  const upSql = sql.slice(upMarkerIndex + upMarker.length, upSectionEnd).trim();
+  const downSql =
+    downMarkerIndex === -1
+      ? ""
+      : sql.slice(downMarkerIndex + downMarker.length).trim();
 
   if (!upSql) {
     throw new Error(`Invalid migration file contents: ${file}`);

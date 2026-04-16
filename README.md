@@ -44,20 +44,20 @@ Every `.sql` file in the migration directory is treated as a migration file. Fil
 - Non-`.sql` files in the directory are ignored
 - Alphabetical order is plain filename order, so zero-padding still matters if you use numeric prefixes
 
-Each file must contain exactly one `up` marker and one `down` marker, in this order:
+Each file must contain exactly one `up` marker and at most one `down` marker:
 
 ```sql
--- % up-migration % --
+-- migrate:up
 CREATE TABLE person (
   id SERIAL PRIMARY KEY,
   name varchar(100) NOT NULL
 );
 
--- % down-migration % --
+-- migrate:down
 DROP TABLE person;
 ```
 
-The `up` section must contain SQL. The `down` section may be left empty for irreversible migrations. During rollback, empty `down` migrations execute no SQL but are still removed from the history table, so their `up()` must be idempotent.
+The `up` section must contain SQL. The `down` marker is optional. If present, its SQL may be empty for irreversible migrations. During rollback, migrations without down SQL execute no SQL but are still removed from the history table, so their `up()` must be idempotent.
 
 ## 🛠️ CLI
 

@@ -8,10 +8,10 @@ import {
   parseMigration,
 } from "./migration-files.js";
 
-const validMigration = `-- % up-migration % --
+const validMigration = `-- migrate:up
 CREATE TABLE person (id integer);
 
--- % down-migration % --
+-- migrate:down
 DROP TABLE person;
 `;
 
@@ -47,21 +47,28 @@ describe("migration-files", (): void => {
       );
     });
 
-    it("rejects missing, duplicated, or reversed migration markers", (): void => {
+    it("rejects missing up, duplicated markers, or reversed markers", (): void => {
       assert.throws((): void => {
         parseMigration("CREATE TABLE person (id integer);", "up", "0.sql");
       }, /Invalid migration file contents: 0\.sql/);
       assert.throws((): void => {
         parseMigration(
-          `${validMigration}\n-- % up-migration % --\nSELECT 1;`,
+          `${validMigration}\n-- migrate:up\nSELECT 1;`,
           "up",
           "0.sql",
         );
       }, /Invalid migration file contents: 0\.sql/);
       assert.throws((): void => {
         parseMigration(
-          `-- % down-migration % --\nDROP TABLE person;\n-- % up-migration % --\nCREATE TABLE person (id integer);`,
+          `-- migrate:down\nDROP TABLE person;\n-- migrate:up\nCREATE TABLE person (id integer);`,
           "up",
+          "0.sql",
+        );
+      }, /Invalid migration file contents: 0\.sql/);
+      assert.throws((): void => {
+        parseMigration(
+          `${validMigration}\n-- migrate:down\nSELECT 1;`,
+          "down",
           "0.sql",
         );
       }, /Invalid migration file contents: 0\.sql/);
@@ -70,7 +77,7 @@ describe("migration-files", (): void => {
     it("rejects empty up sections", (): void => {
       assert.throws((): void => {
         parseMigration(
-          `-- % up-migration % --\n\n-- % down-migration % --\nDROP TABLE person;`,
+          `-- migrate:up\n\n-- migrate:down\nDROP TABLE person;`,
           "up",
           "0.sql",
         );
@@ -80,7 +87,7 @@ describe("migration-files", (): void => {
     it("rejects non-whitespace content before the up marker", (): void => {
       assert.throws((): void => {
         parseMigration(
-          `DROP TABLE important_data;\n-- % up-migration % --\nCREATE TABLE t (id int);\n-- % down-migration % --\nDROP TABLE t;`,
+          `DROP TABLE important_data;\n-- migrate:up\nCREATE TABLE t (id int);\n-- migrate:down\nDROP TABLE t;`,
           "up",
           "0.sql",
         );
@@ -90,12 +97,21 @@ describe("migration-files", (): void => {
     it("allows empty down sections for irreversible migrations", (): void => {
       assert.equal(
         parseMigration(
-          `-- % up-migration % --\nCREATE TABLE person (id integer);\n-- % down-migration % --\n`,
+          `-- migrate:up\nCREATE TABLE person (id integer);\n-- migrate:down\n`,
           "down",
           "0.sql",
         ),
         "",
       );
+    });
+
+    it("allows migrations without a down marker", (): void => {
+      const upOnlyMigration = `-- migrate:up\nCREATE TABLE person (id integer);\n`;
+      assert.equal(
+        parseMigration(upOnlyMigration, "up", "0.sql"),
+        "CREATE TABLE person (id integer);",
+      );
+      assert.equal(parseMigration(upOnlyMigration, "down", "0.sql"), "");
     });
   });
 
@@ -139,11 +155,28 @@ describe("migration-files", (): void => {
     });
 
     it("materializes empty down SQL for irreversible migrations", (): void => {
-      const irreversibleMigration = `-- % up-migration % --\nINSERT INTO data SELECT generate_series(1, 1000);\n-- % down-migration % --\n`;
+      const irreversibleMigration = `-- migrate:up\nINSERT INTO data SELECT generate_series(1, 1000);\n-- migrate:down\n`;
 
       withMigrationDirectory(
         {
           "0-backfill.sql": irreversibleMigration,
+        },
+        (directory): void => {
+          const disk = loadDiskMigrations(directory);
+
+          assert.deepEqual(materializeSteps(disk.all, "down"), [
+            { file: "0-backfill.sql", sql: "" },
+          ]);
+        },
+      );
+    });
+
+    it("materializes empty down SQL when down marker is omitted", (): void => {
+      const upOnlyMigration = `-- migrate:up\nINSERT INTO data SELECT generate_series(1, 1000);\n`;
+
+      withMigrationDirectory(
+        {
+          "0-backfill.sql": upOnlyMigration,
         },
         (directory): void => {
           const disk = loadDiskMigrations(directory);

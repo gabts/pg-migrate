@@ -19,21 +19,21 @@ const client = new pg.Client(databaseConfig);
 const defaultMigrationHistoryTable = "migration_history";
 const tempMigrationDirectories: string[] = [];
 
-const createPersonMigration = `-- % up-migration % --
+const createPersonMigration = `-- migrate:up
 CREATE TABLE person (
   id SERIAL PRIMARY KEY,
   name varchar(100) NOT NULL
 );
 
--- % down-migration % --
+-- migrate:down
 DROP TABLE person;
 `;
 
-const insertPeopleMigration = `-- % up-migration % --
+const insertPeopleMigration = `-- migrate:up
 INSERT INTO person (name)
 VALUES ('gabriel'), ('david'), ('frasse');
 
--- % down-migration % --
+-- migrate:down
 DELETE FROM person
 WHERE name IN ('gabriel', 'david', 'frasse');
 `;
@@ -277,11 +277,11 @@ describe("main", (): void => {
   });
 
   it("down migrates past an irreversible migration", async (): Promise<void> => {
-    const irreversibleMigration = `-- % up-migration % --
+    const irreversibleMigration = `-- migrate:up
 INSERT INTO person (name)
 VALUES ('gabriel'), ('david'), ('frasse');
 
--- % down-migration % --
+-- migrate:down
 `;
 
     const directory = createMigrationDirectory({
@@ -316,13 +316,13 @@ VALUES ('gabriel'), ('david'), ('frasse');
       (): Promise<void> =>
         up(databaseConfig, {
           directory: createMigrationDirectory({
-            "0-break.sql": `-- % up-migration % --
+            "0-break.sql": `-- migrate:up
 CREATE TABLE person (
   id SERIALXXXXX PRIMARY KEY,
   name varchar(100) NOT NULL
 );
 
--- % down-migration % --
+-- migrate:down
 DROP TABLE person;
 `,
           }),
@@ -342,12 +342,12 @@ DROP TABLE person;
     const directory = createMigrationDirectory({
       "0-create.sql": createPersonMigration,
       "1-insert.sql": insertPeopleMigration,
-      "2-break.sql": `-- % up-migration % --
+      "2-break.sql": `-- migrate:up
 CREATE TABLE broken (
   id SERIALXXXXX PRIMARY KEY
 );
 
--- % down-migration % --
+-- migrate:down
 DROP TABLE broken;
 `,
     });
@@ -445,10 +445,10 @@ DROP TABLE broken;
   });
 
   it("down dry run runs SQL but rolls back all changes", async (): Promise<void> => {
-    const updateNamesMigration = `-- % up-migration % --
+    const updateNamesMigration = `-- migrate:up
 UPDATE person SET name = upper(name);
 
--- % down-migration % --
+-- migrate:down
 UPDATE person SET name = lower(name);
 `;
     const directory = createMigrationDirectory({
@@ -548,10 +548,10 @@ UPDATE person SET name = lower(name);
       failAtIndex?: number,
     ): string {
       const files: Record<string, string> = {
-        "000.sql": `-- % up-migration % --
+        "000.sql": `-- migrate:up
 CREATE TABLE bulk_test (value INTEGER PRIMARY KEY);
 
--- % down-migration % --
+-- migrate:down
 DROP TABLE bulk_test;
 `,
       };
@@ -559,16 +559,16 @@ DROP TABLE bulk_test;
       for (let i = 1; i <= count; i++) {
         const file = `${String(i).padStart(3, "0")}.sql`;
         if (i === failAtIndex) {
-          files[file] = `-- % up-migration % --
+          files[file] = `-- migrate:up
 INSERT INTO bulk_test_nonexistent (value) VALUES (${i});
 
--- % down-migration % --
+-- migrate:down
 `;
         } else {
-          files[file] = `-- % up-migration % --
+          files[file] = `-- migrate:up
 INSERT INTO bulk_test (value) VALUES (${i});
 
--- % down-migration % --
+-- migrate:down
 DELETE FROM bulk_test WHERE value = ${i};
 `;
         }

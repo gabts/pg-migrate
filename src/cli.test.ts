@@ -65,7 +65,7 @@ describe("cli", (): void => {
 
     assert.equal(
       fs.readFileSync(createdPath, "utf8"),
-      "-- % up-migration % --\n\n-- % down-migration % --\n",
+      "-- migrate:up\n\n-- migrate:down\n",
     );
   });
 
