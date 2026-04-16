@@ -44,8 +44,8 @@ describe("log-messages", (): void => {
 
     it("formats target version with quoted name and strips .sql", (): void => {
       assert.equal(
-        messages.target("0-create.sql"),
-        '- target version: "0-create"',
+        messages.target("0_create.sql"),
+        '- target version: "0_create"',
       );
     });
   });
@@ -53,40 +53,40 @@ describe("log-messages", (): void => {
   describe("per-step", (): void => {
     it("formats applying with a quoted, .sql-stripped name", (): void => {
       assert.equal(
-        messages.applying("0-create.sql"),
-        '↑ applying "0-create" (up)',
+        messages.applying("0_create.sql"),
+        '↑ applying "0_create" (up)',
       );
     });
 
     it("formats applied with timing", (): void => {
       assert.equal(
-        messages.applied("0-create.sql", 41),
-        '✓ applied "0-create" in 41ms',
+        messages.applied("0_create.sql", 41),
+        '✓ applied "0_create" in 41ms',
       );
     });
 
     it("formats reverting with and without a down section", (): void => {
       assert.equal(
-        messages.reverting("0-create.sql", true),
-        '↓ reverting "0-create" (down)',
+        messages.reverting("0_create.sql", true),
+        '↓ reverting "0_create" (down)',
       );
       assert.equal(
-        messages.reverting("0-backfill.sql", false),
-        '↓ reverting "0-backfill" (down, no SQL)',
+        messages.reverting("0_backfill.sql", false),
+        '↓ reverting "0_backfill" (down, no SQL)',
       );
     });
 
     it("formats reverted with timing", (): void => {
       assert.equal(
-        messages.reverted("1-insert.sql", 18),
-        '⟲ reverted "1-insert" in 18ms',
+        messages.reverted("1_insert.sql", 18),
+        '⟲ reverted "1_insert" in 18ms',
       );
     });
 
     it("formats failed with timing", (): void => {
       assert.equal(
-        messages.failed("2-break.sql", 228),
-        '✗ failed "2-break" after 228ms',
+        messages.failed("2_break.sql", 228),
+        '✗ failed "2_break" after 228ms',
       );
     });
   });

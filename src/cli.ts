@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { assertValidMigrationName } from "./migration-naming.js";
 
 const helpText = `Usage: migratorosaurus <command> [options]
 
@@ -92,13 +93,7 @@ function createMigration(args: string[]): void {
     throw new Error("Name flag (--name, -n) is required");
   }
 
-  if (
-    opts.name.includes("/") ||
-    opts.name.includes("\\") ||
-    opts.name.includes("\0")
-  ) {
-    throw new Error("Migration name may not contain path separators or NUL");
-  }
+  assertValidMigrationName(opts.name);
 
   if (
     !fs.existsSync(opts.directory) ||

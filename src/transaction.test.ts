@@ -149,14 +149,14 @@ describe("transaction", (): void => {
       run: async ({ client: sessionClient }): Promise<void> => {
         await sessionClient.query(
           `INSERT INTO ${qualifiedMigrationHistoryTable} (file) VALUES ($1);`,
-          ["0-create.sql"],
+          ["0_create.sql"],
         );
       },
     });
 
     const rows = await queryHistory(qualifiedMigrationHistoryTable);
     assert.equal(rows.length, 1);
-    assert.equal(rows[0].file, "0-create.sql");
+    assert.equal(rows[0].file, "0_create.sql");
   });
 
   it("requires missing schema-qualified migration history schemas to exist", async (): Promise<void> => {
@@ -177,8 +177,8 @@ describe("transaction", (): void => {
       `
       INSERT INTO ${defaultMigrationHistoryTable} (file)
       VALUES
-        ('0-create.sql'),
-        ('0-create.sql');
+        ('0_create.sql'),
+        ('0_create.sql');
     `,
     );
 
@@ -193,7 +193,7 @@ describe("transaction", (): void => {
             didRun = true;
           },
         }),
-      /Duplicate applied migration file: 0-create\.sql/,
+      /Duplicate applied migration file: 0_create\.sql/,
     );
     assert.equal(didRun, false);
   });

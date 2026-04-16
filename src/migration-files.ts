@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { assertValidMigrationFilename } from "./migration-naming.js";
 import type {
   DiskMigration,
   LoadedMigrations,
@@ -92,7 +93,12 @@ export function loadDiskMigrations(directory: string): LoadedMigrations {
     throw new Error(`No migration files found in directory: ${directory}`);
   }
 
-  const all = migrationFiles.sort().map(
+  migrationFiles.sort();
+  for (const file of migrationFiles) {
+    assertValidMigrationFilename(file);
+  }
+
+  const all = migrationFiles.map(
     (file): DiskMigration => ({
       file,
       path: path.join(directory, file),

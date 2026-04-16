@@ -38,11 +38,11 @@ describe("migration-files", (): void => {
   describe("parseMigration", (): void => {
     it("extracts up and down SQL from a migration file", (): void => {
       assert.equal(
-        parseMigration(validMigration, "up", "0-create.sql"),
+        parseMigration(validMigration, "up", "0_create.sql"),
         "CREATE TABLE person (id integer);",
       );
       assert.equal(
-        parseMigration(validMigration, "down", "0-create.sql"),
+        parseMigration(validMigration, "down", "0_create.sql"),
         "DROP TABLE person;",
       );
     });
@@ -75,11 +75,11 @@ CREATE TABLE person (id integer);
 `;
 
       assert.equal(
-        parseMigration(downBeforeUp, "up", "0-create.sql"),
+        parseMigration(downBeforeUp, "up", "0_create.sql"),
         "CREATE TABLE person (id integer);",
       );
       assert.equal(
-        parseMigration(downBeforeUp, "down", "0-create.sql"),
+        parseMigration(downBeforeUp, "down", "0_create.sql"),
         "DROP TABLE person;",
       );
     });
@@ -146,30 +146,30 @@ CREATE TABLE person (id integer);
     it("reads migration files and extracts SQL for the given direction", (): void => {
       withMigrationDirectory(
         {
-          "0-create.sql": validMigration,
-          "1-add-column.sql": validMigration,
+          "20260416090000_create_person.sql": validMigration,
+          "20260416090100_add_column.sql": validMigration,
         },
         (directory): void => {
           const disk = loadDiskMigrations(directory);
 
           assert.deepEqual(materializeSteps(disk.all, "up"), [
             {
-              file: "0-create.sql",
+              file: "20260416090000_create_person.sql",
               sql: "CREATE TABLE person (id integer);",
             },
             {
-              file: "1-add-column.sql",
+              file: "20260416090100_add_column.sql",
               sql: "CREATE TABLE person (id integer);",
             },
           ]);
 
           assert.deepEqual(materializeSteps(disk.all, "down"), [
             {
-              file: "0-create.sql",
+              file: "20260416090000_create_person.sql",
               sql: "DROP TABLE person;",
             },
             {
-              file: "1-add-column.sql",
+              file: "20260416090100_add_column.sql",
               sql: "DROP TABLE person;",
             },
           ]);
@@ -190,16 +190,22 @@ CREATE TABLE person (id integer);
 
       withMigrationDirectory(
         {
-          "0-create.sql": downBeforeUp,
+          "20260416090000_create_person.sql": downBeforeUp,
         },
         (directory): void => {
           const disk = loadDiskMigrations(directory);
 
           assert.deepEqual(materializeSteps(disk.all, "up"), [
-            { file: "0-create.sql", sql: "CREATE TABLE person (id integer);" },
+            {
+              file: "20260416090000_create_person.sql",
+              sql: "CREATE TABLE person (id integer);",
+            },
           ]);
           assert.deepEqual(materializeSteps(disk.all, "down"), [
-            { file: "0-create.sql", sql: "DROP TABLE person;" },
+            {
+              file: "20260416090000_create_person.sql",
+              sql: "DROP TABLE person;",
+            },
           ]);
         },
       );
@@ -210,13 +216,13 @@ CREATE TABLE person (id integer);
 
       withMigrationDirectory(
         {
-          "0-backfill.sql": irreversibleMigration,
+          "20260416090000_backfill.sql": irreversibleMigration,
         },
         (directory): void => {
           const disk = loadDiskMigrations(directory);
 
           assert.deepEqual(materializeSteps(disk.all, "down"), [
-            { file: "0-backfill.sql", sql: "" },
+            { file: "20260416090000_backfill.sql", sql: "" },
           ]);
         },
       );
@@ -227,13 +233,13 @@ CREATE TABLE person (id integer);
 
       withMigrationDirectory(
         {
-          "0-backfill.sql": upOnlyMigration,
+          "20260416090000_backfill.sql": upOnlyMigration,
         },
         (directory): void => {
           const disk = loadDiskMigrations(directory);
 
           assert.deepEqual(materializeSteps(disk.all, "down"), [
-            { file: "0-backfill.sql", sql: "" },
+            { file: "20260416090000_backfill.sql", sql: "" },
           ]);
         },
       );
@@ -263,9 +269,9 @@ CREATE TABLE person (id integer);
     it("loads SQL migration files in alphabetical order", (): void => {
       withMigrationDirectory(
         {
-          "2-second.sql": validMigration,
-          "10-first.sql": validMigration,
-          "create person's table.sql": validMigration,
+          "20260416090002_second.sql": validMigration,
+          "20260416090001_first.sql": validMigration,
+          "20260416090003_third.sql": validMigration,
           "notes.txt": "ignored",
         },
         (directory): void => {
@@ -283,23 +289,37 @@ CREATE TABLE person (id integer);
             ),
             [
               {
-                file: "10-first.sql",
-                path: path.join(directory, "10-first.sql"),
+                file: "20260416090001_first.sql",
+                path: path.join(directory, "20260416090001_first.sql"),
               },
               {
-                file: "2-second.sql",
-                path: path.join(directory, "2-second.sql"),
+                file: "20260416090002_second.sql",
+                path: path.join(directory, "20260416090002_second.sql"),
               },
               {
-                file: "create person's table.sql",
-                path: path.join(directory, "create person's table.sql"),
+                file: "20260416090003_third.sql",
+                path: path.join(directory, "20260416090003_third.sql"),
               },
             ],
           );
           assert.equal(
-            disk.byFile.get("create person's table.sql")?.path,
-            path.join(directory, "create person's table.sql"),
+            disk.byFile.get("20260416090003_third.sql")?.path,
+            path.join(directory, "20260416090003_third.sql"),
           );
+        },
+      );
+    });
+
+    it("rejects invalid migration filenames", (): void => {
+      withMigrationDirectory(
+        {
+          "20260416090000_valid.sql": validMigration,
+          "bad name.sql": validMigration,
+        },
+        (directory): void => {
+          assert.throws((): void => {
+            loadDiskMigrations(directory);
+          }, /Invalid migration filename: bad name\.sql/);
         },
       );
     });

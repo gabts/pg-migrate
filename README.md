@@ -38,11 +38,13 @@ await down("postgres://localhost:5432/database", {
 
 ## 📁 Migration Files
 
-Every `.sql` file in the migration directory is treated as a migration file. Files are applied in alphabetical filename order.
+Migration filenames are enforced and must match:
+`<YYYYMMDDHHMMSS>_<slug>.sql` (for example `20260414153000_create_person.sql`).
+Files are applied in alphabetical filename order.
 
-- Name migration files however you like, for example `20260414153000-create-person.sql` or `00001.sql`
+- `<slug>` must use lowercase letters, numbers, and underscores only
 - Non-`.sql` files in the directory are ignored
-- Alphabetical order is plain filename order, so zero-padding still matters if you use numeric prefixes
+- Invalid `.sql` migration filenames cause startup validation to fail
 
 Each file must contain exactly one `up` marker and at most one `down` marker:
 
@@ -69,19 +71,19 @@ The built-in CLI currently supports one command:
 
 - `create` creates a new migration file
 
-The CLI creates a filename with a UTC timestamp prefix in `YYYYMMDDHHMMSS` format.
+The CLI creates filenames in `<YYYYMMDDHHMMSS>_<slug>.sql` format.
 
 Useful commands:
 
 ```sh
 migratorosaurus create --help
-migratorosaurus create --directory sql/migrations --name add-users
+migratorosaurus create --directory sql/migrations --name add_users
 ```
 
 `create` command rules:
 
 - `--name` is required
-- CLI-generated migration names may not contain path separators or NUL
+- `--name` must be a lowercase slug (`[a-z0-9][a-z0-9_]*`)
 - `--directory` defaults to `"migrations"`
 - `--help` and `-h` are boolean flags
 - Unknown commands and unknown flags cause the CLI to fail

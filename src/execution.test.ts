@@ -39,11 +39,11 @@ describe("execution", (): void => {
 
       const steps: MigrationStep[] = [
         {
-          file: "0-create.sql",
+          file: "0_create.sql",
           sql: "CREATE TABLE person (id integer);",
         },
         {
-          file: "1-insert.sql",
+          file: "1_insert.sql",
           sql: "INSERT INTO person VALUES (1);",
         },
       ];
@@ -61,11 +61,11 @@ describe("execution", (): void => {
         logs.map(normalizeMs),
         [
           "",
-          messages.applying("0-create.sql"),
-          messages.applied("0-create.sql", 0),
+          messages.applying("0_create.sql"),
+          messages.applied("0_create.sql", 0),
           "",
-          messages.applying("1-insert.sql"),
-          messages.applied("1-insert.sql", 0),
+          messages.applying("1_insert.sql"),
+          messages.applied("1_insert.sql", 0),
         ].map(normalizeMs),
       );
       assert.deepEqual(queries, [
@@ -76,7 +76,7 @@ describe("execution", (): void => {
         },
         {
           sql: 'INSERT INTO "migratorosaurus"."migration_history" ( file, applied_at ) VALUES ( $1, clock_timestamp() );',
-          params: ["0-create.sql"],
+          params: ["0_create.sql"],
         },
         { sql: "COMMIT;", params: undefined },
         { sql: "BEGIN;", params: undefined },
@@ -86,7 +86,7 @@ describe("execution", (): void => {
         },
         {
           sql: 'INSERT INTO "migratorosaurus"."migration_history" ( file, applied_at ) VALUES ( $1, clock_timestamp() );',
-          params: ["1-insert.sql"],
+          params: ["1_insert.sql"],
         },
         { sql: "COMMIT;", params: undefined },
       ]);
@@ -110,9 +110,9 @@ describe("execution", (): void => {
       } as unknown as pg.Client;
 
       const steps: MigrationStep[] = [
-        { file: "0-create.sql", sql: "CREATE TABLE person;" },
-        { file: "1-break.sql", sql: "BROKEN SQL;" },
-        { file: "2-never.sql", sql: "CREATE TABLE never_run;" },
+        { file: "0_create.sql", sql: "CREATE TABLE person;" },
+        { file: "1_break.sql", sql: "BROKEN SQL;" },
+        { file: "2_never.sql", sql: "CREATE TABLE never_run;" },
       ];
 
       const logs: string[] = [];
@@ -151,11 +151,11 @@ describe("execution", (): void => {
         logs.map(normalizeMs),
         [
           "",
-          messages.applying("0-create.sql"),
-          messages.applied("0-create.sql", 0),
+          messages.applying("0_create.sql"),
+          messages.applied("0_create.sql", 0),
           "",
-          messages.applying("1-break.sql"),
-          messages.failed("1-break.sql", 0),
+          messages.applying("1_break.sql"),
+          messages.failed("1_break.sql", 0),
           messages.errorDetails(
             Object.assign(new Error("syntax error at BROKEN"), {
               code: "42601",
@@ -186,8 +186,8 @@ describe("execution", (): void => {
       const logs: string[] = [];
 
       const steps: MigrationStep[] = [
-        { file: "0-create.sql", sql: "CREATE TABLE person (id integer);" },
-        { file: "1-insert.sql", sql: "INSERT INTO person VALUES (1);" },
+        { file: "0_create.sql", sql: "CREATE TABLE person (id integer);" },
+        { file: "1_insert.sql", sql: "INSERT INTO person VALUES (1);" },
       ];
 
       await executeUpPlan({
@@ -204,23 +204,23 @@ describe("execution", (): void => {
         logs.map(normalizeMs),
         [
           "",
-          messages.applying("0-create.sql"),
-          messages.applied("0-create.sql", 0),
+          messages.applying("0_create.sql"),
+          messages.applied("0_create.sql", 0),
           "",
-          messages.applying("1-insert.sql"),
-          messages.applied("1-insert.sql", 0),
+          messages.applying("1_insert.sql"),
+          messages.applied("1_insert.sql", 0),
         ].map(normalizeMs),
       );
       assert.deepEqual(queries, [
         { sql: "CREATE TABLE person (id integer);", params: undefined },
         {
           sql: 'INSERT INTO "migration_history" ( file, applied_at ) VALUES ( $1, clock_timestamp() );',
-          params: ["0-create.sql"],
+          params: ["0_create.sql"],
         },
         { sql: "INSERT INTO person VALUES (1);", params: undefined },
         {
           sql: 'INSERT INTO "migration_history" ( file, applied_at ) VALUES ( $1, clock_timestamp() );',
-          params: ["1-insert.sql"],
+          params: ["1_insert.sql"],
         },
       ]);
     });
@@ -241,8 +241,8 @@ describe("execution", (): void => {
       } as unknown as pg.Client;
 
       const steps: MigrationStep[] = [
-        { file: "0-create.sql", sql: "CREATE TABLE person;" },
-        { file: "1-break.sql", sql: "BROKEN SQL;" },
+        { file: "0_create.sql", sql: "CREATE TABLE person;" },
+        { file: "1_break.sql", sql: "BROKEN SQL;" },
       ];
 
       await assert.rejects(
@@ -277,7 +277,7 @@ describe("execution", (): void => {
       const logs: string[] = [];
 
       const steps: MigrationStep[] = [
-        { file: "1-insert.sql", sql: "DELETE FROM person;" },
+        { file: "1_insert.sql", sql: "DELETE FROM person;" },
       ];
 
       await executeDownPlan({
@@ -294,15 +294,15 @@ describe("execution", (): void => {
         logs.map(normalizeMs),
         [
           "",
-          messages.reverting("1-insert.sql", true),
-          messages.reverted("1-insert.sql", 0),
+          messages.reverting("1_insert.sql", true),
+          messages.reverted("1_insert.sql", 0),
         ].map(normalizeMs),
       );
       assert.deepEqual(queries, [
         { sql: "DELETE FROM person;", params: undefined },
         {
           sql: 'DELETE FROM "migration_history" WHERE file = $1;',
-          params: ["1-insert.sql"],
+          params: ["1_insert.sql"],
         },
       ]);
     });
@@ -310,7 +310,7 @@ describe("execution", (): void => {
     it("handles irreversible steps in dry run", async (): Promise<void> => {
       const { client, queries } = createFakeClient();
 
-      const steps: MigrationStep[] = [{ file: "0-backfill.sql", sql: "" }];
+      const steps: MigrationStep[] = [{ file: "0_backfill.sql", sql: "" }];
 
       await executeDownPlan({
         client,
@@ -323,7 +323,7 @@ describe("execution", (): void => {
       assert.deepEqual(queries, [
         {
           sql: 'DELETE FROM "migration_history" WHERE file = $1;',
-          params: ["0-backfill.sql"],
+          params: ["0_backfill.sql"],
         },
       ]);
     });
@@ -346,8 +346,8 @@ describe("execution", (): void => {
       } as unknown as pg.Client;
 
       const steps: MigrationStep[] = [
-        { file: "1-insert.sql", sql: "DELETE FROM person;" },
-        { file: "0-create.sql", sql: "DROP TABLE person;" },
+        { file: "1_insert.sql", sql: "DELETE FROM person;" },
+        { file: "0_create.sql", sql: "DROP TABLE person;" },
       ];
 
       await assert.rejects(
@@ -391,7 +391,7 @@ describe("execution", (): void => {
       } as unknown as pg.Client;
 
       const logs: string[] = [];
-      const steps: MigrationStep[] = [{ file: "0-backfill.sql", sql: "" }];
+      const steps: MigrationStep[] = [{ file: "0_backfill.sql", sql: "" }];
 
       await assert.rejects(
         (): Promise<void> =>
@@ -421,7 +421,7 @@ describe("execution", (): void => {
 
       const steps: MigrationStep[] = [
         {
-          file: "0-create.sql",
+          file: "0_create.sql",
           sql: "DROP TABLE person;",
         },
       ];
@@ -439,8 +439,8 @@ describe("execution", (): void => {
         logs.map(normalizeMs),
         [
           "",
-          messages.reverting("0-create.sql", true),
-          messages.reverted("0-create.sql", 0),
+          messages.reverting("0_create.sql", true),
+          messages.reverted("0_create.sql", 0),
         ].map(normalizeMs),
       );
       assert.deepEqual(queries, [
@@ -451,7 +451,7 @@ describe("execution", (): void => {
         },
         {
           sql: 'DELETE FROM "migration_history" WHERE file = $1;',
-          params: ["0-create.sql"],
+          params: ["0_create.sql"],
         },
         { sql: "COMMIT;", params: undefined },
       ]);
@@ -461,7 +461,7 @@ describe("execution", (): void => {
       const { client, queries } = createFakeClient();
       const logs: string[] = [];
 
-      const steps: MigrationStep[] = [{ file: "0-backfill.sql", sql: "" }];
+      const steps: MigrationStep[] = [{ file: "0_backfill.sql", sql: "" }];
 
       await executeDownPlan({
         client,
@@ -476,14 +476,14 @@ describe("execution", (): void => {
         logs.map(normalizeMs),
         [
           "",
-          messages.reverting("0-backfill.sql", false),
-          messages.reverted("0-backfill.sql", 0),
+          messages.reverting("0_backfill.sql", false),
+          messages.reverted("0_backfill.sql", 0),
         ].map(normalizeMs),
       );
       assert.deepEqual(queries, [
         {
           sql: 'DELETE FROM "migration_history" WHERE file = $1;',
-          params: ["0-backfill.sql"],
+          params: ["0_backfill.sql"],
         },
       ]);
     });
@@ -499,7 +499,7 @@ describe("execution", (): void => {
       } as unknown as pg.Client;
 
       const steps: MigrationStep[] = [
-        { file: "0-create.sql", sql: "DROP TABLE person;" },
+        { file: "0_create.sql", sql: "DROP TABLE person;" },
       ];
       const logs: string[] = [];
       await assert.rejects(
@@ -519,8 +519,8 @@ describe("execution", (): void => {
         logs.map(normalizeMs),
         [
           "",
-          messages.reverting("0-create.sql", true),
-          messages.failed("0-create.sql", 0),
+          messages.reverting("0_create.sql", true),
+          messages.failed("0_create.sql", 0),
           messages.errorDetails(new Error("cannot drop")),
           messages.failureRolledBack(),
         ].map(normalizeMs),
@@ -534,7 +534,7 @@ describe("execution", (): void => {
         },
       } as unknown as pg.Client;
 
-      const steps: MigrationStep[] = [{ file: "0-backfill.sql", sql: "" }];
+      const steps: MigrationStep[] = [{ file: "0_backfill.sql", sql: "" }];
       const logs: string[] = [];
       await assert.rejects(
         (): Promise<void> =>
@@ -553,8 +553,8 @@ describe("execution", (): void => {
         logs.map(normalizeMs),
         [
           "",
-          messages.reverting("0-backfill.sql", false),
-          messages.failed("0-backfill.sql", 0),
+          messages.reverting("0_backfill.sql", false),
+          messages.failed("0_backfill.sql", 0),
           messages.errorDetails(new Error("history write failed")),
         ].map(normalizeMs),
       );

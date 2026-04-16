@@ -3,9 +3,9 @@ import { planDownExecution, planUpExecution } from "./planning.js";
 import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
 
 const migrations: DiskMigration[] = [
-  { file: "0-create.sql", path: "/migrations/0-create.sql" },
-  { file: "1-insert.sql", path: "/migrations/1-insert.sql" },
-  { file: "2-alter.sql", path: "/migrations/2-alter.sql" },
+  { file: "0_create.sql", path: "/migrations/0_create.sql" },
+  { file: "1_insert.sql", path: "/migrations/1_insert.sql" },
+  { file: "2_alter.sql", path: "/migrations/2_alter.sql" },
 ];
 
 const disk: LoadedMigrations = {
@@ -56,9 +56,9 @@ describe("planning", (): void => {
 
   describe("planDownExecution", (): void => {
     const appliedRows: AppliedRow[] = [
-      { file: "2-alter.sql" },
-      { file: "1-insert.sql" },
-      { file: "0-create.sql" },
+      { file: "2_alter.sql" },
+      { file: "1_insert.sql" },
+      { file: "0_create.sql" },
     ];
 
     it("plans the latest applied migration when no target is provided", (): void => {
@@ -96,8 +96,8 @@ describe("planning", (): void => {
 
     it("plans nothing when the target migration is not applied", (): void => {
       const unappliedMigration: DiskMigration = {
-        file: "3-drop.sql",
-        path: "/migrations/3-drop.sql",
+        file: "3_drop.sql",
+        path: "/migrations/3_drop.sql",
       };
       const diskWithUnappliedMigration: LoadedMigrations = {
         all: [...migrations, unappliedMigration],

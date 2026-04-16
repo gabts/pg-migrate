@@ -18,6 +18,12 @@ const databaseConfig: string | pg.ClientConfig = process.env.DATABASE_URL;
 const client = new pg.Client(databaseConfig);
 const defaultMigrationHistoryTable = "migration_history";
 const tempMigrationDirectories: string[] = [];
+const standardCreateFile = "20260416090000_create.sql";
+const standardInsertFile = "20260416090100_insert.sql";
+const backfillFile = "20260416090100_backfill.sql";
+const breakOnlyFile = "20260416090000_break.sql";
+const breakAfterStandardFile = "20260416090200_break.sql";
+const updateFile = "20260416090200_update.sql";
 
 const createPersonMigration = `-- migrate:up
 CREATE TABLE person (
@@ -53,8 +59,8 @@ function createMigrationDirectory(files: Record<string, string> = {}): string {
 
 function createStandardMigrationDirectory(): string {
   return createMigrationDirectory({
-    "0-create.sql": createPersonMigration,
-    "1-insert.sql": insertPeopleMigration,
+    [standardCreateFile]: createPersonMigration,
+    [standardInsertFile]: insertPeopleMigration,
   });
 }
 
@@ -116,7 +122,7 @@ async function assertMigration0(): Promise<void> {
   const personRows = await queryPersons();
 
   assert.equal(historyRows.length, 1);
-  assert.equal(historyRows[0].file, "0-create.sql");
+  assert.equal(historyRows[0].file, standardCreateFile);
   assert.equal(personRows.length, 0);
 }
 
@@ -126,8 +132,8 @@ async function assertMigration1(): Promise<void> {
   const personRows = await queryPersons();
 
   assert.equal(historyRows.length, 2);
-  assert.equal(historyRows[0].file, "0-create.sql");
-  assert.equal(historyRows[1].file, "1-insert.sql");
+  assert.equal(historyRows[0].file, standardCreateFile);
+  assert.equal(historyRows[1].file, standardInsertFile);
   assert.equal(personRows.length, 3);
 }
 
@@ -160,7 +166,7 @@ describe("main", (): void => {
   it("up migrates through a target migration", async (): Promise<void> => {
     await up(databaseConfig, {
       directory: createStandardMigrationDirectory(),
-      target: "0-create.sql",
+      target: standardCreateFile,
     });
 
     await assertMigration0();
@@ -179,7 +185,7 @@ describe("main", (): void => {
     await up(databaseConfig, { directory });
     await down(databaseConfig, {
       directory,
-      target: "0-create.sql",
+      target: standardCreateFile,
     });
 
     await assertMigration0();
@@ -203,17 +209,17 @@ describe("main", (): void => {
         messages.creatingTable(),
         messages.pending(2),
         "",
-        messages.applying("0-create.sql"),
-        messages.applied("0-create.sql", 0),
+        messages.applying(standardCreateFile),
+        messages.applied(standardCreateFile, 0),
         "",
-        messages.applying("1-insert.sql"),
-        messages.applied("1-insert.sql", 0),
+        messages.applying(standardInsertFile),
+        messages.applied(standardInsertFile, 0),
         messages.completedUp(),
         messages.startedDown(),
         messages.pending(1),
         "",
-        messages.reverting("1-insert.sql", true),
-        messages.reverted("1-insert.sql", 0),
+        messages.reverting(standardInsertFile, true),
+        messages.reverted(standardInsertFile, 0),
         messages.completedDown(),
       ].map(normalizeMs),
     );
@@ -285,8 +291,8 @@ VALUES ('gabriel'), ('david'), ('frasse');
 `;
 
     const directory = createMigrationDirectory({
-      "0-create.sql": createPersonMigration,
-      "1-backfill.sql": irreversibleMigration,
+      [standardCreateFile]: createPersonMigration,
+      [backfillFile]: irreversibleMigration,
     });
 
     const logs: string[] = [];
@@ -295,19 +301,17 @@ VALUES ('gabriel'), ('david'), ('frasse');
     };
 
     await up(databaseConfig, { directory });
-    await down(databaseConfig, { directory, target: "0-create.sql", log });
+    await down(databaseConfig, { directory, target: standardCreateFile, log });
 
     const historyRows = await queryHistory(defaultMigrationHistoryTable);
     assert.equal(historyRows.length, 1);
-    assert.equal(historyRows[0].file, "0-create.sql");
+    assert.equal(historyRows[0].file, standardCreateFile);
 
     const personRows = await queryPersons();
     assert.equal(personRows.length, 3);
 
     assert.ok(
-      logs.some(
-        (l): boolean => l === messages.reverting("1-backfill.sql", false),
-      ),
+      logs.some((l): boolean => l === messages.reverting(backfillFile, false)),
     );
   });
 
@@ -316,7 +320,7 @@ VALUES ('gabriel'), ('david'), ('frasse');
       (): Promise<void> =>
         up(databaseConfig, {
           directory: createMigrationDirectory({
-            "0-break.sql": `-- migrate:up
+            [breakOnlyFile]: `-- migrate:up
 CREATE TABLE person (
   id SERIALXXXXX PRIMARY KEY,
   name varchar(100) NOT NULL
@@ -340,9 +344,9 @@ DROP TABLE person;
 
   it("commits earlier migrations and rolls back only the failing one", async (): Promise<void> => {
     const directory = createMigrationDirectory({
-      "0-create.sql": createPersonMigration,
-      "1-insert.sql": insertPeopleMigration,
-      "2-break.sql": `-- migrate:up
+      [standardCreateFile]: createPersonMigration,
+      [standardInsertFile]: insertPeopleMigration,
+      [breakAfterStandardFile]: `-- migrate:up
 CREATE TABLE broken (
   id SERIALXXXXX PRIMARY KEY
 );
@@ -364,8 +368,8 @@ DROP TABLE broken;
 
     const historyRows = await queryHistory(defaultMigrationHistoryTable);
     assert.equal(historyRows.length, 2);
-    assert.equal(historyRows[0].file, "0-create.sql");
-    assert.equal(historyRows[1].file, "1-insert.sql");
+    assert.equal(historyRows[0].file, standardCreateFile);
+    assert.equal(historyRows[1].file, standardInsertFile);
 
     const personRows = await queryPersons();
     assert.equal(personRows.length, 3);
@@ -392,7 +396,7 @@ DROP TABLE broken;
     };
 
     await up(databaseConfig, { directory });
-    await down(databaseConfig, { directory, target: "1-insert.sql", log });
+    await down(databaseConfig, { directory, target: standardInsertFile, log });
 
     assert.ok(logs.some((l): boolean => l === messages.pending(0)));
     assert.ok(logs.some((l): boolean => l === messages.nothingToRollback()));
@@ -410,10 +414,10 @@ DROP TABLE broken;
 
     assert.ok(logs.some((l): boolean => l === messages.startedUp(true)));
     assert.ok(
-      logs.some((l): boolean => l === messages.applying("0-create.sql")),
+      logs.some((l): boolean => l === messages.applying(standardCreateFile)),
     );
     assert.ok(
-      logs.some((l): boolean => l === messages.applying("1-insert.sql")),
+      logs.some((l): boolean => l === messages.applying(standardInsertFile)),
     );
     assert.ok(logs.some((l): boolean => l === messages.completedUp()));
     assert.equal(await queryTableExists(defaultMigrationHistoryTable), false);
@@ -427,19 +431,19 @@ DROP TABLE broken;
       logs.push(message);
     };
 
-    await up(databaseConfig, { directory, target: "0-create.sql" });
+    await up(databaseConfig, { directory, target: standardCreateFile });
     await up(databaseConfig, { directory, dryRun: true, log });
 
     assert.ok(logs.some((l): boolean => l === messages.startedUp(true)));
     assert.ok(
-      logs.some((l): boolean => l === messages.applying("1-insert.sql")),
+      logs.some((l): boolean => l === messages.applying(standardInsertFile)),
     );
     assert.ok(logs.some((l): boolean => l === messages.completedUp()));
 
     assert.ok(await queryTableExists(defaultMigrationHistoryTable));
     const historyRows = await queryHistory(defaultMigrationHistoryTable);
     assert.equal(historyRows.length, 1);
-    assert.equal(historyRows[0].file, "0-create.sql");
+    assert.equal(historyRows[0].file, standardCreateFile);
     const personRows = await queryPersons();
     assert.equal(personRows.length, 0);
   });
@@ -452,9 +456,9 @@ UPDATE person SET name = upper(name);
 UPDATE person SET name = lower(name);
 `;
     const directory = createMigrationDirectory({
-      "0-create.sql": createPersonMigration,
-      "1-insert.sql": insertPeopleMigration,
-      "2-update.sql": updateNamesMigration,
+      [standardCreateFile]: createPersonMigration,
+      [standardInsertFile]: insertPeopleMigration,
+      [updateFile]: updateNamesMigration,
     });
     const logs: string[] = [];
     const log = (message: string): void => {
@@ -465,17 +469,19 @@ UPDATE person SET name = lower(name);
     await down(databaseConfig, {
       directory,
       dryRun: true,
-      target: "0-create.sql",
+      target: standardCreateFile,
       log,
     });
 
     assert.ok(logs.some((l): boolean => l === messages.startedDown(true)));
     assert.ok(logs.some((l): boolean => l === messages.pending(2)));
     assert.ok(
-      logs.some((l): boolean => l === messages.reverting("2-update.sql", true)),
+      logs.some((l): boolean => l === messages.reverting(updateFile, true)),
     );
     assert.ok(
-      logs.some((l): boolean => l === messages.reverting("1-insert.sql", true)),
+      logs.some(
+        (l): boolean => l === messages.reverting(standardInsertFile, true),
+      ),
     );
     assert.ok(logs.some((l): boolean => l === messages.completedDown()));
 
@@ -496,7 +502,7 @@ UPDATE person SET name = lower(name);
     };
 
     await up(databaseConfig, { directory });
-    await up(databaseConfig, { directory, target: "1-insert.sql", log });
+    await up(databaseConfig, { directory, target: standardInsertFile, log });
 
     assert.ok(logs.some((l): boolean => l === messages.pending(0)));
     await assertMigration1();
@@ -505,7 +511,7 @@ UPDATE person SET name = lower(name);
   it("up applies remaining migrations incrementally", async (): Promise<void> => {
     const directory = createStandardMigrationDirectory();
 
-    await up(databaseConfig, { directory, target: "0-create.sql" });
+    await up(databaseConfig, { directory, target: standardCreateFile });
     await assertMigration0();
 
     await up(databaseConfig, { directory });
@@ -534,7 +540,7 @@ UPDATE person SET name = lower(name);
         `${schema}.migration_history`,
       );
       assert.equal(historyAfterDown.length, 1);
-      assert.equal(historyAfterDown[0].file, "0-create.sql");
+      assert.equal(historyAfterDown[0].file, standardCreateFile);
     } finally {
       await client.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE;`);
     }
@@ -542,13 +548,18 @@ UPDATE person SET name = lower(name);
 
   describe("bulk migrations (100+)", (): void => {
     const MIGRATION_COUNT = 100;
+    const bulkBaseVersion = 20260416090000;
+
+    function bulkFileForIndex(index: number): string {
+      return `${String(bulkBaseVersion + index)}_bulk_${String(index).padStart(3, "0")}.sql`;
+    }
 
     function createBulkMigrationDirectory(
       count: number,
       failAtIndex?: number,
     ): string {
       const files: Record<string, string> = {
-        "000.sql": `-- migrate:up
+        [bulkFileForIndex(0)]: `-- migrate:up
 CREATE TABLE bulk_test (value INTEGER PRIMARY KEY);
 
 -- migrate:down
@@ -557,7 +568,7 @@ DROP TABLE bulk_test;
       };
 
       for (let i = 1; i <= count; i++) {
-        const file = `${String(i).padStart(3, "0")}.sql`;
+        const file = bulkFileForIndex(i);
         if (i === failAtIndex) {
           files[file] = `-- migrate:up
 INSERT INTO bulk_test_nonexistent (value) VALUES (${i});
@@ -587,10 +598,10 @@ DELETE FROM bulk_test WHERE value = ${i};
 
       const historyRows = await queryHistory();
       assert.equal(historyRows.length, MIGRATION_COUNT + 1);
-      assert.equal(historyRows[0].file, "000.sql");
+      assert.equal(historyRows[0].file, bulkFileForIndex(0));
       assert.equal(
         historyRows[MIGRATION_COUNT].file,
-        `${String(MIGRATION_COUNT).padStart(3, "0")}.sql`,
+        bulkFileForIndex(MIGRATION_COUNT),
       );
 
       const { rows } = await client.query(
@@ -608,13 +619,10 @@ DELETE FROM bulk_test WHERE value = ${i};
         /does not exist/i,
       );
 
-      // 000.sql through 050.sql committed successfully (failAt entries)
+      // Migration 0 through 50 committed successfully (failAt entries)
       const historyRows = await queryHistory();
       assert.equal(historyRows.length, failAt);
-      assert.equal(
-        historyRows[failAt - 1].file,
-        `${String(failAt - 1).padStart(3, "0")}.sql`,
-      );
+      assert.equal(historyRows[failAt - 1].file, bulkFileForIndex(failAt - 1));
 
       const { rows } = await client.query(
         "SELECT COUNT(*) AS n FROM bulk_test;",
@@ -625,7 +633,7 @@ DELETE FROM bulk_test WHERE value = ${i};
     it("applies remaining migrations after partial completion", async (): Promise<void> => {
       const directory = createBulkMigrationDirectory(MIGRATION_COUNT);
       const midpoint = 50;
-      const midpointFile = `${String(midpoint).padStart(3, "0")}.sql`;
+      const midpointFile = bulkFileForIndex(midpoint);
 
       await up(databaseConfig, { directory, target: midpointFile });
 
@@ -647,11 +655,11 @@ DELETE FROM bulk_test WHERE value = ${i};
       const directory = createBulkMigrationDirectory(MIGRATION_COUNT);
 
       await up(databaseConfig, { directory });
-      await down(databaseConfig, { directory, target: "000.sql" });
+      await down(databaseConfig, { directory, target: bulkFileForIndex(0) });
 
       const historyRows = await queryHistory();
       assert.equal(historyRows.length, 1);
-      assert.equal(historyRows[0].file, "000.sql");
+      assert.equal(historyRows[0].file, bulkFileForIndex(0));
 
       const { rows } = await client.query(
         "SELECT COUNT(*) AS n FROM bulk_test;",

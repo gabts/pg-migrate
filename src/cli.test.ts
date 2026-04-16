@@ -55,12 +55,12 @@ describe("cli", (): void => {
       "--directory",
       tempDir,
       "--name",
-      "create-person",
+      "create_person",
     ]);
     const createdPath = assertCreatedMigrationPath(
       output,
       tempDir,
-      "create-person",
+      "create_person",
     );
 
     assert.equal(
@@ -87,38 +87,33 @@ describe("cli", (): void => {
     assert.ok(output.length > 0);
   });
 
-  it("accepts migration names with spaces and punctuation", (): void => {
+  it("accepts slug migration names", (): void => {
     const output = runCli([
       "create",
       "--directory",
       tempDir,
       "--name",
-      "create.person+table",
+      "create_person_table2",
     ]);
     const createdPath = assertCreatedMigrationPath(
       output,
       tempDir,
-      "create.person+table",
+      "create_person_table2",
     );
 
     assert.ok(fs.existsSync(createdPath));
   });
 
-  it("accepts migration names that start with a hyphen", (): void => {
-    const output = runCli([
-      "create",
-      "--directory",
-      tempDir,
-      "--name",
-      "-create-person",
-    ]);
-    const createdPath = assertCreatedMigrationPath(
-      output,
-      tempDir,
-      "-create-person",
-    );
-
-    assert.ok(fs.existsSync(createdPath));
+  it("rejects invalid migration slugs", (): void => {
+    assert.throws((): void => {
+      runCli(["create", "--directory", tempDir, "--name", "Create_Person"]);
+    }, /Invalid migration name: Create_Person/);
+    assert.throws((): void => {
+      runCli(["create", "--directory", tempDir, "--name", "-create_person"]);
+    }, /Invalid migration name: -create_person/);
+    assert.throws((): void => {
+      runCli(["create", "--directory", tempDir, "--name", "create person"]);
+    }, /Invalid migration name: create person/);
   });
 
   it("rejects missing migration directories", (): void => {
@@ -131,7 +126,7 @@ describe("cli", (): void => {
           "--directory",
           missingDir,
           "--name",
-          "create-person",
+          "create_person",
         ]);
       },
       new RegExp(`Migration directory does not exist: ${missingDir}`),
@@ -151,7 +146,7 @@ describe("cli", (): void => {
   });
 
   it("creates a timestamped migration without inspecting existing SQL names", (): void => {
-    fs.writeFileSync(path.join(tempDir, "000-initial.sql"), "existing\n");
+    fs.writeFileSync(path.join(tempDir, "000_initial.sql"), "existing\n");
     fs.writeFileSync(path.join(tempDir, "bad name.sql"), "existing\n");
 
     const output = runCli([
@@ -159,12 +154,12 @@ describe("cli", (): void => {
       "--directory",
       tempDir,
       "--name",
-      "create-person",
+      "create_person",
     ]);
     const createdPath = assertCreatedMigrationPath(
       output,
       tempDir,
-      "create-person",
+      "create_person",
     );
 
     assert.ok(fs.existsSync(createdPath));
@@ -172,8 +167,8 @@ describe("cli", (): void => {
 
   it("rejects path separators in migration names", (): void => {
     assert.throws((): void => {
-      runCli(["create", "--directory", tempDir, "--name", "../create-person"]);
-    }, /Migration name may not contain path separators or NUL/);
+      runCli(["create", "--directory", tempDir, "--name", "../create_person"]);
+    }, /Invalid migration name: \.\.\/create_person/);
   });
 
   it("rejects removed zero-padding options", (): void => {
@@ -185,7 +180,7 @@ describe("cli", (): void => {
         "--pad-width",
         "3abc",
         "--name",
-        "create-person",
+        "create_person",
       ]);
     }, /Unknown argument: --pad-width/);
   });
@@ -202,12 +197,12 @@ describe("cli", (): void => {
       "--directory",
       tempDir,
       "--name",
-      "create-person.sql",
+      "create_person.sql",
     ]);
     const createdPath = assertCreatedMigrationPath(
       output,
       tempDir,
-      "create-person",
+      "create_person",
     );
 
     assert.ok(fs.existsSync(createdPath));

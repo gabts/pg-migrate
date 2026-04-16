@@ -1,0 +1,18 @@
+const migrationSlugPattern = /^[a-z0-9][a-z0-9_]*$/;
+const migrationFilePattern = /^(\d{14})_([a-z0-9][a-z0-9_]*)\.sql$/;
+
+export function assertValidMigrationName(name: string): void {
+  if (!migrationSlugPattern.test(name)) {
+    throw new Error(
+      `Invalid migration name: ${name}. Expected lowercase slug format: <slug> with letters, numbers, and underscores`,
+    );
+  }
+}
+
+export function assertValidMigrationFilename(file: string): void {
+  if (!migrationFilePattern.test(file)) {
+    throw new Error(
+      `Invalid migration filename: ${file}. Expected format: <YYYYMMDDHHMMSS>_<slug>.sql`,
+    );
+  }
+}
