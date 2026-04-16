@@ -40,7 +40,7 @@ await down("postgres://localhost:5432/database", {
 
 Migration filenames are enforced and must match:
 `<YYYYMMDDHHMMSS>_<slug>.sql` (for example `20260414153000_create_person.sql`).
-Files are applied in alphabetical filename order.
+Files are applied in ascending version order.
 
 - `<slug>` must use lowercase letters, numbers, and underscores only
 - Non-`.sql` files in the directory are ignored
@@ -103,7 +103,7 @@ Use `up(config, { target })` to migrate forward until that migration has been ap
 Use `down(config)` to roll back exactly one migration.
 Use `down(config, { target })` to roll back newer migrations while leaving the target migration applied.
 
-`up()` is append-only by alphabetical migration order. If a migration file is added alphabetically before the latest applied migration after that later migration has already been applied, `up()` fails instead of silently applying it out of order.
+`up()` is append-only by version order. If a migration file is added with a version earlier than the latest applied migration after that later migration has already been applied, `up()` fails instead of silently applying it out of order.
 
 ## 🧫 Transactions
 

@@ -96,11 +96,19 @@ export function loadDiskMigrations(directory: string): LoadedMigrations {
     throw new Error(`No migration files found in directory: ${directory}`);
   }
 
-  migrationFiles.sort();
-  const seenVersions = new Map<string, string>();
-  for (const file of migrationFiles) {
+  const filesWithVersions = migrationFiles.map((file) => {
     assertValidMigrationFilename(file);
-    const version = getMigrationVersion(file);
+    return { file, version: getMigrationVersion(file) };
+  });
+
+  filesWithVersions.sort((a, b) => {
+    if (a.version < b.version) return -1;
+    if (a.version > b.version) return 1;
+    return 0;
+  });
+
+  const seenVersions = new Map<string, string>();
+  for (const { file, version } of filesWithVersions) {
     const existingFile = seenVersions.get(version);
     if (existingFile) {
       throw new Error(
@@ -110,8 +118,8 @@ export function loadDiskMigrations(directory: string): LoadedMigrations {
     seenVersions.set(version, file);
   }
 
-  const all = migrationFiles.map(
-    (file): DiskMigration => ({
+  const all = filesWithVersions.map(
+    ({ file }): DiskMigration => ({
       file,
       path: path.join(directory, file),
     }),

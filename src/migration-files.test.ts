@@ -266,7 +266,7 @@ CREATE TABLE person (id integer);
       }, /Migration directory does not exist/);
     });
 
-    it("loads SQL migration files in alphabetical order", (): void => {
+    it("loads SQL migration files in version order", (): void => {
       withMigrationDirectory(
         {
           "20260416090002_second.sql": validMigration,
