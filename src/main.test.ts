@@ -539,4 +539,134 @@ UPDATE person SET name = lower(name);
       await client.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE;`);
     }
   });
+
+  describe("bulk migrations (100+)", (): void => {
+    const MIGRATION_COUNT = 100;
+
+    function createBulkMigrationDirectory(
+      count: number,
+      failAtIndex?: number,
+    ): string {
+      const files: Record<string, string> = {
+        "000.sql": `-- % up-migration % --
+CREATE TABLE bulk_test (value INTEGER PRIMARY KEY);
+
+-- % down-migration % --
+DROP TABLE bulk_test;
+`,
+      };
+
+      for (let i = 1; i <= count; i++) {
+        const file = `${String(i).padStart(3, "0")}.sql`;
+        if (i === failAtIndex) {
+          files[file] = `-- % up-migration % --
+INSERT INTO bulk_test_nonexistent (value) VALUES (${i});
+
+-- % down-migration % --
+`;
+        } else {
+          files[file] = `-- % up-migration % --
+INSERT INTO bulk_test (value) VALUES (${i});
+
+-- % down-migration % --
+DELETE FROM bulk_test WHERE value = ${i};
+`;
+        }
+      }
+
+      return createMigrationDirectory(files);
+    }
+
+    afterEach(async (): Promise<void> => {
+      await client.query("DROP TABLE IF EXISTS bulk_test;");
+    });
+
+    it("up applies all migrations successfully", async (): Promise<void> => {
+      const directory = createBulkMigrationDirectory(MIGRATION_COUNT);
+      await up(databaseConfig, { directory });
+
+      const historyRows = await queryHistory();
+      assert.equal(historyRows.length, MIGRATION_COUNT + 1);
+      assert.equal(historyRows[0].file, "000.sql");
+      assert.equal(
+        historyRows[MIGRATION_COUNT].file,
+        `${String(MIGRATION_COUNT).padStart(3, "0")}.sql`,
+      );
+
+      const { rows } = await client.query(
+        "SELECT COUNT(*) AS n FROM bulk_test;",
+      );
+      assert.equal(Number(rows[0].n), MIGRATION_COUNT);
+    });
+
+    it("commits earlier migrations when a later one fails", async (): Promise<void> => {
+      const failAt = 51;
+      const directory = createBulkMigrationDirectory(MIGRATION_COUNT, failAt);
+
+      await assert.rejects(
+        (): Promise<void> => up(databaseConfig, { directory }),
+        /does not exist/i,
+      );
+
+      // 000.sql through 050.sql committed successfully (failAt entries)
+      const historyRows = await queryHistory();
+      assert.equal(historyRows.length, failAt);
+      assert.equal(
+        historyRows[failAt - 1].file,
+        `${String(failAt - 1).padStart(3, "0")}.sql`,
+      );
+
+      const { rows } = await client.query(
+        "SELECT COUNT(*) AS n FROM bulk_test;",
+      );
+      assert.equal(Number(rows[0].n), failAt - 1);
+    });
+
+    it("applies remaining migrations after partial completion", async (): Promise<void> => {
+      const directory = createBulkMigrationDirectory(MIGRATION_COUNT);
+      const midpoint = 50;
+      const midpointFile = `${String(midpoint).padStart(3, "0")}.sql`;
+
+      await up(databaseConfig, { directory, target: midpointFile });
+
+      const historyAfterPartial = await queryHistory();
+      assert.equal(historyAfterPartial.length, midpoint + 1);
+
+      await up(databaseConfig, { directory });
+
+      const historyAfterFull = await queryHistory();
+      assert.equal(historyAfterFull.length, MIGRATION_COUNT + 1);
+
+      const { rows } = await client.query(
+        "SELECT COUNT(*) AS n FROM bulk_test;",
+      );
+      assert.equal(Number(rows[0].n), MIGRATION_COUNT);
+    });
+
+    it("down rolls back all applied migrations to target", async (): Promise<void> => {
+      const directory = createBulkMigrationDirectory(MIGRATION_COUNT);
+
+      await up(databaseConfig, { directory });
+      await down(databaseConfig, { directory, target: "000.sql" });
+
+      const historyRows = await queryHistory();
+      assert.equal(historyRows.length, 1);
+      assert.equal(historyRows[0].file, "000.sql");
+
+      const { rows } = await client.query(
+        "SELECT COUNT(*) AS n FROM bulk_test;",
+      );
+      assert.equal(Number(rows[0].n), 0);
+    });
+
+    it("up is a no-op when all migrations are already applied", async (): Promise<void> => {
+      const directory = createBulkMigrationDirectory(MIGRATION_COUNT);
+
+      await up(databaseConfig, { directory });
+      await up(databaseConfig, { directory });
+
+      const historyRows = await queryHistory();
+      assert.equal(historyRows.length, MIGRATION_COUNT + 1);
+    });
+  });
 });
