@@ -1,6 +1,9 @@
 import * as fs from "fs";
 import * as path from "path";
-import { assertValidMigrationFilename } from "./migration-naming.js";
+import {
+  assertValidMigrationFilename,
+  getMigrationVersion,
+} from "./migration-naming.js";
 import type {
   DiskMigration,
   LoadedMigrations,
@@ -94,8 +97,17 @@ export function loadDiskMigrations(directory: string): LoadedMigrations {
   }
 
   migrationFiles.sort();
+  const seenVersions = new Map<string, string>();
   for (const file of migrationFiles) {
     assertValidMigrationFilename(file);
+    const version = getMigrationVersion(file);
+    const existingFile = seenVersions.get(version);
+    if (existingFile) {
+      throw new Error(
+        `Duplicate migration version: ${version} in files ${existingFile} and ${file}`,
+      );
+    }
+    seenVersions.set(version, file);
   }
 
   const all = migrationFiles.map(

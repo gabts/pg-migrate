@@ -323,5 +323,19 @@ CREATE TABLE person (id integer);
         },
       );
     });
+
+    it("rejects duplicate migration versions across different files", (): void => {
+      withMigrationDirectory(
+        {
+          "20260416090000_add_users.sql": validMigration,
+          "20260416090000_add_roles.sql": validMigration,
+        },
+        (directory): void => {
+          assert.throws((): void => {
+            loadDiskMigrations(directory);
+          }, /Duplicate migration version: 20260416090000/);
+        },
+      );
+    });
   });
 });

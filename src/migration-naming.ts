@@ -16,3 +16,14 @@ export function assertValidMigrationFilename(file: string): void {
     );
   }
 }
+
+export function getMigrationVersion(file: string): string {
+  const match = file.match(migrationFilePattern);
+  const version = match?.[1];
+  if (!version) {
+    throw new Error(
+      `Invalid migration filename: ${file}. Expected format: <YYYYMMDDHHMMSS>_<slug>.sql`,
+    );
+  }
+  return version;
+}
