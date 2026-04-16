@@ -34,7 +34,7 @@ export async function readAppliedRows(
 ): Promise<AppliedRow[]> {
   // Order is irrelevant: disk.all is the canonical migration order.
   const appliedRowsResult = await client.query<AppliedRow>(
-    `SELECT filename AS file FROM ${qualifiedTableName};`,
+    `SELECT filename, version FROM ${qualifiedTableName};`,
   );
   const appliedRows = appliedRowsResult.rows;
   validateAppliedHistory(appliedRows);

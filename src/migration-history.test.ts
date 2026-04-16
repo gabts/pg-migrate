@@ -92,23 +92,30 @@ describe("migration-history", (): void => {
   });
 
   describe("readAppliedRows", (): void => {
-    it("loads rows from filename column and maps to applied file shape", async (): Promise<void> => {
+    it("loads rows from filename/version columns", async (): Promise<void> => {
       const queries: string[] = [];
       const client = {
         query: async (sql: string): Promise<{ rows: unknown[] }> => {
           queries.push(sql);
           return {
-            rows: [{ file: "20260416090000_create.sql" }],
+            rows: [
+              {
+                filename: "20260416090000_create.sql",
+                version: "20260416090000",
+              },
+            ],
           };
         },
       } as unknown as pg.Client;
 
       const rows = await readAppliedRows(client, '"migration_history"');
 
-      assert.deepEqual(rows, [{ file: "20260416090000_create.sql" }]);
+      assert.deepEqual(rows, [
+        { filename: "20260416090000_create.sql", version: "20260416090000" },
+      ]);
       assert.ok(
         queries.some((sql): boolean =>
-          sql.includes(`SELECT filename AS file FROM "migration_history"`),
+          sql.includes(`SELECT filename, version FROM "migration_history"`),
         ),
       );
     });
@@ -118,8 +125,14 @@ describe("migration-history", (): void => {
         query: async (): Promise<{ rows: unknown[] }> => {
           return {
             rows: [
-              { file: "20260416090000_create.sql" },
-              { file: "20260416090000_create.sql" },
+              {
+                filename: "20260416090000_create.sql",
+                version: "20260416090000",
+              },
+              {
+                filename: "20260416090000_create.sql",
+                version: "20260416090000",
+              },
             ],
           };
         },
@@ -128,6 +141,30 @@ describe("migration-history", (): void => {
       await assert.rejects(
         (): Promise<unknown> => readAppliedRows(client, '"migration_history"'),
         /Duplicate applied migration file: 20260416090000_create\.sql/,
+      );
+    });
+
+    it("validates and rejects duplicate applied versions", async (): Promise<void> => {
+      const client = {
+        query: async (): Promise<{ rows: unknown[] }> => {
+          return {
+            rows: [
+              {
+                filename: "20260416090000_create.sql",
+                version: "20260416090000",
+              },
+              {
+                filename: "20260416090001_insert.sql",
+                version: "20260416090000",
+              },
+            ],
+          };
+        },
+      } as unknown as pg.Client;
+
+      await assert.rejects(
+        (): Promise<unknown> => readAppliedRows(client, '"migration_history"'),
+        /Duplicate applied migration version: 20260416090000/,
       );
     });
   });

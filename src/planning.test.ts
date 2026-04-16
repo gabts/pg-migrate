@@ -1,11 +1,24 @@
 import * as assert from "assert";
+import { getMigrationVersion } from "./migration-naming.js";
 import { planDownExecution, planUpExecution } from "./planning.js";
 import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
 
+const createFile = "20260416090000_create.sql";
+const insertFile = "20260416090100_insert.sql";
+const alterFile = "20260416090200_alter.sql";
+const dropFile = "20260416090300_drop.sql";
+
+function row(file: string): AppliedRow {
+  return {
+    filename: file,
+    version: getMigrationVersion(file),
+  };
+}
+
 const migrations: DiskMigration[] = [
-  { file: "0_create.sql", path: "/migrations/0_create.sql" },
-  { file: "1_insert.sql", path: "/migrations/1_insert.sql" },
-  { file: "2_alter.sql", path: "/migrations/2_alter.sql" },
+  { file: createFile, path: `/migrations/${createFile}` },
+  { file: insertFile, path: `/migrations/${insertFile}` },
+  { file: alterFile, path: `/migrations/${alterFile}` },
 ];
 
 const disk: LoadedMigrations = {
@@ -56,9 +69,9 @@ describe("planning", (): void => {
 
   describe("planDownExecution", (): void => {
     const appliedRows: AppliedRow[] = [
-      { file: "2_alter.sql" },
-      { file: "1_insert.sql" },
-      { file: "0_create.sql" },
+      row(alterFile),
+      row(insertFile),
+      row(createFile),
     ];
 
     it("plans the latest applied migration when no target is provided", (): void => {
@@ -96,8 +109,8 @@ describe("planning", (): void => {
 
     it("plans nothing when the target migration is not applied", (): void => {
       const unappliedMigration: DiskMigration = {
-        file: "3_drop.sql",
-        path: "/migrations/3_drop.sql",
+        file: dropFile,
+        path: `/migrations/${dropFile}`,
       };
       const diskWithUnappliedMigration: LoadedMigrations = {
         all: [...migrations, unappliedMigration],

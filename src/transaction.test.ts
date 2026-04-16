@@ -12,6 +12,8 @@ const client = new pg.Client(databaseConfig);
 const defaultMigrationHistoryTable = "migration_history";
 const schemaMigrationHistorySchema = "migratorosaurus_test";
 const qualifiedMigrationHistoryTable = `${schemaMigrationHistorySchema}.migration_history`;
+const createFile = "20260416090000_create.sql";
+const createVersion = "20260416090000";
 
 async function queryTableExists(tableName: string): Promise<boolean> {
   const [schema, table] = tableName.includes(".")
@@ -125,14 +127,14 @@ describe("transaction", (): void => {
       run: async ({ client: sessionClient }): Promise<void> => {
         await sessionClient.query(
           `INSERT INTO ${qualifiedMigrationHistoryTable} (filename, version) VALUES ($1, $2);`,
-          ["0_create.sql", "0"],
+          [createFile, createVersion],
         );
       },
     });
 
     const rows = await queryHistory(qualifiedMigrationHistoryTable);
     assert.equal(rows.length, 1);
-    assert.equal(rows[0].file, "0_create.sql");
+    assert.equal(rows[0].file, createFile);
   });
 
   it("requires missing schema-qualified migration history schemas to exist", async (): Promise<void> => {
@@ -153,8 +155,8 @@ describe("transaction", (): void => {
       `
       INSERT INTO ${defaultMigrationHistoryTable} (filename, version)
       VALUES
-        ('0_create.sql', '0'),
-        ('0_create.sql', '1');
+        ('${createFile}', '${createVersion}'),
+        ('${createFile}', '20260416090001');
     `,
     );
 
@@ -169,7 +171,7 @@ describe("transaction", (): void => {
             didRun = true;
           },
         }),
-      /Duplicate applied migration file: 0_create\.sql/,
+      /Duplicate applied migration file: 20260416090000_create\.sql/,
     );
     assert.equal(didRun, false);
   });

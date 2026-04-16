@@ -23,7 +23,8 @@ export interface ParsedMigrationSql {
 }
 
 export interface AppliedRow {
-  file: string;
+  filename: string;
+  version: string;
 }
 
 export type ClientConfig = string | pg.ClientConfig;

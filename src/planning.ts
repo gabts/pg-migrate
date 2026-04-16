@@ -21,7 +21,7 @@ export function planDownExecution(args: {
   targetMigration: DiskMigration | null;
 }): DiskMigration[] {
   const { appliedRows, disk, targetMigration } = args;
-  const appliedFiles = new Set(appliedRows.map(({ file }) => file));
+  const appliedFiles = new Set(appliedRows.map(({ filename }) => filename));
   const appliedMigrations = disk.all
     .filter(({ file }): boolean => appliedFiles.has(file))
     .reverse();

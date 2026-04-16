@@ -1,18 +1,32 @@
+import { getMigrationVersion } from "./migration-naming.js";
 import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
 
 export function validateAppliedHistory(rows: AppliedRow[]): void {
   const seenFiles = new Set<string>();
+  const seenVersions = new Set<string>();
 
-  for (const { file } of rows) {
-    if (typeof file !== "string" || file.length === 0) {
-      throw new Error(`Invalid applied migration file: ${file}`);
+  for (const { filename, version } of rows) {
+    if (typeof filename !== "string" || filename.length === 0) {
+      throw new Error(`Invalid applied migration file: ${filename}`);
     }
 
-    if (seenFiles.has(file)) {
-      throw new Error(`Duplicate applied migration file: ${file}`);
+    if (seenFiles.has(filename)) {
+      throw new Error(`Duplicate applied migration file: ${filename}`);
     }
 
-    seenFiles.add(file);
+    seenFiles.add(filename);
+
+    if (typeof version !== "string" || version.length === 0) {
+      throw new Error(
+        `Invalid applied migration version for file "${filename}": ${version}`,
+      );
+    }
+
+    if (seenVersions.has(version)) {
+      throw new Error(`Duplicate applied migration version: ${version}`);
+    }
+
+    seenVersions.add(version);
   }
 }
 
@@ -20,15 +34,31 @@ export function validateAppliedFilesExistOnDisk(
   appliedRows: AppliedRow[],
   disk: LoadedMigrations,
 ): void {
-  for (const { file } of appliedRows) {
-    if (!disk.byFile.has(file)) {
-      throw new Error(`Applied migration file is missing on disk: ${file}`);
+  for (const { filename } of appliedRows) {
+    if (!disk.byFile.has(filename)) {
+      throw new Error(`Applied migration file is missing on disk: ${filename}`);
+    }
+  }
+}
+
+function validateAppliedVersionsMatchDisk(
+  appliedRows: AppliedRow[],
+  disk: LoadedMigrations,
+): void {
+  for (const { filename, version } of appliedRows) {
+    const expectedVersion = getMigrationVersion(
+      disk.byFile.get(filename)!.file,
+    );
+    if (version !== expectedVersion) {
+      throw new Error(
+        `Applied migration version mismatch for file "${filename}": expected "${expectedVersion}", got "${version}"`,
+      );
     }
   }
 }
 
 function getAppliedFiles(appliedRows: AppliedRow[]): Set<string> {
-  return new Set(appliedRows.map(({ file }) => file));
+  return new Set(appliedRows.map(({ filename }) => filename));
 }
 
 function getLatestAppliedMigration(
@@ -47,6 +77,34 @@ function getLatestAppliedMigration(
   return latestApplied;
 }
 
+function validateAppliedHistoryConsistency(
+  appliedRows: AppliedRow[],
+  disk: LoadedMigrations,
+): DiskMigration | null {
+  validateAppliedFilesExistOnDisk(appliedRows, disk);
+  validateAppliedVersionsMatchDisk(appliedRows, disk);
+
+  const latestAppliedMigration = getLatestAppliedMigration(appliedRows, disk);
+  if (!latestAppliedMigration) {
+    return null;
+  }
+
+  const appliedFiles = getAppliedFiles(appliedRows);
+
+  // Applied migrations must always form a contiguous prefix of disk migrations.
+  for (const migration of disk.all) {
+    if (!appliedFiles.has(migration.file)) {
+      throw new Error(
+        `Gap in applied migration history: "${migration.file}" is not applied, but migrations up to "${latestAppliedMigration.file}" have been applied`,
+      );
+    }
+
+    if (migration === latestAppliedMigration) break;
+  }
+
+  return latestAppliedMigration;
+}
+
 export function validateDownPreconditions(args: {
   appliedRows: AppliedRow[];
   disk: LoadedMigrations;
@@ -55,9 +113,9 @@ export function validateDownPreconditions(args: {
   targetMigration: DiskMigration | null;
 } {
   const { appliedRows, disk, target } = args;
+  validateAppliedHistoryConsistency(appliedRows, disk);
 
   if (!target) {
-    validateAppliedFilesExistOnDisk(appliedRows, disk);
     return { targetMigration: null };
   }
 
@@ -65,8 +123,6 @@ export function validateDownPreconditions(args: {
   if (!targetMigration) {
     throw new Error(`No such target file "${target}"`);
   }
-
-  validateAppliedFilesExistOnDisk(appliedRows, disk);
 
   const appliedFiles = getAppliedFiles(appliedRows);
   if (!appliedFiles.has(target)) {
@@ -85,29 +141,17 @@ export function validateUpPreconditions(args: {
   targetMigration: DiskMigration | null;
 } {
   const { appliedRows, disk, target } = args;
-  const appliedFiles = getAppliedFiles(appliedRows);
-  const latestAppliedMigration = getLatestAppliedMigration(appliedRows, disk);
+  const latestAppliedMigration = validateAppliedHistoryConsistency(
+    appliedRows,
+    disk,
+  );
   const targetMigration = target ? disk.byFile.get(target) : undefined;
 
   if (target && !targetMigration) {
     throw new Error(`No such target file "${target}"`);
   }
 
-  validateAppliedFilesExistOnDisk(appliedRows, disk);
-
   if (latestAppliedMigration) {
-    // Verify applied migrations are contiguous: every disk migration at or
-    // before the latest applied migration must also be applied.
-    for (const migration of disk.all) {
-      if (!appliedFiles.has(migration.file)) {
-        throw new Error(
-          `Gap in applied migration history: "${migration.file}" is not applied, but migrations up to "${latestAppliedMigration.file}" have been applied`,
-        );
-      }
-
-      if (migration === latestAppliedMigration) break;
-    }
-
     if (targetMigration === latestAppliedMigration) {
       return {
         latestAppliedMigration,
