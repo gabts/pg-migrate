@@ -109,7 +109,7 @@ function createMigration(args: string[]): void {
 
   const filePath = path.join(
     opts.directory,
-    `${formatTimestamp()}-${opts.name}.sql`,
+    `${formatTimestamp()}_${opts.name}.sql`,
   );
   const fileContent = "-- migrate:up\n\n-- migrate:down\n";
 

@@ -32,7 +32,7 @@ function assertCreatedMigrationPath(
   assert.equal(path.dirname(createdPath), directory);
   assert.match(
     path.basename(createdPath),
-    new RegExp(`^\\d{14}-${escapeRegExp(name)}\\.sql$`),
+    new RegExp(`^\\d{14}_${escapeRegExp(name)}\\.sql$`),
   );
 
   return createdPath;
