@@ -2,6 +2,7 @@ import * as assert from "assert";
 import type * as pg from "pg";
 import { executeDownPlan, executeUpPlan } from "./execution.js";
 import { messages } from "./log-messages.js";
+import type { Logger } from "./logger.js";
 import type { MigrationStep } from "./types.js";
 
 function normalizeMs(s: string): string {
@@ -11,6 +12,26 @@ function normalizeMs(s: string): string {
 interface QueryCall {
   sql: string;
   params?: unknown[];
+}
+
+const noopLog: Logger = {
+  debug: (): void => undefined,
+  error: (): void => undefined,
+  info: (): void => undefined,
+  warn: (): void => undefined,
+};
+
+function createCapturedLog(logs: string[]): Logger {
+  const capture = (message: string): void => {
+    logs.push(message);
+  };
+
+  return {
+    debug: capture,
+    error: capture,
+    info: capture,
+    warn: capture,
+  };
 }
 
 function createFakeClient(): {
@@ -50,9 +71,7 @@ describe("execution", (): void => {
 
       await executeUpPlan({
         client,
-        log: (message: string): void => {
-          logs.push(message);
-        },
+        log: createCapturedLog(logs),
         steps,
         table: "migratorosaurus.migration_history",
       });
@@ -120,9 +139,7 @@ describe("execution", (): void => {
         (): Promise<void> =>
           executeUpPlan({
             client,
-            log: (message: string): void => {
-              logs.push(message);
-            },
+            log: createCapturedLog(logs),
             steps,
             table: "migration_history",
           }),
@@ -171,7 +188,7 @@ describe("execution", (): void => {
 
       await executeUpPlan({
         client,
-        log: (): void => undefined,
+        log: noopLog,
         steps: [],
         table: "migration_history",
       });
@@ -199,9 +216,7 @@ describe("execution", (): void => {
       await executeUpPlan({
         client,
         dryRun: true,
-        log: (message: string): void => {
-          logs.push(message);
-        },
+        log: createCapturedLog(logs),
         steps,
         table: "migration_history",
       });
@@ -256,7 +271,7 @@ describe("execution", (): void => {
           executeUpPlan({
             client,
             dryRun: true,
-            log: (): void => undefined,
+            log: noopLog,
             steps,
             table: "migration_history",
           }),
@@ -289,9 +304,7 @@ describe("execution", (): void => {
       await executeDownPlan({
         client,
         dryRun: true,
-        log: (message: string): void => {
-          logs.push(message);
-        },
+        log: createCapturedLog(logs),
         steps,
         table: "migration_history",
       });
@@ -323,7 +336,7 @@ describe("execution", (): void => {
       await executeDownPlan({
         client,
         dryRun: true,
-        log: (): void => undefined,
+        log: noopLog,
         steps,
         table: "migration_history",
       });
@@ -363,7 +376,7 @@ describe("execution", (): void => {
           executeDownPlan({
             client,
             dryRun: true,
-            log: (): void => undefined,
+            log: noopLog,
             steps,
             table: "migration_history",
           }),
@@ -408,9 +421,7 @@ describe("execution", (): void => {
           executeDownPlan({
             client,
             dryRun: true,
-            log: (message: string): void => {
-              logs.push(message);
-            },
+            log: createCapturedLog(logs),
             steps,
             table: "migration_history",
           }),
@@ -438,9 +449,7 @@ describe("execution", (): void => {
 
       await executeDownPlan({
         client,
-        log: (message: string): void => {
-          logs.push(message);
-        },
+        log: createCapturedLog(logs),
         steps,
         table: "migration_history",
       });
@@ -477,9 +486,7 @@ describe("execution", (): void => {
 
       await executeDownPlan({
         client,
-        log: (message: string): void => {
-          logs.push(message);
-        },
+        log: createCapturedLog(logs),
         steps,
         table: "migration_history",
       });
@@ -518,9 +525,7 @@ describe("execution", (): void => {
         (): Promise<void> =>
           executeDownPlan({
             client,
-            log: (message: string): void => {
-              logs.push(message);
-            },
+            log: createCapturedLog(logs),
             steps,
             table: "migration_history",
           }),
@@ -554,9 +559,7 @@ describe("execution", (): void => {
         (): Promise<void> =>
           executeDownPlan({
             client,
-            log: (message: string): void => {
-              logs.push(message);
-            },
+            log: createCapturedLog(logs),
             steps,
             table: "migration_history",
           }),
@@ -579,7 +582,7 @@ describe("execution", (): void => {
 
       await executeDownPlan({
         client,
-        log: (): void => undefined,
+        log: noopLog,
         steps: [],
         table: "migration_history",
       });

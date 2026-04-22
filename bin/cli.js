@@ -2,7 +2,13 @@
 
 const { cli } = require("../dist/cli.js");
 
-Promise.resolve(cli()).catch((err) => {
-  process.stderr.write(`${err.message}\n`);
-  process.exitCode = 1;
-});
+Promise.resolve(cli())
+  .then((exitCode) => {
+    process.exitCode = exitCode;
+  })
+  .catch((error) => {
+    const message =
+      error instanceof Error ? (error.stack ?? error.message) : String(error);
+    process.stderr.write(message.endsWith("\n") ? message : `${message}\n`);
+    process.exitCode = 1;
+  });

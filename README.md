@@ -67,9 +67,11 @@ The `up` section must contain SQL. The `down` marker is optional. If present, it
 migratorosaurus --help
 ```
 
-The built-in CLI currently supports one command:
+The built-in CLI supports:
 
 - `create` creates a new migration file
+- `up` applies pending migrations
+- `down` rolls back applied migrations
 
 The CLI creates filenames in `<YYYYMMDDHHMMSS>_<slug>.sql` format.
 
@@ -78,7 +80,16 @@ Useful commands:
 ```sh
 migratorosaurus create --help
 migratorosaurus create --directory sql/migrations --name add_users
+migratorosaurus up --url postgres://localhost:5432/app
+migratorosaurus down --url postgres://localhost:5432/app --target 20260416090100_add_users.sql
 ```
+
+Global CLI flags:
+
+- `--json` emit machine-readable result JSON to `stdout`
+- `--quiet` suppress non-error logs
+- `--verbose` / `-v` enable debug logs
+- `--no-color` disable ANSI color in logs
 
 `create` command rules:
 
@@ -93,16 +104,27 @@ migratorosaurus create --directory sql/migrations --name add_users
 - `--directory` defaults to `MIGRATION_DIRECTORY` or `"migrations"`
 - `--directory` takes precedence over `MIGRATION_DIRECTORY`
 
+CLI stream conventions:
+
+- Command results are written to `stdout` only
+- Logs (info/warn/error/debug) are written to `stderr`
+- In `--json` mode, `stdout` contains only structured JSON output
+- ANSI color in logs is enabled only when `stderr` is a TTY
+
 ## 👩‍🔬 Configuration
 
 The first argument is a required PostgreSQL connection string or `pg` client configuration.
 The second argument is an optional configuration object:
 
 - **directory** The directory that contains your migration `.sql` files. Defaults to `"migrations"`.
-- **log** Function to handle logging, e.g. console.log.
+- **quiet** Suppress non-error logs.
+- **verbose** Enable debug logs.
+- **color** Enable/disable ANSI color in logs (TTY-aware by default).
 - **table** The name of the database table that stores migration history. Defaults to `"migration_history"`.
   Valid values must use conventional PostgreSQL-style names only: `table_name` or `schema_name.table_name`. Table names may only use lowercase letters, numbers, and `_`, and must start with a letter or `_`. If you use a schema-qualified name, the schema must already exist.
 - **target** An exact migration filename.
+
+By default, `up()` and `down()` emit logs to `stderr` using the same conventions as the CLI.
 
 Use `up(config, { target })` to migrate forward until that migration has been applied.
 Use `down(config)` to roll back exactly one migration.

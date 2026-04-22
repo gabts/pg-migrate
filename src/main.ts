@@ -1,3 +1,4 @@
+import { createLogger, type ColorMode, type Logger } from "./logger.js";
 import { executeDownPlan, executeUpPlan } from "./execution.js";
 import { messages } from "./log-messages.js";
 import {
@@ -7,31 +8,39 @@ import {
 } from "./migration-files.js";
 import { planDownExecution, planUpExecution } from "./planning.js";
 import { withMigrationSession } from "./transaction.js";
-import type { ClientConfig, LogFn } from "./types.js";
+import type { ClientConfig } from "./types.js";
 import {
   validateDownPreconditions,
   validateUpPreconditions,
 } from "./validation.js";
 
 export interface MigrationOptions {
+  color?: ColorMode;
   directory?: string;
   dryRun?: boolean;
-  log?: LogFn;
+  quiet?: boolean;
   table?: string;
   target?: string;
+  verbose?: boolean;
 }
 
 function normalizeOptions(args: MigrationOptions): {
+  log: Logger;
   directory: string;
   dryRun: boolean;
-  log: LogFn;
   table: string;
   target?: string;
 } {
+  const log = createLogger({
+    color: args.color,
+    quiet: args.quiet,
+    verbose: args.verbose,
+  });
+
   return {
+    log,
     directory: args.directory ?? "migrations",
     dryRun: args.dryRun ?? false,
-    log: args.log ?? ((): undefined => undefined),
     table: args.table ?? "migration_history",
     target: args.target,
   };
@@ -41,11 +50,14 @@ export async function up(
   clientConfig: ClientConfig,
   args: MigrationOptions = {},
 ): Promise<void> {
-  const { directory, dryRun, log, table, target } = normalizeOptions(args);
+  const { log, directory, dryRun, table, target } = normalizeOptions(args);
 
-  log(messages.startedUp(dryRun));
+  log.debug(
+    `run=up directory=${JSON.stringify(directory)} table=${JSON.stringify(table)} dryRun=${String(dryRun)} target=${JSON.stringify(target ?? null)}`,
+  );
+  log.info(messages.startedUp(dryRun));
   if (target) {
-    log(messages.target(target));
+    log.info(messages.target(target));
   }
 
   try {
@@ -56,8 +68,8 @@ export async function up(
 
     await withMigrationSession({
       clientConfig,
-      dryRun,
       log,
+      dryRun,
       table,
       run: async ({ appliedRows, client }): Promise<void> => {
         const { latestAppliedMigration, targetMigration } =
@@ -74,19 +86,19 @@ export async function up(
         });
 
         const steps = materializeStepsFromSql(migrations, "up", sqlByFile);
-        log(messages.pending(steps.length));
+        log.info(messages.pending(steps.length));
 
         if (steps.length === 0) {
           return;
         }
 
-        await executeUpPlan({ client, dryRun, log, steps, table });
+        await executeUpPlan({ client, log, dryRun, steps, table });
       },
     });
 
-    log(messages.completedUp());
+    log.info(messages.completedUp());
   } catch (error) {
-    log(messages.abortedUp());
+    log.error(messages.abortedUp());
     throw error;
   }
 }
@@ -95,11 +107,14 @@ export async function down(
   clientConfig: ClientConfig,
   args: MigrationOptions = {},
 ): Promise<void> {
-  const { directory, dryRun, log, table, target } = normalizeOptions(args);
+  const { log, directory, dryRun, table, target } = normalizeOptions(args);
 
-  log(messages.startedDown(dryRun));
+  log.debug(
+    `run=down directory=${JSON.stringify(directory)} table=${JSON.stringify(table)} dryRun=${String(dryRun)} target=${JSON.stringify(target ?? null)}`,
+  );
+  log.info(messages.startedDown(dryRun));
   if (target) {
-    log(messages.target(target));
+    log.info(messages.target(target));
   }
 
   try {
@@ -110,8 +125,8 @@ export async function down(
 
     await withMigrationSession({
       clientConfig,
-      dryRun,
       log,
+      dryRun,
       table,
       run: async ({ appliedRows, client }): Promise<void> => {
         const { targetMigration } = validateDownPreconditions({
@@ -127,20 +142,20 @@ export async function down(
         });
 
         const steps = materializeStepsFromSql(migrations, "down", sqlByFile);
-        log(messages.pending(steps.length));
+        log.info(messages.pending(steps.length));
 
         if (steps.length === 0) {
-          log(messages.nothingToRollback());
+          log.info(messages.nothingToRollback());
           return;
         }
 
-        await executeDownPlan({ client, dryRun, log, steps, table });
+        await executeDownPlan({ client, log, dryRun, steps, table });
       },
     });
 
-    log(messages.completedDown());
+    log.info(messages.completedDown());
   } catch (error) {
-    log(messages.abortedDown());
+    log.error(messages.abortedDown());
     throw error;
   }
 }

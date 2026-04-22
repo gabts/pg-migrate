@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import type * as pg from "pg";
+import type { Logger } from "./logger.js";
 import { messages } from "./log-messages.js";
 import {
   ensureMigrationHistory,
@@ -8,6 +9,19 @@ import {
 
 interface EnsurePlan {
   tableExists: boolean;
+}
+
+function createCapturedLog(logs: string[]): Logger {
+  const capture = (message: string): void => {
+    logs.push(message);
+  };
+
+  return {
+    debug: capture,
+    error: capture,
+    info: capture,
+    warn: capture,
+  };
 }
 
 function createEnsureFakeClient(plan: EnsurePlan): {
@@ -44,9 +58,7 @@ describe("migration-history", (): void => {
 
       await ensureMigrationHistory({
         client,
-        log: (message: string): void => {
-          logs.push(message);
-        },
+        log: createCapturedLog(logs),
         qualifiedTableName: '"migration_history"',
       });
 
@@ -73,9 +85,7 @@ describe("migration-history", (): void => {
 
       await ensureMigrationHistory({
         client,
-        log: (message: string): void => {
-          logs.push(message);
-        },
+        log: createCapturedLog(logs),
         qualifiedTableName: '"migration_history"',
       });
 

@@ -1,13 +1,14 @@
+import type { Logger } from "./logger.js";
 import type * as pg from "pg";
 import { messages } from "./log-messages.js";
 import { getMigrationVersion } from "./migration-naming.js";
 import { parseTableName, qualifyTableName } from "./table-name.js";
 import { runInTransaction } from "./transaction.js";
-import type { LogFn, MigrationStep } from "./types.js";
+import type { MigrationStep } from "./types.js";
 
 interface ExecutePlanArgs {
   client: pg.Client;
-  log: LogFn;
+  log: Logger;
   qualifiedTableName: string;
   steps: MigrationStep[];
 }
@@ -17,8 +18,8 @@ async function executeUpPlanNormal(args: ExecutePlanArgs): Promise<void> {
 
   for (const { file, sql } of steps) {
     const version = getMigrationVersion(file);
-    log("");
-    log(messages.applying(file));
+    log.info("");
+    log.info(messages.applying(file));
     const started = Date.now();
 
     try {
@@ -30,11 +31,11 @@ async function executeUpPlanNormal(args: ExecutePlanArgs): Promise<void> {
         );
       });
 
-      log(messages.applied(file, Date.now() - started));
+      log.info(messages.applied(file, Date.now() - started));
     } catch (error) {
-      log(messages.failed(file, Date.now() - started));
-      log(messages.errorDetails(error));
-      log(messages.failureRolledBack());
+      log.error(messages.failed(file, Date.now() - started));
+      log.error(messages.errorDetails(error));
+      log.error(messages.failureRolledBack());
       throw error;
     }
   }
@@ -45,8 +46,8 @@ async function executeUpPlanDryRun(args: ExecutePlanArgs): Promise<void> {
 
   for (const { file, sql } of steps) {
     const version = getMigrationVersion(file);
-    log("");
-    log(messages.applying(file));
+    log.info("");
+    log.info(messages.applying(file));
     const started = Date.now();
 
     try {
@@ -56,11 +57,11 @@ async function executeUpPlanDryRun(args: ExecutePlanArgs): Promise<void> {
         [file, version],
       );
 
-      log(messages.applied(file, Date.now() - started));
+      log.info(messages.applied(file, Date.now() - started));
     } catch (error) {
-      log(messages.failed(file, Date.now() - started));
-      log(messages.errorDetails(error));
-      log(messages.failureRolledBack());
+      log.error(messages.failed(file, Date.now() - started));
+      log.error(messages.errorDetails(error));
+      log.error(messages.failureRolledBack());
       throw error;
     }
   }
@@ -71,8 +72,8 @@ async function executeDownPlanNormal(args: ExecutePlanArgs): Promise<void> {
 
   for (const { file, sql } of steps) {
     const hasSql = sql !== "";
-    log("");
-    log(messages.reverting(file, hasSql));
+    log.info("");
+    log.info(messages.reverting(file, hasSql));
     const started = Date.now();
 
     try {
@@ -91,12 +92,12 @@ async function executeDownPlanNormal(args: ExecutePlanArgs): Promise<void> {
         );
       }
 
-      log(messages.reverted(file, Date.now() - started));
+      log.info(messages.reverted(file, Date.now() - started));
     } catch (error) {
-      log(messages.failed(file, Date.now() - started));
-      log(messages.errorDetails(error));
+      log.error(messages.failed(file, Date.now() - started));
+      log.error(messages.errorDetails(error));
       if (hasSql) {
-        log(messages.failureRolledBack());
+        log.error(messages.failureRolledBack());
       }
       throw error;
     }
@@ -108,8 +109,8 @@ async function executeDownPlanDryRun(args: ExecutePlanArgs): Promise<void> {
 
   for (const { file, sql } of steps) {
     const hasSql = sql !== "";
-    log("");
-    log(messages.reverting(file, hasSql));
+    log.info("");
+    log.info(messages.reverting(file, hasSql));
     const started = Date.now();
 
     try {
@@ -121,11 +122,11 @@ async function executeDownPlanDryRun(args: ExecutePlanArgs): Promise<void> {
         [file],
       );
 
-      log(messages.reverted(file, Date.now() - started));
+      log.info(messages.reverted(file, Date.now() - started));
     } catch (error) {
-      log(messages.failed(file, Date.now() - started));
-      log(messages.errorDetails(error));
-      log(messages.failureRolledBack());
+      log.error(messages.failed(file, Date.now() - started));
+      log.error(messages.errorDetails(error));
+      log.error(messages.failureRolledBack());
       throw error;
     }
   }
@@ -133,16 +134,21 @@ async function executeDownPlanDryRun(args: ExecutePlanArgs): Promise<void> {
 
 export async function executeUpPlan(args: {
   client: pg.Client;
+  log: Logger;
   dryRun?: boolean;
-  log: LogFn;
   steps: MigrationStep[];
   table: string;
 }): Promise<void> {
-  const { client, dryRun = false, log, steps, table } = args;
+  const { client, log, dryRun = false, steps, table } = args;
   const qualifiedTableName = qualifyTableName(parseTableName(table));
 
   if (dryRun) {
-    await executeUpPlanDryRun({ client, log, qualifiedTableName, steps });
+    await executeUpPlanDryRun({
+      client,
+      log,
+      qualifiedTableName,
+      steps,
+    });
     return;
   }
 
@@ -151,18 +157,28 @@ export async function executeUpPlan(args: {
 
 export async function executeDownPlan(args: {
   client: pg.Client;
+  log: Logger;
   dryRun?: boolean;
-  log: LogFn;
   steps: MigrationStep[];
   table: string;
 }): Promise<void> {
-  const { client, dryRun = false, log, steps, table } = args;
+  const { client, log, dryRun = false, steps, table } = args;
   const qualifiedTableName = qualifyTableName(parseTableName(table));
 
   if (dryRun) {
-    await executeDownPlanDryRun({ client, log, qualifiedTableName, steps });
+    await executeDownPlanDryRun({
+      client,
+      log,
+      qualifiedTableName,
+      steps,
+    });
     return;
   }
 
-  await executeDownPlanNormal({ client, log, qualifiedTableName, steps });
+  await executeDownPlanNormal({
+    client,
+    log,
+    qualifiedTableName,
+    steps,
+  });
 }

@@ -28,4 +28,3 @@ export interface AppliedRow {
 }
 
 export type ClientConfig = string | pg.ClientConfig;
-export type LogFn = (...args: any[]) => void;

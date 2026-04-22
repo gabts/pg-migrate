@@ -1,11 +1,12 @@
+import type { Logger } from "./logger.js";
 import type * as pg from "pg";
 import { messages } from "./log-messages.js";
-import type { AppliedRow, LogFn } from "./types.js";
+import type { AppliedRow } from "./types.js";
 import { validateAppliedHistory } from "./validation.js";
 
 export async function ensureMigrationHistory(args: {
   client: pg.Client;
-  log: LogFn;
+  log: Logger;
   qualifiedTableName: string;
 }): Promise<void> {
   const { client, log, qualifiedTableName } = args;
@@ -16,7 +17,7 @@ export async function ensureMigrationHistory(args: {
   );
 
   if (!migrationTableQueryResult.rows[0].exists) {
-    log(messages.creatingTable());
+    log.info(messages.creatingTable());
     await client.query(`
       CREATE TABLE ${qualifiedTableName}
       (

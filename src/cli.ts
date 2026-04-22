@@ -1,5 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
+import { createIo, type Io } from "./io.js";
+import type { ColorMode } from "./logger.js";
 import { down as runDown, up as runUp } from "./main.js";
 import { assertValidMigrationName } from "./migration-naming.js";
 
@@ -12,6 +14,12 @@ Commands:
   down              Roll back applied migrations
   create            Create a new migration file
 
+Global options:
+  --json                    Emit structured command results to stdout
+  --quiet                   Suppress non-error logs
+  --verbose, -v             Show debug logs
+  --no-color                Disable ANSI color in logs
+
 Run "migratorosaurus <command> --help" for command-specific usage.
 `;
 
@@ -20,6 +28,10 @@ const createHelpText = `Usage: migratorosaurus create --name <name> [options]
 Options:
   -n, --name <name>         Migration name slug
   -d, --directory <dir>     Output directory, defaults to MIGRATION_DIRECTORY or migrations
+  --json                    Emit structured command result
+  --quiet                   Suppress non-error logs
+  --verbose, -v             Show debug logs
+  --no-color                Disable ANSI color in logs
   -h, --help                Show this help text
 
 Notes:
@@ -41,6 +53,10 @@ Options:
   -t, --target <filename>   Apply pending migrations up to and including target
   --table <table-name>      Migration history table, defaults to migration_history
   --dry-run                 Run planned SQL and history writes, then roll back
+  --json                    Emit structured command result
+  --quiet                   Suppress non-error logs
+  --verbose, -v             Show debug logs
+  --no-color                Disable ANSI color in logs
   -h, --help                Show this help text
 
 Behavior:
@@ -62,6 +78,10 @@ Options:
   -t, --target <filename>   Roll back newer migrations; target remains applied
   --table <table-name>      Migration history table, defaults to migration_history
   --dry-run                 Run planned SQL and history writes, then roll back
+  --json                    Emit structured command result
+  --quiet                   Suppress non-error logs
+  --verbose, -v             Show debug logs
+  --no-color                Disable ANSI color in logs
   -h, --help                Show this help text
 
 Behavior:
@@ -81,6 +101,13 @@ interface CreateOptions {
   name?: string;
 }
 
+interface GlobalOptions {
+  color: ColorMode;
+  json: boolean;
+  quiet: boolean;
+  verbose: boolean;
+}
+
 interface MigrationRunOptions {
   clientConfig: string;
   directory: string;
@@ -89,15 +116,57 @@ interface MigrationRunOptions {
   target?: string;
 }
 
-function showHelp(text: string): never {
-  process.stdout.write(text);
-  process.exit(0);
+function showHelp(io: Io, text: string): number {
+  io.result(text);
+  return 0;
+}
+
+function parseGlobalOptions(args: string[]): {
+  argsWithoutGlobalFlags: string[];
+  global: GlobalOptions;
+} {
+  const global: GlobalOptions = {
+    color: "auto",
+    json: false,
+    quiet: false,
+    verbose: false,
+  };
+  const argsWithoutGlobalFlags: string[] = [
+    args[0] ?? "node",
+    args[1] ?? "migratorosaurus",
+  ];
+
+  for (const arg of args.slice(2)) {
+    switch (arg) {
+      case "--json":
+        global.json = true;
+        break;
+      case "--quiet":
+        global.quiet = true;
+        break;
+      case "--verbose":
+      case "-v":
+        global.verbose = true;
+        break;
+      case "--no-color":
+        global.color = false;
+        break;
+      default:
+        argsWithoutGlobalFlags.push(arg);
+        break;
+    }
+  }
+
+  return {
+    argsWithoutGlobalFlags,
+    global,
+  };
 }
 
 function getFlagValue(
   label: string,
   flags: string,
-  args: string[],
+  args: readonly string[],
   index: number,
 ): string {
   const value = args[index + 1];
@@ -107,23 +176,25 @@ function getFlagValue(
   return value;
 }
 
+function hasHelpFlag(args: readonly string[]): boolean {
+  return args.includes("-h") || args.includes("--help");
+}
+
 function getDefaultMigrationDirectory(): string {
   return process.env[migrationDirectoryEnvVar] || "migrations";
 }
 
-function parseCreateArgs(args: string[]): CreateOptions {
+function parseCreateArgs(args: readonly string[]): CreateOptions {
   const opts: CreateOptions = {
     directory: getDefaultMigrationDirectory(),
   };
 
-  if (args.slice(3).includes("-h") || args.slice(3).includes("--help")) {
-    showHelp(createHelpText);
-  }
-
-  let i = 3;
+  let i = 0;
 
   while (i < args.length) {
-    switch (args[i]) {
+    const arg = args[i];
+
+    switch (arg) {
       case "-d":
       case "--directory":
         opts.directory = getFlagValue("Directory", "--directory, -d", args, i);
@@ -138,7 +209,7 @@ function parseCreateArgs(args: string[]): CreateOptions {
         i += 2;
         break;
       default:
-        throw new Error(`Unknown argument: ${args[i]}`);
+        throw new Error(`Unknown argument: ${arg}`);
     }
   }
 
@@ -146,7 +217,7 @@ function parseCreateArgs(args: string[]): CreateOptions {
 }
 
 function parseMigrationRunArgs(
-  args: string[],
+  args: readonly string[],
   command: "up" | "down",
 ): MigrationRunOptions {
   const opts: Omit<MigrationRunOptions, "clientConfig"> = {
@@ -155,13 +226,9 @@ function parseMigrationRunArgs(
     table: "migration_history",
   };
 
-  if (args.slice(3).includes("-h") || args.slice(3).includes("--help")) {
-    showHelp(command === "up" ? upHelpText : downHelpText);
-  }
-
   let clientConfig = process.env.DATABASE_URL;
   let explicitClientConfig = false;
-  let i = 3;
+  let i = 0;
 
   while (i < args.length) {
     const arg = args[i];
@@ -236,9 +303,7 @@ function formatTimestamp(date = new Date()): string {
   return `${year}${month}${day}${hour}${minute}${second}`;
 }
 
-function createMigration(args: string[]): void {
-  const opts = parseCreateArgs(args);
-
+function createMigration(opts: CreateOptions): string {
   if (!opts.name) {
     throw new Error("Name flag (--name, -n) is required");
   }
@@ -268,30 +333,116 @@ function createMigration(args: string[]): void {
     }
     throw error;
   }
-  process.stdout.write(`${filePath}\n`);
+
+  return filePath;
 }
 
-export async function cli(args = process.argv): Promise<void> {
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+async function executeCommand(
+  args: readonly string[],
+  io: Io,
+  color: ColorMode,
+): Promise<number> {
   const command = args[2];
+  const commandArgs = args.slice(3);
 
   switch (command) {
     case undefined:
     case "-h":
     case "--help":
-      showHelp(helpText);
-      break;
-    case "create":
-      createMigration(args);
-      break;
+      return showHelp(io, helpText);
+    case "create": {
+      if (hasHelpFlag(commandArgs)) {
+        return showHelp(io, createHelpText);
+      }
+
+      const options = parseCreateArgs(commandArgs);
+      io.debug(
+        `command=create directory=${JSON.stringify(options.directory)} name=${JSON.stringify(options.name ?? "")}`,
+      );
+      const filePath = createMigration(options);
+
+      if (io.json) {
+        io.result({
+          command: "create",
+          file: filePath,
+        });
+      } else {
+        io.result(filePath);
+      }
+      return 0;
+    }
     case "up": {
-      const options = parseMigrationRunArgs(args, "up");
-      return runUp(options.clientConfig, options);
+      if (hasHelpFlag(commandArgs)) {
+        return showHelp(io, upHelpText);
+      }
+
+      const options = parseMigrationRunArgs(commandArgs, "up");
+      await runUp(options.clientConfig, {
+        color,
+        directory: options.directory,
+        dryRun: options.dryRun,
+        quiet: io.quiet,
+        table: options.table,
+        target: options.target,
+        verbose: io.verbose,
+      });
+
+      if (io.json) {
+        io.result({
+          command: "up",
+          dryRun: options.dryRun,
+          ok: true,
+          target: options.target ?? null,
+        });
+      }
+      return 0;
     }
     case "down": {
-      const options = parseMigrationRunArgs(args, "down");
-      return runDown(options.clientConfig, options);
+      if (hasHelpFlag(commandArgs)) {
+        return showHelp(io, downHelpText);
+      }
+
+      const options = parseMigrationRunArgs(commandArgs, "down");
+      await runDown(options.clientConfig, {
+        color,
+        directory: options.directory,
+        dryRun: options.dryRun,
+        quiet: io.quiet,
+        table: options.table,
+        target: options.target,
+        verbose: io.verbose,
+      });
+
+      if (io.json) {
+        io.result({
+          command: "down",
+          dryRun: options.dryRun,
+          ok: true,
+          target: options.target ?? null,
+        });
+      }
+      return 0;
     }
     default:
       throw new Error(`Unknown command: ${command}`);
+  }
+}
+
+export async function cli(args = process.argv): Promise<number> {
+  const { argsWithoutGlobalFlags, global } = parseGlobalOptions(args);
+  const io = createIo(global);
+
+  try {
+    return await executeCommand(argsWithoutGlobalFlags, io, global.color);
+  } catch (error) {
+    io.error(formatErrorMessage(error));
+    return 1;
   }
 }
