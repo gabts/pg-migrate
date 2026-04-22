@@ -18,7 +18,7 @@ DROP TABLE person;
 `;
 
 function withMigrationDirectory(
-  files: Record<string, string>,
+  files: Record<string, string | Buffer>,
   test: (directory: string) => void,
 ): void {
   const directory = fs.mkdtempSync(
@@ -181,6 +181,20 @@ CREATE TABLE person (id integer);
 
     it("returns an empty array for an empty plan", (): void => {
       assert.deepEqual(materializeSteps([], "up"), []);
+    });
+
+    it("throws when a migration file is not valid UTF-8", (): void => {
+      withMigrationDirectory(
+        {
+          "20260416090000_invalid_utf8.sql": Buffer.from([0xc3, 0x28]),
+        },
+        (directory): void => {
+          const disk = loadDiskMigrations(directory);
+          assert.throws((): void => {
+            materializeSteps(disk.all, "up");
+          }, /Migration file is not valid UTF-8: 20260416090000_invalid_utf8\.sql/);
+        },
+      );
     });
 
     it("materializes SQL when down marker appears before up marker", (): void => {
