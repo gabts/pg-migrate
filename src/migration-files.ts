@@ -17,6 +17,15 @@ const migrationMarkers = {
   down: "-- migrate:down",
 };
 
+function readFileUtf8Strict(filePath: string, file: string): string {
+  const bytes = fs.readFileSync(filePath);
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error(`Migration file is not valid UTF-8: ${file}`);
+  }
+}
+
 function hasOnlyCommentsAndWhitespace(sql: string): boolean {
   const commentOrWhitespacePattern =
     /^(?:\s|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)*$/;
@@ -87,7 +96,7 @@ export function readMigrationSqlByFile(
   const sqlByFile = new Map<string, ParsedMigrationSql>();
 
   for (const { file, path: filePath } of migrations) {
-    const sql = fs.readFileSync(filePath, "utf8");
+    const sql = readFileUtf8Strict(filePath, file);
     sqlByFile.set(file, parseMigrationSections(sql, file));
   }
 
