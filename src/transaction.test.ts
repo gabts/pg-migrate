@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import * as pg from "pg";
 import { messages } from "./log-messages.js";
+import type { Logger } from "./logger.js";
 import { withMigrationSession } from "./transaction.js";
 
 if (!process.env.DATABASE_URL) {
@@ -14,6 +15,26 @@ const schemaMigrationHistorySchema = "migratorosaurus_test";
 const qualifiedMigrationHistoryTable = `${schemaMigrationHistorySchema}.migration_history`;
 const createFile = "20260416090000_create.sql";
 const createVersion = "20260416090000";
+
+const noopLog: Logger = {
+  debug: (): void => undefined,
+  error: (): void => undefined,
+  info: (): void => undefined,
+  warn: (): void => undefined,
+};
+
+function createCapturedLog(logs: string[]): Logger {
+  const capture = (message: string): void => {
+    logs.push(message);
+  };
+
+  return {
+    debug: capture,
+    error: capture,
+    info: capture,
+    warn: capture,
+  };
+}
 
 async function queryTableExists(tableName: string): Promise<boolean> {
   const [schema, table] = tableName.includes(".")
@@ -101,9 +122,7 @@ describe("transaction", (): void => {
 
     const result = await withMigrationSession({
       clientConfig: databaseConfig,
-      log: (message: string): void => {
-        logs.push(message);
-      },
+      log: createCapturedLog(logs),
       table: defaultMigrationHistoryTable,
       run: async ({ appliedRows }): Promise<string> => {
         assert.deepEqual(appliedRows, []);
@@ -122,7 +141,7 @@ describe("transaction", (): void => {
 
     await withMigrationSession({
       clientConfig: databaseConfig,
-      log: (): void => undefined,
+      log: noopLog,
       table: qualifiedMigrationHistoryTable,
       run: async ({ client: sessionClient }): Promise<void> => {
         await sessionClient.query(
@@ -142,7 +161,7 @@ describe("transaction", (): void => {
       (): Promise<void> =>
         withMigrationSession({
           clientConfig: databaseConfig,
-          log: (): void => undefined,
+          log: noopLog,
           table: "missing_migratorosaurus_schema.migration_history",
           run: async (): Promise<void> => undefined,
         }),
@@ -165,7 +184,7 @@ describe("transaction", (): void => {
       (): Promise<void> =>
         withMigrationSession({
           clientConfig: databaseConfig,
-          log: (): void => undefined,
+          log: noopLog,
           table: defaultMigrationHistoryTable,
           run: async (): Promise<void> => {
             didRun = true;
@@ -183,9 +202,7 @@ describe("transaction", (): void => {
       (): Promise<void> =>
         withMigrationSession({
           clientConfig: databaseConfig,
-          log: (message: string): void => {
-            logs.push(message);
-          },
+          log: createCapturedLog(logs),
           table: defaultMigrationHistoryTable,
           run: async (): Promise<void> => {
             throw new Error("runner failed");
@@ -221,7 +238,7 @@ describe("transaction", (): void => {
         (): Promise<void> =>
           withMigrationSession({
             clientConfig: databaseConfig,
-            log: (): void => undefined,
+            log: noopLog,
             table: defaultMigrationHistoryTable,
             run: async (): Promise<void> => undefined,
           }),
@@ -262,7 +279,7 @@ describe("transaction", (): void => {
         (): Promise<void> =>
           withMigrationSession({
             clientConfig: databaseConfig,
-            log: (): void => undefined,
+            log: noopLog,
             table: qualifiedAlias,
             run: async (): Promise<void> => undefined,
           }),

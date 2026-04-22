@@ -3,13 +3,104 @@ import * as assert from "assert";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { cli } from "./cli.js";
 
-const cliPath = path.join(__dirname, "..", "bin", "cli.js");
+interface CliRunResult {
+  status: number | null;
+  stderr: string;
+  stdout: string;
+}
 
-function runCli(args: string[]): string {
+function runCliRaw(args: string[]): CliRunResult {
+  const cliPath = path.join(__dirname, "..", "bin", "cli.js");
   const result = spawnSync("node", [cliPath, ...args], {
     encoding: "utf8",
   });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  return {
+    status: result.status,
+    stderr: result.stderr,
+    stdout: result.stdout,
+  };
+}
+
+async function runCliInProcessRaw(args: string[]): Promise<CliRunResult> {
+  type StdoutWriteArgs = Parameters<typeof process.stdout.write>;
+  type StderrWriteArgs = Parameters<typeof process.stderr.write>;
+  const stdoutChunks: string[] = [];
+  const stderrChunks: string[] = [];
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+  const stdoutWriteSpy = (...writeArgs: StdoutWriteArgs): boolean => {
+    const [chunk, encodingOrCallback, callback] = writeArgs;
+    if (typeof chunk === "string") {
+      stdoutChunks.push(chunk);
+    } else {
+      stdoutChunks.push(Buffer.from(chunk).toString("utf8"));
+    }
+    const done =
+      typeof encodingOrCallback === "function" ? encodingOrCallback : callback;
+    if (typeof done === "function") {
+      done();
+    }
+    return true;
+  };
+
+  const stderrWriteSpy = (...writeArgs: StderrWriteArgs): boolean => {
+    const [chunk, encodingOrCallback, callback] = writeArgs;
+    if (typeof chunk === "string") {
+      stderrChunks.push(chunk);
+    } else {
+      stderrChunks.push(Buffer.from(chunk).toString("utf8"));
+    }
+    const done =
+      typeof encodingOrCallback === "function" ? encodingOrCallback : callback;
+    if (typeof done === "function") {
+      done();
+    }
+    return true;
+  };
+
+  // Color decisions still use the real process.stderr.isTTY; content assertions should strip ANSI.
+  Object.defineProperty(process.stdout, "write", {
+    configurable: true,
+    value: stdoutWriteSpy as typeof process.stdout.write,
+    writable: true,
+  });
+  Object.defineProperty(process.stderr, "write", {
+    configurable: true,
+    value: stderrWriteSpy as typeof process.stderr.write,
+    writable: true,
+  });
+
+  try {
+    const status = await cli(["node", "migratorosaurus", ...args]);
+    return {
+      status,
+      stderr: stderrChunks.join(""),
+      stdout: stdoutChunks.join(""),
+    };
+  } finally {
+    Object.defineProperty(process.stdout, "write", {
+      configurable: true,
+      value: originalStdoutWrite,
+      writable: true,
+    });
+    Object.defineProperty(process.stderr, "write", {
+      configurable: true,
+      value: originalStderrWrite,
+      writable: true,
+    });
+  }
+}
+
+async function runCliInProcess(args: string[]): Promise<string> {
+  const result = await runCliInProcessRaw(args);
 
   if (result.status !== 0) {
     throw new Error(result.stderr.trim());
@@ -18,12 +109,12 @@ function runCli(args: string[]): string {
   return result.stdout;
 }
 
-function withoutDatabaseUrl<T>(fn: () => T): T {
+async function withoutDatabaseUrl<T>(fn: () => Promise<T>): Promise<T> {
   const original = process.env.DATABASE_URL;
   delete process.env.DATABASE_URL;
 
   try {
-    return fn();
+    return await fn();
   } finally {
     if (original === undefined) {
       delete process.env.DATABASE_URL;
@@ -33,10 +124,10 @@ function withoutDatabaseUrl<T>(fn: () => T): T {
   }
 }
 
-function withEnvVars<T>(
+async function withEnvVars<T>(
   env: Record<string, string | undefined>,
-  fn: () => T,
-): T {
+  fn: () => Promise<T>,
+): Promise<T> {
   const originals = new Map<string, string | undefined>();
 
   for (const [key, value] of Object.entries(env)) {
@@ -50,7 +141,7 @@ function withEnvVars<T>(
   }
 
   try {
-    return fn();
+    return await fn();
   } finally {
     for (const [key, value] of originals.entries()) {
       if (value === undefined) {
@@ -66,12 +157,16 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function stripAnsi(value: string): string {
+  return value.replace(/\u001B\[[0-9;]*m/g, "");
+}
+
 function assertCreatedMigrationPath(
-  output: string,
+  stdoutText: string,
   directory: string,
   name: string,
 ): string {
-  const createdPath = output.trim();
+  const createdPath = stdoutText.trim();
 
   assert.equal(path.dirname(createdPath), directory);
   assert.match(
@@ -93,8 +188,8 @@ describe("cli", (): void => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("creates a migration file with the expected markers", (): void => {
-    const output = runCli([
+  it("creates a migration file with the expected markers", async (): Promise<void> => {
+    const output = await runCliInProcess([
       "create",
       "--directory",
       tempDir,
@@ -113,42 +208,42 @@ describe("cli", (): void => {
     );
   });
 
-  it("prints help text", (): void => {
-    const output = runCli(["--help"]);
+  it("prints help text", async (): Promise<void> => {
+    const output = await runCliInProcess(["--help"]);
 
     assert.ok(output.length > 0);
   });
 
-  it("prints create help text", (): void => {
-    const output = runCli(["create", "--help"]);
+  it("prints create help text", async (): Promise<void> => {
+    const output = await runCliInProcess(["create", "--help"]);
 
     assert.ok(output.length > 0);
   });
 
-  it("prints create help text even when help appears after another flag", (): void => {
-    const output = runCli(["create", "--name", "--help"]);
+  it("prints create help text even when help appears after another flag", async (): Promise<void> => {
+    const output = await runCliInProcess(["create", "--name", "--help"]);
 
     assert.ok(output.length > 0);
   });
 
-  it("prints up help text", (): void => {
-    const output = runCli(["up", "--help"]);
+  it("prints up help text", async (): Promise<void> => {
+    const output = await runCliInProcess(["up", "--help"]);
 
     assert.ok(output.length > 0);
     assert.match(output, /up to and including target/);
     assert.match(output, /then roll back/);
   });
 
-  it("prints down help text", (): void => {
-    const output = runCli(["down", "--help"]);
+  it("prints down help text", async (): Promise<void> => {
+    const output = await runCliInProcess(["down", "--help"]);
 
     assert.ok(output.length > 0);
     assert.match(output, /rolls back exactly one migration/);
     assert.match(output, /target migration is excluded from rollback/);
   });
 
-  it("accepts slug migration names", (): void => {
-    const output = runCli([
+  it("accepts slug migration names", async (): Promise<void> => {
+    const output = await runCliInProcess([
       "create",
       "--directory",
       tempDir,
@@ -164,52 +259,78 @@ describe("cli", (): void => {
     assert.ok(fs.existsSync(createdPath));
   });
 
-  it("rejects invalid migration slugs", (): void => {
-    assert.throws((): void => {
-      runCli(["create", "--directory", tempDir, "--name", "Create_Person"]);
-    }, /Invalid migration name: Create_Person/);
-    assert.throws((): void => {
-      runCli(["create", "--directory", tempDir, "--name", "-create_person"]);
-    }, /Invalid migration name: -create_person/);
-    assert.throws((): void => {
-      runCli(["create", "--directory", tempDir, "--name", "create person"]);
-    }, /Invalid migration name: create person/);
+  it("rejects invalid migration slugs", async (): Promise<void> => {
+    await assert.rejects(
+      (): Promise<string> =>
+        runCliInProcess([
+          "create",
+          "--directory",
+          tempDir,
+          "--name",
+          "Create_Person",
+        ]),
+      /Invalid migration name: Create_Person/,
+    );
+    await assert.rejects(
+      (): Promise<string> =>
+        runCliInProcess([
+          "create",
+          "--directory",
+          tempDir,
+          "--name",
+          "-create_person",
+        ]),
+      /Invalid migration name: -create_person/,
+    );
+    await assert.rejects(
+      (): Promise<string> =>
+        runCliInProcess([
+          "create",
+          "--directory",
+          tempDir,
+          "--name",
+          "create person",
+        ]),
+      /Invalid migration name: create person/,
+    );
   });
 
-  it("rejects missing migration directories", (): void => {
+  it("rejects missing migration directories", async (): Promise<void> => {
     const missingDir = path.join(tempDir, "missing");
 
-    assert.throws(
-      (): void => {
-        runCli([
+    await assert.rejects(
+      (): Promise<string> =>
+        runCliInProcess([
           "create",
           "--directory",
           missingDir,
           "--name",
           "create_person",
-        ]);
-      },
+        ]),
       new RegExp(`Migration directory does not exist: ${missingDir}`),
     );
   });
 
-  it("rejects missing name flag values", (): void => {
-    assert.throws((): void => {
-      runCli(["create", "--directory", tempDir, "--name"]);
-    }, /Name flag \(\-\-name, -n\) requires a value/);
+  it("rejects missing name flag values", async (): Promise<void> => {
+    await assert.rejects(
+      (): Promise<string> =>
+        runCliInProcess(["create", "--directory", tempDir, "--name"]),
+      /Name flag \(\-\-name, -n\) requires a value/,
+    );
   });
 
-  it("rejects missing directory flag values", (): void => {
-    assert.throws((): void => {
-      runCli(["create", "--directory"]);
-    }, /Directory flag \(\-\-directory, -d\) requires a value/);
+  it("rejects missing directory flag values", async (): Promise<void> => {
+    await assert.rejects(
+      (): Promise<string> => runCliInProcess(["create", "--directory"]),
+      /Directory flag \(\-\-directory, -d\) requires a value/,
+    );
   });
 
-  it("creates a timestamped migration without inspecting existing SQL names", (): void => {
+  it("creates a timestamped migration without inspecting existing SQL names", async (): Promise<void> => {
     fs.writeFileSync(path.join(tempDir, "000_initial.sql"), "existing\n");
     fs.writeFileSync(path.join(tempDir, "bad name.sql"), "existing\n");
 
-    const output = runCli([
+    const output = await runCliInProcess([
       "create",
       "--directory",
       tempDir,
@@ -225,9 +346,11 @@ describe("cli", (): void => {
     assert.ok(fs.existsSync(createdPath));
   });
 
-  it("uses MIGRATION_DIRECTORY when create --directory is omitted", (): void => {
-    const output = withEnvVars({ MIGRATION_DIRECTORY: tempDir }, (): string =>
-      runCli(["create", "--name", "create_person"]),
+  it("uses MIGRATION_DIRECTORY when create --directory is omitted", async (): Promise<void> => {
+    const output = await withEnvVars(
+      { MIGRATION_DIRECTORY: tempDir },
+      (): Promise<string> =>
+        runCliInProcess(["create", "--name", "create_person"]),
     );
     const createdPath = assertCreatedMigrationPath(
       output,
@@ -238,18 +361,20 @@ describe("cli", (): void => {
     assert.ok(fs.existsSync(createdPath));
   });
 
-  it("prefers create --directory over MIGRATION_DIRECTORY", (): void => {
+  it("prefers create --directory over MIGRATION_DIRECTORY", async (): Promise<void> => {
     const explicitDirectory = path.join(tempDir, "explicit");
     fs.mkdirSync(explicitDirectory);
 
-    const output = withEnvVars({ MIGRATION_DIRECTORY: tempDir }, (): string =>
-      runCli([
-        "create",
-        "--directory",
-        explicitDirectory,
-        "--name",
-        "create_person",
-      ]),
+    const output = await withEnvVars(
+      { MIGRATION_DIRECTORY: tempDir },
+      (): Promise<string> =>
+        runCliInProcess([
+          "create",
+          "--directory",
+          explicitDirectory,
+          "--name",
+          "create_person",
+        ]),
     );
     const createdPath = assertCreatedMigrationPath(
       output,
@@ -260,63 +385,86 @@ describe("cli", (): void => {
     assert.ok(fs.existsSync(createdPath));
   });
 
-  it("rejects path separators in migration names", (): void => {
-    assert.throws((): void => {
-      runCli(["create", "--directory", tempDir, "--name", "../create_person"]);
-    }, /Invalid migration name: \.\.\/create_person/);
+  it("rejects path separators in migration names", async (): Promise<void> => {
+    await assert.rejects(
+      (): Promise<string> =>
+        runCliInProcess([
+          "create",
+          "--directory",
+          tempDir,
+          "--name",
+          "../create_person",
+        ]),
+      /Invalid migration name: \.\.\/create_person/,
+    );
   });
 
-  it("rejects removed zero-padding options", (): void => {
-    assert.throws((): void => {
-      runCli([
-        "create",
-        "--directory",
-        tempDir,
-        "--pad-width",
-        "3abc",
-        "--name",
-        "create_person",
-      ]);
-    }, /Unknown argument: --pad-width/);
+  it("rejects removed zero-padding options", async (): Promise<void> => {
+    await assert.rejects(
+      (): Promise<string> =>
+        runCliInProcess([
+          "create",
+          "--directory",
+          tempDir,
+          "--pad-width",
+          "3abc",
+          "--name",
+          "create_person",
+        ]),
+      /Unknown argument: --pad-width/,
+    );
   });
 
-  it("rejects unknown commands", (): void => {
-    assert.throws((): void => {
-      runCli(["unknown"]);
-    }, /Unknown command: unknown/);
+  it("rejects unknown commands", async (): Promise<void> => {
+    await assert.rejects(
+      (): Promise<string> => runCliInProcess(["unknown"]),
+      /Unknown command: unknown/,
+    );
   });
 
-  it("rejects up when database URL is missing", (): void => {
-    assert.throws((): void => {
-      withoutDatabaseUrl((): string => runCli(["up"]));
-    }, /Database URL is required for up/);
+  it("rejects up when database URL is missing", async (): Promise<void> => {
+    await assert.rejects(
+      (): Promise<string> =>
+        withoutDatabaseUrl((): Promise<string> => runCliInProcess(["up"])),
+      /Database URL is required for up/,
+    );
   });
 
-  it("rejects down when database URL is missing", (): void => {
-    assert.throws((): void => {
-      withoutDatabaseUrl((): string => runCli(["down"]));
-    }, /Database URL is required for down/);
+  it("rejects down when database URL is missing", async (): Promise<void> => {
+    await assert.rejects(
+      (): Promise<string> =>
+        withoutDatabaseUrl((): Promise<string> => runCliInProcess(["down"])),
+      /Database URL is required for down/,
+    );
   });
 
-  it("rejects unknown up flags", (): void => {
-    assert.throws((): void => {
-      runCli(["up", "postgres://localhost:5432/example", "--unknown"]);
-    }, /Unknown argument: --unknown/);
+  it("rejects unknown up flags", async (): Promise<void> => {
+    await assert.rejects(
+      (): Promise<string> =>
+        runCliInProcess([
+          "up",
+          "postgres://localhost:5432/example",
+          "--unknown",
+        ]),
+      /Unknown argument: --unknown/,
+    );
   });
 
-  it("rejects multiple explicit database URLs", (): void => {
-    assert.throws((): void => {
-      runCli([
-        "up",
-        "postgres://localhost:5432/one",
-        "--url",
-        "postgres://localhost:5432/two",
-      ]);
-    }, /Database URL provided multiple times/);
+  it("rejects multiple explicit database URLs", async (): Promise<void> => {
+    await assert.rejects(
+      (): Promise<string> =>
+        runCliInProcess([
+          "up",
+          "postgres://localhost:5432/one",
+          "--url",
+          "postgres://localhost:5432/two",
+        ]),
+      /Database URL provided multiple times/,
+    );
   });
 
-  it("strips .sql extension from migration name", (): void => {
-    const output = runCli([
+  it("strips .sql extension from migration name", async (): Promise<void> => {
+    const output = await runCliInProcess([
       "create",
       "--directory",
       tempDir,
@@ -332,79 +480,205 @@ describe("cli", (): void => {
     assert.ok(fs.existsSync(createdPath));
   });
 
-  it("uses MIGRATION_DIRECTORY for up when --directory is omitted", (): void => {
+  it("uses MIGRATION_DIRECTORY for up when --directory is omitted", async (): Promise<void> => {
     const missingDirectory = path.join(tempDir, "missing-from-env");
 
-    assert.throws(
-      (): void => {
-        withEnvVars({ MIGRATION_DIRECTORY: missingDirectory }, (): string =>
-          runCli(["up", "postgres://localhost:5432/example"]),
-        );
-      },
+    await assert.rejects(
+      (): Promise<string> =>
+        withEnvVars(
+          { MIGRATION_DIRECTORY: missingDirectory },
+          (): Promise<string> =>
+            runCliInProcess(["up", "postgres://localhost:5432/example"]),
+        ),
       new RegExp(`Migration directory does not exist: ${missingDirectory}`),
     );
   });
 
-  it("prefers up --directory over MIGRATION_DIRECTORY", (): void => {
+  it("prefers up --directory over MIGRATION_DIRECTORY", async (): Promise<void> => {
     const explicitDirectory = path.join(tempDir, "empty-dir");
     const missingDirectory = path.join(tempDir, "missing-from-env");
     fs.mkdirSync(explicitDirectory);
 
-    assert.throws(
-      (): void => {
-        withEnvVars({ MIGRATION_DIRECTORY: missingDirectory }, (): string =>
-          runCli([
-            "up",
-            "postgres://localhost:5432/example",
-            "--directory",
-            explicitDirectory,
-          ]),
-        );
-      },
+    await assert.rejects(
+      (): Promise<string> =>
+        withEnvVars(
+          { MIGRATION_DIRECTORY: missingDirectory },
+          (): Promise<string> =>
+            runCliInProcess([
+              "up",
+              "postgres://localhost:5432/example",
+              "--directory",
+              explicitDirectory,
+            ]),
+        ),
       new RegExp(
         `No migration files found in directory: ${escapeRegExp(explicitDirectory)}`,
       ),
     );
   });
 
-  it("uses MIGRATION_DIRECTORY for down when --directory is omitted", (): void => {
+  it("uses MIGRATION_DIRECTORY for down when --directory is omitted", async (): Promise<void> => {
     const missingDirectory = path.join(tempDir, "missing-from-env");
 
-    assert.throws(
-      (): void => {
-        withEnvVars({ MIGRATION_DIRECTORY: missingDirectory }, (): string =>
-          runCli(["down", "postgres://localhost:5432/example"]),
-        );
-      },
+    await assert.rejects(
+      (): Promise<string> =>
+        withEnvVars(
+          { MIGRATION_DIRECTORY: missingDirectory },
+          (): Promise<string> =>
+            runCliInProcess(["down", "postgres://localhost:5432/example"]),
+        ),
       new RegExp(`Migration directory does not exist: ${missingDirectory}`),
     );
   });
 
-  it("prefers down --directory over MIGRATION_DIRECTORY", (): void => {
+  it("prefers down --directory over MIGRATION_DIRECTORY", async (): Promise<void> => {
     const explicitDirectory = path.join(tempDir, "empty-dir");
     const missingDirectory = path.join(tempDir, "missing-from-env");
     fs.mkdirSync(explicitDirectory);
 
-    assert.throws(
-      (): void => {
-        withEnvVars({ MIGRATION_DIRECTORY: missingDirectory }, (): string =>
-          runCli([
-            "down",
-            "postgres://localhost:5432/example",
-            "--directory",
-            explicitDirectory,
-          ]),
-        );
-      },
+    await assert.rejects(
+      (): Promise<string> =>
+        withEnvVars(
+          { MIGRATION_DIRECTORY: missingDirectory },
+          (): Promise<string> =>
+            runCliInProcess([
+              "down",
+              "postgres://localhost:5432/example",
+              "--directory",
+              explicitDirectory,
+            ]),
+        ),
       new RegExp(
         `No migration files found in directory: ${escapeRegExp(explicitDirectory)}`,
       ),
     );
   });
 
-  it("create help documents generated filename format", (): void => {
-    const output = runCli(["create", "--help"]);
+  it("create help documents generated filename format", async (): Promise<void> => {
+    const output = await runCliInProcess(["create", "--help"]);
 
     assert.match(output, /Creates <YYYYMMDDHHMMSS>_<name>\.sql/);
+  });
+
+  it("separates failed up logs to stderr while keeping stdout empty", (): void => {
+    const missingDirectory = path.join(tempDir, "missing");
+    const result = runCliRaw([
+      "up",
+      "postgres://localhost:5432/example",
+      "--directory",
+      missingDirectory,
+    ]);
+
+    assert.notEqual(result.status, 0);
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, "");
+    assert.match(result.stderr, /started migration run/);
+    assert.match(result.stderr, /migration run aborted/);
+    assert.match(
+      result.stderr,
+      new RegExp(`Migration directory does not exist: ${missingDirectory}`),
+    );
+  });
+
+  it("emits parseable JSON for create with no incidental stdout text", async (): Promise<void> => {
+    const result = await runCliInProcessRaw([
+      "create",
+      "--directory",
+      tempDir,
+      "--name",
+      "create_person",
+      "--json",
+    ]);
+
+    assert.equal(result.status, 0);
+    const parsed = JSON.parse(result.stdout);
+    assert.deepEqual(Object.keys(parsed).sort(), ["command", "file"]);
+    assert.equal(parsed.command, "create");
+    assert.equal(path.dirname(parsed.file), tempDir);
+    assert.equal(result.stderr, "");
+  });
+
+  it("keeps json stdout clean while sending verbose logs to stderr", async (): Promise<void> => {
+    const result = await runCliInProcessRaw([
+      "--json",
+      "--verbose",
+      "create",
+      "--directory",
+      tempDir,
+      "--name",
+      "create_person",
+    ]);
+
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout.trimEnd().split("\n").length, 1);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.command, "create");
+    assert.match(stripAnsi(result.stderr), /Debug: command=create/);
+  });
+
+  it("suppresses non-error logs in quiet mode", async (): Promise<void> => {
+    const missingDirectory = path.join(tempDir, "missing");
+    const result = await runCliInProcessRaw([
+      "--quiet",
+      "up",
+      "postgres://localhost:5432/example",
+      "--directory",
+      missingDirectory,
+    ]);
+
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, "");
+    assert.doesNotMatch(result.stderr, /started migration run/);
+    assert.match(result.stderr, /migration run aborted/);
+    assert.match(
+      result.stderr,
+      new RegExp(`Migration directory does not exist: ${missingDirectory}`),
+    );
+  });
+
+  it("emits debug logs when verbose is enabled", async (): Promise<void> => {
+    const result = await runCliInProcessRaw([
+      "--verbose",
+      "create",
+      "--directory",
+      tempDir,
+      "--name",
+      "create_person",
+    ]);
+
+    assert.equal(result.status, 0);
+    assert.match(stripAnsi(result.stderr), /Debug: command=create/);
+    assert.ok(result.stdout.trim().length > 0);
+  });
+
+  it("uses main run debug logs for up without duplicate command logs", async (): Promise<void> => {
+    const missingDirectory = path.join(tempDir, "missing");
+    const result = await runCliInProcessRaw([
+      "--verbose",
+      "up",
+      "postgres://localhost:5432/example",
+      "--directory",
+      missingDirectory,
+    ]);
+
+    assert.equal(result.status, 1);
+    assert.match(stripAnsi(result.stderr), /Debug: run=up /);
+    assert.doesNotMatch(stripAnsi(result.stderr), /Debug: command=up/);
+  });
+
+  it("returns status code 0 for help and non-zero for failures", (): void => {
+    const helpResult = runCliRaw(["--help"]);
+    const errorResult = runCliRaw(["unknown"]);
+
+    assert.equal(helpResult.status, 0);
+    assert.equal(errorResult.status, 1);
+  });
+
+  it("does not output ANSI color sequences in non-tty mode", (): void => {
+    const result = runCliRaw(["unknown"]);
+
+    assert.equal(result.status, 1);
+    assert.ok(result.stderr.length > 0);
+    assert.doesNotMatch(result.stderr, /\u001B\[[0-9;]*m/);
   });
 });

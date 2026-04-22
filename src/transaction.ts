@@ -1,10 +1,11 @@
+import type { Logger } from "./logger.js";
 import * as pg from "pg";
 import {
   ensureMigrationHistory,
   readAppliedRows,
 } from "./migration-history.js";
 import { parseTableName, qualifyTableName } from "./table-name.js";
-import type { AppliedRow, ClientConfig, LogFn } from "./types.js";
+import type { AppliedRow, ClientConfig } from "./types.js";
 
 export async function runInTransaction<T>(
   client: pg.Client,
@@ -30,7 +31,7 @@ export async function runInTransaction<T>(
 
 async function withMigrationSessionNormal<T>(args: {
   client: pg.Client;
-  log: LogFn;
+  log: Logger;
   qualifiedTableName: string;
   run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
 }): Promise<T> {
@@ -52,7 +53,7 @@ async function withMigrationSessionNormal<T>(args: {
 
 async function withMigrationSessionDryRun<T>(args: {
   client: pg.Client;
-  log: LogFn;
+  log: Logger;
   qualifiedTableName: string;
   run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
 }): Promise<T> {
@@ -78,15 +79,15 @@ async function withMigrationSessionDryRun<T>(args: {
 }
 
 // Errors thrown from `run` (or from session setup) propagate unchanged.
-// Callers are responsible for logging aborted-run messages around the call.
+// Callers are responsible for emitting aborted-run logs around the call.
 export async function withMigrationSession<T>(args: {
   clientConfig: ClientConfig;
+  log: Logger;
   dryRun?: boolean;
-  log: LogFn;
   run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
   table: string;
 }): Promise<T> {
-  const { clientConfig, dryRun = false, log, run, table } = args;
+  const { clientConfig, log, dryRun = false, run, table } = args;
   const parsedTableName = parseTableName(table);
   const qualifiedTableName = qualifyTableName(parsedTableName);
   const client = new pg.Client(clientConfig);

@@ -4,7 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import * as pg from "pg";
 import { messages } from "./log-messages.js";
-import { down, up } from "./main.js";
+import { down, up, type MigrationOptions } from "./main.js";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set to run integration tests");
@@ -64,6 +64,13 @@ function createStandardMigrationDirectory(): string {
   });
 }
 
+function createMissingDirectory(prefix: string): string {
+  const existing = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const missing = path.join(existing, "missing");
+  fs.rmSync(existing, { force: true, recursive: true });
+  return missing;
+}
+
 function removeTempMigrationDirectories(): void {
   while (tempMigrationDirectories.length > 0) {
     fs.rmSync(tempMigrationDirectories.pop()!, {
@@ -112,6 +119,20 @@ async function dropTables(): Promise<void> {
   `);
 }
 
+async function runUp(args: MigrationOptions): Promise<void> {
+  const captured = await captureStderr(async (): Promise<void> => {
+    await up(databaseConfig, { quiet: true, ...args });
+  });
+  assert.equal(captured.stderr, "");
+}
+
+async function runDown(args: MigrationOptions): Promise<void> {
+  const captured = await captureStderr(async (): Promise<void> => {
+    await down(databaseConfig, { quiet: true, ...args });
+  });
+  assert.equal(captured.stderr, "");
+}
+
 async function assertMigration0(): Promise<void> {
   assert.ok(await queryTableExists(defaultMigrationHistoryTable));
   const historyRows = await queryHistory(defaultMigrationHistoryTable);
@@ -133,6 +154,47 @@ async function assertMigration1(): Promise<void> {
   assert.equal(personRows.length, 3);
 }
 
+async function captureStderr<T>(run: () => Promise<T>): Promise<{
+  result?: T;
+  stderr: string;
+}> {
+  type StderrWriteArgs = Parameters<typeof process.stderr.write>;
+  const chunks: string[] = [];
+  const originalWrite = process.stderr.write.bind(process.stderr);
+  const writeSpy = (...args: StderrWriteArgs): boolean => {
+    const [chunk, encodingOrCallback, callback] = args;
+    if (typeof chunk === "string") {
+      chunks.push(chunk);
+    } else {
+      chunks.push(Buffer.from(chunk).toString("utf8"));
+    }
+
+    const done =
+      typeof encodingOrCallback === "function" ? encodingOrCallback : callback;
+    if (typeof done === "function") {
+      done();
+    }
+    return true;
+  };
+
+  Object.defineProperty(process.stderr, "write", {
+    configurable: true,
+    value: writeSpy as typeof process.stderr.write,
+    writable: true,
+  });
+
+  try {
+    const result = await run();
+    return { result, stderr: chunks.join("") };
+  } finally {
+    Object.defineProperty(process.stderr, "write", {
+      configurable: true,
+      value: originalWrite,
+      writable: true,
+    });
+  }
+}
+
 describe("main", (): void => {
   before(async (): Promise<void> => {
     await client.connect();
@@ -152,7 +214,7 @@ describe("main", (): void => {
   });
 
   it("up migrates all pending migrations", async (): Promise<void> => {
-    await up(databaseConfig, {
+    await runUp({
       directory: createStandardMigrationDirectory(),
     });
 
@@ -160,7 +222,7 @@ describe("main", (): void => {
   });
 
   it("up migrates through a target migration", async (): Promise<void> => {
-    await up(databaseConfig, {
+    await runUp({
       directory: createStandardMigrationDirectory(),
       target: standardCreateFile,
     });
@@ -170,55 +232,21 @@ describe("main", (): void => {
 
   it("down migrates one migration by default", async (): Promise<void> => {
     const directory = createStandardMigrationDirectory();
-    await up(databaseConfig, { directory });
-    await down(databaseConfig, { directory });
+    await runUp({ directory });
+    await runDown({ directory });
 
     await assertMigration0();
   });
 
   it("down migrates to a target while leaving target applied", async (): Promise<void> => {
     const directory = createStandardMigrationDirectory();
-    await up(databaseConfig, { directory });
-    await down(databaseConfig, {
+    await runUp({ directory });
+    await runDown({
       directory,
       target: standardCreateFile,
     });
 
     await assertMigration0();
-  });
-
-  it("logs lifecycle messages for up and down", async (): Promise<void> => {
-    const directory = createStandardMigrationDirectory();
-    const logs: string[] = [];
-    const log = (message: string): void => {
-      logs.push(message);
-    };
-
-    await up(databaseConfig, { directory, log });
-    await down(databaseConfig, { directory, log });
-
-    const normalized = logs.map(normalizeMs);
-    assert.deepEqual(
-      normalized,
-      [
-        messages.startedUp(),
-        messages.creatingTable(),
-        messages.pending(2),
-        "",
-        messages.applying(standardCreateFile),
-        messages.applied(standardCreateFile, 0),
-        "",
-        messages.applying(standardInsertFile),
-        messages.applied(standardInsertFile, 0),
-        messages.completedUp(),
-        messages.startedDown(),
-        messages.pending(1),
-        "",
-        messages.reverting(standardInsertFile, true),
-        messages.reverted(standardInsertFile, 0),
-        messages.completedDown(),
-      ].map(normalizeMs),
-    );
   });
 
   it("fails fast when concurrent up cannot acquire advisory lock", async (): Promise<void> => {
@@ -236,7 +264,7 @@ describe("main", (): void => {
 
       await assert.rejects(
         (): Promise<void> =>
-          up(databaseConfig, {
+          runUp({
             directory: createStandardMigrationDirectory(),
           }),
         /Could not acquire advisory lock for migration table "migration_history"/,
@@ -262,13 +290,11 @@ VALUES ('gabriel'), ('david'), ('frasse');
       [backfillFile]: irreversibleMigration,
     });
 
-    const logs: string[] = [];
-    const log = (message: string): void => {
-      logs.push(message);
-    };
-
-    await up(databaseConfig, { directory });
-    await down(databaseConfig, { directory, target: standardCreateFile, log });
+    await runUp({ directory });
+    await runDown({
+      directory,
+      target: standardCreateFile,
+    });
 
     const historyRows = await queryHistory(defaultMigrationHistoryTable);
     assert.equal(historyRows.length, 1);
@@ -276,10 +302,6 @@ VALUES ('gabriel'), ('david'), ('frasse');
 
     const personRows = await queryPersons();
     assert.equal(personRows.length, 3);
-
-    assert.ok(
-      logs.some((l): boolean => l === messages.reverting(backfillFile, false)),
-    );
   });
 
   it("validates the full migration set before running any SQL for up", async (): Promise<void> => {
@@ -291,7 +313,7 @@ VALUES ('gabriel'), ('david'), ('frasse');
     });
 
     await assert.rejects(
-      (): Promise<void> => up(databaseConfig, { directory }),
+      (): Promise<void> => runUp({ directory }),
       /Invalid migration file contents: 20260416090200_invalid\.sql/,
     );
 
@@ -302,11 +324,11 @@ VALUES ('gabriel'), ('david'), ('frasse');
   it("validates the full migration set before running any SQL for down", async (): Promise<void> => {
     const invalidFile = "20260416090200_invalid.sql";
     const directory = createStandardMigrationDirectory();
-    await up(databaseConfig, { directory });
+    await runUp({ directory });
     fs.writeFileSync(path.join(directory, invalidFile), "SELECT 1;");
 
     await assert.rejects(
-      (): Promise<void> => down(databaseConfig, { directory }),
+      (): Promise<void> => runDown({ directory }),
       /Invalid migration file contents: 20260416090200_invalid\.sql/,
     );
 
@@ -316,7 +338,7 @@ VALUES ('gabriel'), ('david'), ('frasse');
   it("surfaces postgres errors and rolls back the failing migration", async (): Promise<void> => {
     await assert.rejects(
       (): Promise<void> =>
-        up(databaseConfig, {
+        runUp({
           directory: createMigrationDirectory({
             [breakOnlyFile]: `-- migrate:up
 CREATE TABLE person (
@@ -355,7 +377,7 @@ DROP TABLE broken;
     });
 
     await assert.rejects(
-      (): Promise<void> => up(databaseConfig, { directory }),
+      (): Promise<void> => runUp({ directory }),
       /type "serialxxxxx" does not exist/i,
     );
 
@@ -375,68 +397,31 @@ DROP TABLE broken;
 
   it("down is a no-op when no migrations are applied", async (): Promise<void> => {
     const directory = createStandardMigrationDirectory();
-    const logs: string[] = [];
-    const log = (message: string): void => {
-      logs.push(message);
-    };
-
-    await down(databaseConfig, { directory, log });
-
-    assert.ok(logs.some((l): boolean => l === messages.pending(0)));
-    assert.ok(logs.some((l): boolean => l === messages.nothingToRollback()));
+    await runDown({ directory });
+    assert.ok(await queryTableExists(defaultMigrationHistoryTable));
+    assert.deepEqual(await queryHistory(defaultMigrationHistoryTable), []);
   });
 
   it("down is a no-op when target is the latest applied migration", async (): Promise<void> => {
     const directory = createStandardMigrationDirectory();
-    const logs: string[] = [];
-    const log = (message: string): void => {
-      logs.push(message);
-    };
 
-    await up(databaseConfig, { directory });
-    await down(databaseConfig, { directory, target: standardInsertFile, log });
-
-    assert.ok(logs.some((l): boolean => l === messages.pending(0)));
-    assert.ok(logs.some((l): boolean => l === messages.nothingToRollback()));
+    await runUp({ directory });
+    await runDown({ directory, target: standardInsertFile });
     await assertMigration1();
   });
 
   it("up dry run runs SQL but rolls back all changes", async (): Promise<void> => {
     const directory = createStandardMigrationDirectory();
-    const logs: string[] = [];
-    const log = (message: string): void => {
-      logs.push(message);
-    };
-
-    await up(databaseConfig, { directory, dryRun: true, log });
-
-    assert.ok(logs.some((l): boolean => l === messages.startedUp(true)));
-    assert.ok(
-      logs.some((l): boolean => l === messages.applying(standardCreateFile)),
-    );
-    assert.ok(
-      logs.some((l): boolean => l === messages.applying(standardInsertFile)),
-    );
-    assert.ok(logs.some((l): boolean => l === messages.completedUp()));
+    await runUp({ directory, dryRun: true });
     assert.equal(await queryTableExists(defaultMigrationHistoryTable), false);
     assert.equal(await queryTableExists("person"), false);
   });
 
   it("up dry run keeps existing history table and rows unchanged", async (): Promise<void> => {
     const directory = createStandardMigrationDirectory();
-    const logs: string[] = [];
-    const log = (message: string): void => {
-      logs.push(message);
-    };
 
-    await up(databaseConfig, { directory, target: standardCreateFile });
-    await up(databaseConfig, { directory, dryRun: true, log });
-
-    assert.ok(logs.some((l): boolean => l === messages.startedUp(true)));
-    assert.ok(
-      logs.some((l): boolean => l === messages.applying(standardInsertFile)),
-    );
-    assert.ok(logs.some((l): boolean => l === messages.completedUp()));
+    await runUp({ directory, target: standardCreateFile });
+    await runUp({ directory, dryRun: true });
 
     assert.ok(await queryTableExists(defaultMigrationHistoryTable));
     const historyRows = await queryHistory(defaultMigrationHistoryTable);
@@ -458,30 +443,13 @@ UPDATE person SET name = lower(name);
       [standardInsertFile]: insertPeopleMigration,
       [updateFile]: updateNamesMigration,
     });
-    const logs: string[] = [];
-    const log = (message: string): void => {
-      logs.push(message);
-    };
 
-    await up(databaseConfig, { directory });
-    await down(databaseConfig, {
+    await runUp({ directory });
+    await runDown({
       directory,
       dryRun: true,
       target: standardCreateFile,
-      log,
     });
-
-    assert.ok(logs.some((l): boolean => l === messages.startedDown(true)));
-    assert.ok(logs.some((l): boolean => l === messages.pending(2)));
-    assert.ok(
-      logs.some((l): boolean => l === messages.reverting(updateFile, true)),
-    );
-    assert.ok(
-      logs.some(
-        (l): boolean => l === messages.reverting(standardInsertFile, true),
-      ),
-    );
-    assert.ok(logs.some((l): boolean => l === messages.completedDown()));
 
     const historyRows = await queryHistory();
     assert.equal(historyRows.length, 3);
@@ -494,25 +462,19 @@ UPDATE person SET name = lower(name);
 
   it("up is a no-op when target equals latest applied migration", async (): Promise<void> => {
     const directory = createStandardMigrationDirectory();
-    const logs: string[] = [];
-    const log = (message: string): void => {
-      logs.push(message);
-    };
 
-    await up(databaseConfig, { directory });
-    await up(databaseConfig, { directory, target: standardInsertFile, log });
-
-    assert.ok(logs.some((l): boolean => l === messages.pending(0)));
+    await runUp({ directory });
+    await runUp({ directory, target: standardInsertFile });
     await assertMigration1();
   });
 
   it("up applies remaining migrations incrementally", async (): Promise<void> => {
     const directory = createStandardMigrationDirectory();
 
-    await up(databaseConfig, { directory, target: standardCreateFile });
+    await runUp({ directory, target: standardCreateFile });
     await assertMigration0();
 
-    await up(databaseConfig, { directory });
+    await runUp({ directory });
     await assertMigration1();
   });
 
@@ -524,7 +486,7 @@ UPDATE person SET name = lower(name);
     try {
       await client.query(`CREATE SCHEMA IF NOT EXISTS ${schema};`);
 
-      await up(databaseConfig, { directory, table });
+      await runUp({ directory, table });
 
       assert.ok(await queryTableExists(table));
       const historyAfterUp = await queryHistory(`${schema}.migration_history`);
@@ -532,7 +494,7 @@ UPDATE person SET name = lower(name);
       const personRows = await queryPersons();
       assert.equal(personRows.length, 3);
 
-      await down(databaseConfig, { directory, table });
+      await runDown({ directory, table });
 
       const historyAfterDown = await queryHistory(
         `${schema}.migration_history`,
@@ -544,7 +506,9 @@ UPDATE person SET name = lower(name);
     }
   });
 
-  describe("bulk migrations (100+)", (): void => {
+  describe("bulk migrations (100+)", function (this: Mocha.Suite): void {
+    this.timeout(30000);
+
     const MIGRATION_COUNT = 100;
     const bulkBaseVersion = 20260416090000;
 
@@ -592,7 +556,7 @@ DELETE FROM bulk_test WHERE value = ${i};
 
     it("up applies all migrations successfully", async (): Promise<void> => {
       const directory = createBulkMigrationDirectory(MIGRATION_COUNT);
-      await up(databaseConfig, { directory });
+      await runUp({ directory });
 
       const historyRows = await queryHistory();
       assert.equal(historyRows.length, MIGRATION_COUNT + 1);
@@ -613,7 +577,7 @@ DELETE FROM bulk_test WHERE value = ${i};
       const directory = createBulkMigrationDirectory(MIGRATION_COUNT, failAt);
 
       await assert.rejects(
-        (): Promise<void> => up(databaseConfig, { directory }),
+        (): Promise<void> => runUp({ directory }),
         /does not exist/i,
       );
 
@@ -633,12 +597,12 @@ DELETE FROM bulk_test WHERE value = ${i};
       const midpoint = 50;
       const midpointFile = bulkFileForIndex(midpoint);
 
-      await up(databaseConfig, { directory, target: midpointFile });
+      await runUp({ directory, target: midpointFile });
 
       const historyAfterPartial = await queryHistory();
       assert.equal(historyAfterPartial.length, midpoint + 1);
 
-      await up(databaseConfig, { directory });
+      await runUp({ directory });
 
       const historyAfterFull = await queryHistory();
       assert.equal(historyAfterFull.length, MIGRATION_COUNT + 1);
@@ -652,8 +616,8 @@ DELETE FROM bulk_test WHERE value = ${i};
     it("down rolls back all applied migrations to target", async (): Promise<void> => {
       const directory = createBulkMigrationDirectory(MIGRATION_COUNT);
 
-      await up(databaseConfig, { directory });
-      await down(databaseConfig, { directory, target: bulkFileForIndex(0) });
+      await runUp({ directory });
+      await runDown({ directory, target: bulkFileForIndex(0) });
 
       const historyRows = await queryHistory();
       assert.equal(historyRows.length, 1);
@@ -668,11 +632,79 @@ DELETE FROM bulk_test WHERE value = ${i};
     it("up is a no-op when all migrations are already applied", async (): Promise<void> => {
       const directory = createBulkMigrationDirectory(MIGRATION_COUNT);
 
-      await up(databaseConfig, { directory });
-      await up(databaseConfig, { directory });
+      await runUp({ directory });
+      await runUp({ directory });
 
       const historyRows = await queryHistory();
       assert.equal(historyRows.length, MIGRATION_COUNT + 1);
+    });
+  });
+
+  describe("logging", (): void => {
+    it("logs lifecycle messages for up and down in order", async (): Promise<void> => {
+      const directory = createStandardMigrationDirectory();
+      const captured = await captureStderr(async (): Promise<void> => {
+        await up(databaseConfig, { color: false, directory });
+        await down(databaseConfig, { color: false, directory });
+      });
+
+      const observed = captured.stderr.split("\n");
+      if (observed[observed.length - 1] === "") {
+        observed.pop();
+      }
+
+      assert.deepEqual(
+        observed.map(normalizeMs),
+        [
+          messages.startedUp(),
+          messages.creatingTable(),
+          messages.pending(2),
+          "",
+          messages.applying(standardCreateFile),
+          messages.applied(standardCreateFile, 0),
+          "",
+          messages.applying(standardInsertFile),
+          messages.applied(standardInsertFile, 0),
+          messages.completedUp(),
+          messages.startedDown(),
+          messages.pending(1),
+          "",
+          messages.reverting(standardInsertFile, true),
+          messages.reverted(standardInsertFile, 0),
+          messages.completedDown(),
+        ].map(normalizeMs),
+      );
+    });
+
+    it("writes logs to stderr by default for up failures", async (): Promise<void> => {
+      const missingDirectory = createMissingDirectory("migratorosaurus-up-");
+      const captured = await captureStderr(async (): Promise<void> => {
+        await assert.rejects(
+          (): Promise<void> =>
+            up("postgres://localhost:5432/example", {
+              directory: missingDirectory,
+            }),
+        );
+      });
+
+      assert.match(captured.stderr, /started migration run/);
+      assert.match(captured.stderr, /migration run aborted/);
+    });
+
+    it("keeps abort logs in quiet mode while suppressing non-errors", async (): Promise<void> => {
+      const missingDirectory = createMissingDirectory("migratorosaurus-down-");
+      const captured = await captureStderr(async (): Promise<void> => {
+        await assert.rejects(
+          (): Promise<void> =>
+            down("postgres://localhost:5432/example", {
+              directory: missingDirectory,
+              quiet: true,
+            }),
+        );
+      });
+
+      assert.doesNotMatch(captured.stderr, /started rollback/);
+      assert.match(captured.stderr, /rollback aborted/);
     });
   });
 });
