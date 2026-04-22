@@ -33,6 +33,35 @@ function withoutDatabaseUrl<T>(fn: () => T): T {
   }
 }
 
+function withEnvVars<T>(
+  env: Record<string, string | undefined>,
+  fn: () => T,
+): T {
+  const originals = new Map<string, string | undefined>();
+
+  for (const [key, value] of Object.entries(env)) {
+    originals.set(key, process.env[key]);
+
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+
+  try {
+    return fn();
+  } finally {
+    for (const [key, value] of originals.entries()) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -196,6 +225,41 @@ describe("cli", (): void => {
     assert.ok(fs.existsSync(createdPath));
   });
 
+  it("uses MIGRATION_DIRECTORY when create --directory is omitted", (): void => {
+    const output = withEnvVars({ MIGRATION_DIRECTORY: tempDir }, (): string =>
+      runCli(["create", "--name", "create_person"]),
+    );
+    const createdPath = assertCreatedMigrationPath(
+      output,
+      tempDir,
+      "create_person",
+    );
+
+    assert.ok(fs.existsSync(createdPath));
+  });
+
+  it("prefers create --directory over MIGRATION_DIRECTORY", (): void => {
+    const explicitDirectory = path.join(tempDir, "explicit");
+    fs.mkdirSync(explicitDirectory);
+
+    const output = withEnvVars({ MIGRATION_DIRECTORY: tempDir }, (): string =>
+      runCli([
+        "create",
+        "--directory",
+        explicitDirectory,
+        "--name",
+        "create_person",
+      ]),
+    );
+    const createdPath = assertCreatedMigrationPath(
+      output,
+      explicitDirectory,
+      "create_person",
+    );
+
+    assert.ok(fs.existsSync(createdPath));
+  });
+
   it("rejects path separators in migration names", (): void => {
     assert.throws((): void => {
       runCli(["create", "--directory", tempDir, "--name", "../create_person"]);
@@ -266,6 +330,76 @@ describe("cli", (): void => {
     );
 
     assert.ok(fs.existsSync(createdPath));
+  });
+
+  it("uses MIGRATION_DIRECTORY for up when --directory is omitted", (): void => {
+    const missingDirectory = path.join(tempDir, "missing-from-env");
+
+    assert.throws(
+      (): void => {
+        withEnvVars({ MIGRATION_DIRECTORY: missingDirectory }, (): string =>
+          runCli(["up", "postgres://localhost:5432/example"]),
+        );
+      },
+      new RegExp(`Migration directory does not exist: ${missingDirectory}`),
+    );
+  });
+
+  it("prefers up --directory over MIGRATION_DIRECTORY", (): void => {
+    const explicitDirectory = path.join(tempDir, "empty-dir");
+    const missingDirectory = path.join(tempDir, "missing-from-env");
+    fs.mkdirSync(explicitDirectory);
+
+    assert.throws(
+      (): void => {
+        withEnvVars({ MIGRATION_DIRECTORY: missingDirectory }, (): string =>
+          runCli([
+            "up",
+            "postgres://localhost:5432/example",
+            "--directory",
+            explicitDirectory,
+          ]),
+        );
+      },
+      new RegExp(
+        `No migration files found in directory: ${escapeRegExp(explicitDirectory)}`,
+      ),
+    );
+  });
+
+  it("uses MIGRATION_DIRECTORY for down when --directory is omitted", (): void => {
+    const missingDirectory = path.join(tempDir, "missing-from-env");
+
+    assert.throws(
+      (): void => {
+        withEnvVars({ MIGRATION_DIRECTORY: missingDirectory }, (): string =>
+          runCli(["down", "postgres://localhost:5432/example"]),
+        );
+      },
+      new RegExp(`Migration directory does not exist: ${missingDirectory}`),
+    );
+  });
+
+  it("prefers down --directory over MIGRATION_DIRECTORY", (): void => {
+    const explicitDirectory = path.join(tempDir, "empty-dir");
+    const missingDirectory = path.join(tempDir, "missing-from-env");
+    fs.mkdirSync(explicitDirectory);
+
+    assert.throws(
+      (): void => {
+        withEnvVars({ MIGRATION_DIRECTORY: missingDirectory }, (): string =>
+          runCli([
+            "down",
+            "postgres://localhost:5432/example",
+            "--directory",
+            explicitDirectory,
+          ]),
+        );
+      },
+      new RegExp(
+        `No migration files found in directory: ${escapeRegExp(explicitDirectory)}`,
+      ),
+    );
   });
 
   it("create help documents generated filename format", (): void => {

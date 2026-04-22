@@ -84,9 +84,14 @@ migratorosaurus create --directory sql/migrations --name add_users
 
 - `--name` is required
 - `--name` must be a lowercase slug (`[a-z0-9][a-z0-9_]*`)
-- `--directory` defaults to `"migrations"`
+- `--directory` defaults to `MIGRATION_DIRECTORY` or `"migrations"`
 - `--help` and `-h` are boolean flags
 - Unknown commands and unknown flags cause the CLI to fail
+
+`up` / `down` command rules:
+
+- `--directory` defaults to `MIGRATION_DIRECTORY` or `"migrations"`
+- `--directory` takes precedence over `MIGRATION_DIRECTORY`
 
 ## 👩‍🔬 Configuration
 

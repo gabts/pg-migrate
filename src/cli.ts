@@ -3,6 +3,8 @@ import * as path from "path";
 import { down as runDown, up as runUp } from "./main.js";
 import { assertValidMigrationName } from "./migration-naming.js";
 
+const migrationDirectoryEnvVar = "MIGRATION_DIRECTORY";
+
 const helpText = `Usage: migratorosaurus <command> [options]
 
 Commands:
@@ -17,7 +19,7 @@ const createHelpText = `Usage: migratorosaurus create --name <name> [options]
 
 Options:
   -n, --name <name>         Migration name slug
-  -d, --directory <dir>     Output directory, defaults to migrations
+  -d, --directory <dir>     Output directory, defaults to MIGRATION_DIRECTORY or migrations
   -h, --help                Show this help text
 
 Notes:
@@ -35,7 +37,7 @@ const upHelpText = `Usage: migratorosaurus up [options] [<database-url>]
 
 Options:
   --url <database-url>      Database URL (alternative to positional URL)
-  -d, --directory <dir>     Migrations directory, defaults to migrations
+  -d, --directory <dir>     Migrations directory, defaults to MIGRATION_DIRECTORY or migrations
   -t, --target <filename>   Apply pending migrations up to and including target
   --table <table-name>      Migration history table, defaults to migration_history
   --dry-run                 Run planned SQL and history writes, then roll back
@@ -44,6 +46,7 @@ Options:
 Behavior:
   - Without --target, applies all pending migrations.
   - Provide exactly one of positional <database-url> or --url; otherwise DATABASE_URL is used.
+  - --directory takes precedence over MIGRATION_DIRECTORY.
 
 Examples:
   migratorosaurus up postgres://localhost:5432/app
@@ -55,7 +58,7 @@ const downHelpText = `Usage: migratorosaurus down [options] [<database-url>]
 
 Options:
   --url <database-url>      Database URL (alternative to positional URL)
-  -d, --directory <dir>     Migrations directory, defaults to migrations
+  -d, --directory <dir>     Migrations directory, defaults to MIGRATION_DIRECTORY or migrations
   -t, --target <filename>   Roll back newer migrations; target remains applied
   --table <table-name>      Migration history table, defaults to migration_history
   --dry-run                 Run planned SQL and history writes, then roll back
@@ -65,6 +68,7 @@ Behavior:
   - Without --target, rolls back exactly one migration (latest applied).
   - With --target, target migration is excluded from rollback and stays applied.
   - Provide exactly one of positional <database-url> or --url; otherwise DATABASE_URL is used.
+  - --directory takes precedence over MIGRATION_DIRECTORY.
 
 Examples:
   migratorosaurus down postgres://localhost:5432/app
@@ -103,9 +107,13 @@ function getFlagValue(
   return value;
 }
 
+function getDefaultMigrationDirectory(): string {
+  return process.env[migrationDirectoryEnvVar] || "migrations";
+}
+
 function parseCreateArgs(args: string[]): CreateOptions {
   const opts: CreateOptions = {
-    directory: "migrations",
+    directory: getDefaultMigrationDirectory(),
   };
 
   if (args.slice(3).includes("-h") || args.slice(3).includes("--help")) {
@@ -142,7 +150,7 @@ function parseMigrationRunArgs(
   command: "up" | "down",
 ): MigrationRunOptions {
   const opts: Omit<MigrationRunOptions, "clientConfig"> = {
-    directory: "migrations",
+    directory: getDefaultMigrationDirectory(),
     dryRun: false,
     table: "migration_history",
   };
