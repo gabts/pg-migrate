@@ -18,6 +18,21 @@ function runCli(args: string[]): string {
   return result.stdout;
 }
 
+function withoutDatabaseUrl<T>(fn: () => T): T {
+  const original = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
+
+  try {
+    return fn();
+  } finally {
+    if (original === undefined) {
+      delete process.env.DATABASE_URL;
+    } else {
+      process.env.DATABASE_URL = original;
+    }
+  }
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -85,6 +100,22 @@ describe("cli", (): void => {
     const output = runCli(["create", "--name", "--help"]);
 
     assert.ok(output.length > 0);
+  });
+
+  it("prints up help text", (): void => {
+    const output = runCli(["up", "--help"]);
+
+    assert.ok(output.length > 0);
+    assert.match(output, /up to and including target/);
+    assert.match(output, /then roll back/);
+  });
+
+  it("prints down help text", (): void => {
+    const output = runCli(["down", "--help"]);
+
+    assert.ok(output.length > 0);
+    assert.match(output, /rolls back exactly one migration/);
+    assert.match(output, /target migration is excluded from rollback/);
   });
 
   it("accepts slug migration names", (): void => {
@@ -191,6 +222,35 @@ describe("cli", (): void => {
     }, /Unknown command: unknown/);
   });
 
+  it("rejects up when database URL is missing", (): void => {
+    assert.throws((): void => {
+      withoutDatabaseUrl((): string => runCli(["up"]));
+    }, /Database URL is required for up/);
+  });
+
+  it("rejects down when database URL is missing", (): void => {
+    assert.throws((): void => {
+      withoutDatabaseUrl((): string => runCli(["down"]));
+    }, /Database URL is required for down/);
+  });
+
+  it("rejects unknown up flags", (): void => {
+    assert.throws((): void => {
+      runCli(["up", "postgres://localhost:5432/example", "--unknown"]);
+    }, /Unknown argument: --unknown/);
+  });
+
+  it("rejects multiple explicit database URLs", (): void => {
+    assert.throws((): void => {
+      runCli([
+        "up",
+        "postgres://localhost:5432/one",
+        "--url",
+        "postgres://localhost:5432/two",
+      ]);
+    }, /Database URL provided multiple times/);
+  });
+
   it("strips .sql extension from migration name", (): void => {
     const output = runCli([
       "create",
@@ -206,5 +266,11 @@ describe("cli", (): void => {
     );
 
     assert.ok(fs.existsSync(createdPath));
+  });
+
+  it("create help documents generated filename format", (): void => {
+    const output = runCli(["create", "--help"]);
+
+    assert.match(output, /Creates <YYYYMMDDHHMMSS>_<name>\.sql/);
   });
 });
