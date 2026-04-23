@@ -103,6 +103,16 @@ async function createMalformedMigrationHistoryTable(): Promise<void> {
   `);
 }
 
+async function createMissingVersionMigrationHistoryTable(): Promise<void> {
+  await client.query(`
+    CREATE TABLE ${defaultMigrationHistoryTable}
+    (
+      filename text PRIMARY KEY,
+      applied_at timestamptz NOT NULL DEFAULT now()
+    );
+  `);
+}
+
 describe("transaction", (): void => {
   before(async (): Promise<void> => {
     await client.connect();
@@ -165,6 +175,21 @@ describe("transaction", (): void => {
           table: "missing_migratorosaurus_schema.migration_history",
           run: async (): Promise<void> => undefined,
         }),
+    );
+  });
+
+  it("throws a clear schema error when version column is missing", async (): Promise<void> => {
+    await createMissingVersionMigrationHistoryTable();
+
+    await assert.rejects(
+      (): Promise<void> =>
+        withMigrationSession({
+          clientConfig: databaseConfig,
+          log: noopLog,
+          table: defaultMigrationHistoryTable,
+          run: async (): Promise<void> => undefined,
+        }),
+      /Invalid migration history table schema: migration_history\. Expected columns filename, version, applied_at: column "version" does not exist/,
     );
   });
 

@@ -12,7 +12,7 @@ import {
 } from "./args.js";
 import { createIo, type Io } from "./io.js";
 import type { ColorMode } from "./logger.js";
-import { down as runDown, up as runUp } from "./main.js";
+import { down, up, validate } from "./main.js";
 import { assertValidMigrationName } from "./migration-naming.js";
 
 const migrationDirectoryEnvVar = "MIGRATION_DIRECTORY";
@@ -22,6 +22,7 @@ const helpText = `Usage: migratorosaurus <command> [options]
 Commands:
   up                Apply pending migrations
   down              Roll back applied migrations
+  validate          Validate migration environment and state
   create            Create a new migration file
 
 Global options:
@@ -106,6 +107,31 @@ Examples:
   migratorosaurus down --dry-run
 `;
 
+const validateHelpText = `Usage: migratorosaurus validate [options] [<database-url>]
+
+Options:
+  --url <database-url>      Database URL (alternative to positional URL)
+  -d, --directory <dir>     Migrations directory, defaults to MIGRATION_DIRECTORY or migrations
+  --table <table-name>      Migration history table, defaults to migration_history
+  --json                    Emit structured command result
+  --quiet                   Suppress non-error logs
+  --verbose, -v             Show debug logs
+  --no-color                Disable ANSI color in logs
+  -h, --help                Show this help text
+
+Behavior:
+  - Validates migration files, order, and applied migration history consistency.
+  - Checks database connectivity and migration history table state.
+  - Does not create missing migration history tables.
+  - Uses the same advisory lock as up/down; fails fast if another migratorosaurus process holds it.
+  - Provide exactly one of positional <database-url> or --url; otherwise DATABASE_URL is used.
+  - --directory takes precedence over MIGRATION_DIRECTORY.
+
+Examples:
+  migratorosaurus validate postgres://localhost:5432/app
+  migratorosaurus validate --url postgres://localhost:5432/app --table migration_history
+`;
+
 function getDefaultMigrationDirectory(): string {
   return process.env[migrationDirectoryEnvVar] || "migrations";
 }
@@ -115,11 +141,14 @@ interface CreateOptions {
   name?: string;
 }
 
-interface MigrationRunOptions {
+interface DatabaseRunOptions {
   clientConfig: string;
   directory: string;
-  dryRun: boolean;
   table: string;
+}
+
+interface MigrationRunOptions extends DatabaseRunOptions {
+  dryRun: boolean;
   target?: string;
 }
 
@@ -138,11 +167,11 @@ function buildCreateOptions(
   };
 }
 
-function buildMigrationRunOptions(
+function buildDatabaseRunOptions(
   parsed: ParsedTokens,
   extraPositional: readonly string[],
-  command: "up" | "down",
-): MigrationRunOptions {
+  command: "up" | "down" | "validate",
+): DatabaseRunOptions {
   if (extraPositional.length > 1) {
     throw new Error(`Unexpected argument: ${extraPositional[1]}`);
   }
@@ -167,8 +196,20 @@ function buildMigrationRunOptions(
     clientConfig,
     directory:
       valueFlag(parsed, "--directory") ?? getDefaultMigrationDirectory(),
-    dryRun: booleanFlag(parsed, "--dry-run"),
     table: valueFlag(parsed, "--table") ?? "migration_history",
+  };
+}
+
+function buildMigrationRunOptions(
+  parsed: ParsedTokens,
+  extraPositional: readonly string[],
+  command: "up" | "down",
+): MigrationRunOptions {
+  const base = buildDatabaseRunOptions(parsed, extraPositional, command);
+
+  return {
+    ...base,
+    dryRun: booleanFlag(parsed, "--dry-run"),
     target: valueFlag(parsed, "--target"),
   };
 }
@@ -233,6 +274,8 @@ function helpTextFor(command: CommandName | undefined): string {
       return upHelpText;
     case "down":
       return downHelpText;
+    case "validate":
+      return validateHelpText;
     case undefined:
       return helpText;
   }
@@ -263,8 +306,30 @@ async function runCommand(
     return 0;
   }
 
+  if (command === "validate") {
+    const runOptions = buildDatabaseRunOptions(
+      parsed,
+      extraPositional,
+      command,
+    );
+    await validate(runOptions.clientConfig, {
+      color,
+      directory: runOptions.directory,
+      quiet: io.quiet,
+      table: runOptions.table,
+      verbose: io.verbose,
+    });
+    if (io.json) {
+      io.result({
+        command,
+        ok: true,
+      });
+    }
+    return 0;
+  }
+
   const runOptions = buildMigrationRunOptions(parsed, extraPositional, command);
-  const runFn = command === "up" ? runUp : runDown;
+  const runFn = command === "up" ? up : down;
   await runFn(runOptions.clientConfig, {
     color,
     directory: runOptions.directory,
@@ -306,7 +371,8 @@ export async function cli(args = process.argv): Promise<number> {
       if (
         commandToken !== "create" &&
         commandToken !== "up" &&
-        commandToken !== "down"
+        commandToken !== "down" &&
+        commandToken !== "validate"
       ) {
         throw new Error(`Unknown command: ${commandToken}`);
       }

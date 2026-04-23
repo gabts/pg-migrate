@@ -20,6 +20,12 @@ describe("log-messages", (): void => {
       assert.equal(messages.abortedDown(), "☄️ rollback aborted");
     });
 
+    it("formats validation lifecycle", (): void => {
+      assert.equal(messages.startedValidate(), "🦖 started validation");
+      assert.equal(messages.completedValidate(), "🌋 validation complete");
+      assert.equal(messages.abortedValidate(), "☄️ validation aborted");
+    });
+
     it("formats session and no-op messages", (): void => {
       assert.equal(
         messages.creatingTable(),
@@ -40,6 +46,13 @@ describe("log-messages", (): void => {
     it("formats pending migration count", (): void => {
       assert.equal(messages.pending(0), "🧬 pending migrations: 0");
       assert.equal(messages.pending(2), "🧬 pending migrations: 2");
+    });
+
+    it("formats validation summary counts", (): void => {
+      assert.equal(
+        messages.validationSummary(3, 2, 1),
+        "🧪 validation summary: pending_up=3 rollbackable_down=2 next_down=1",
+      );
     });
 
     it("formats target version with quoted name and strips .sql", (): void => {

@@ -23,7 +23,12 @@ This package requires Node.js `>=22`.
 Use it from your app or migration runner:
 
 ```javascript
-import { down, up } from "migratorosaurus";
+import { down, up, validate } from "migratorosaurus";
+
+await validate("postgres://localhost:5432/database", {
+  directory: `sql/migrations`,
+  table: "my_migration_history",
+});
 
 await up("postgres://localhost:5432/database", {
   directory: `sql/migrations`,
@@ -72,6 +77,7 @@ The built-in CLI supports:
 - `create` creates a new migration file
 - `up` applies pending migrations
 - `down` rolls back applied migrations
+- `validate` checks migration environment and state without applying SQL
 
 The CLI creates filenames in `<YYYYMMDDHHMMSS>_<slug>.sql` format.
 
@@ -80,6 +86,7 @@ Useful commands:
 ```sh
 migratorosaurus create --help
 migratorosaurus create --directory sql/migrations --name add_users
+migratorosaurus validate --url postgres://localhost:5432/app
 migratorosaurus up --url postgres://localhost:5432/app
 migratorosaurus down --url postgres://localhost:5432/app --target 20260416090100_add_users.sql
 ```
@@ -99,10 +106,17 @@ Global CLI flags:
 - `--help` and `-h` are boolean flags
 - Unknown commands and unknown flags cause the CLI to fail
 
-`up` / `down` command rules:
+`up` / `down` / `validate` command rules:
 
 - `--directory` defaults to `MIGRATION_DIRECTORY` or `"migrations"`
 - `--directory` takes precedence over `MIGRATION_DIRECTORY`
+
+`validate` command behavior:
+
+- validates migration files, order, and applied history consistency
+- validates database connectivity and migration table state
+- does not create missing migration history tables
+- uses the same advisory lock as `up`/`down` and fails fast if another run is active
 
 CLI stream conventions:
 
@@ -125,6 +139,7 @@ The second argument is an optional configuration object:
 - **target** An exact migration filename.
 
 By default, `up()` and `down()` emit logs to `stderr` using the same conventions as the CLI.
+`validate()` also logs to `stderr` and performs checks only (no migration SQL execution).
 
 Use `up(config, { target })` to migrate forward until that migration has been applied.
 Use `down(config)` to roll back exactly one migration.

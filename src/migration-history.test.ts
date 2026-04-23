@@ -3,6 +3,7 @@ import type * as pg from "pg";
 import type { Logger } from "./logger.js";
 import { messages } from "./log-messages.js";
 import {
+  assertMigrationHistoryTableShape,
   ensureMigrationHistory,
   readAppliedRows,
 } from "./migration-history.js";
@@ -175,6 +176,73 @@ describe("migration-history", (): void => {
       await assert.rejects(
         (): Promise<unknown> => readAppliedRows(client, '"migration_history"'),
         /Duplicate applied migration version: 20260416090000/,
+      );
+    });
+  });
+
+  describe("assertMigrationHistoryTableShape", (): void => {
+    it("accepts tables with the expected columns", async (): Promise<void> => {
+      const queries: string[] = [];
+      const client = {
+        query: async (sql: string): Promise<{ rows: unknown[] }> => {
+          queries.push(sql);
+          return { rows: [] };
+        },
+      } as unknown as pg.Client;
+
+      await assertMigrationHistoryTableShape({
+        client,
+        qualifiedTableName: '"migration_history"',
+        table: "migration_history",
+      });
+
+      assert.ok(
+        queries.some((sql): boolean =>
+          sql.includes(
+            'SELECT filename, version, applied_at FROM "migration_history" LIMIT 0;',
+          ),
+        ),
+      );
+    });
+
+    it("throws a clear schema error when expected columns are missing", async (): Promise<void> => {
+      const client = {
+        query: async (): Promise<{ rows: unknown[] }> => {
+          throw Object.assign(new Error('column "version" does not exist'), {
+            code: "42703",
+          });
+        },
+      } as unknown as pg.Client;
+
+      await assert.rejects(
+        (): Promise<void> =>
+          assertMigrationHistoryTableShape({
+            client,
+            qualifiedTableName: '"migration_history"',
+            table: "migration_history",
+          }),
+        /Invalid migration history table schema: migration_history\. Expected columns filename, version, applied_at: column "version" does not exist/,
+      );
+    });
+
+    it("rethrows non-schema database errors unchanged", async (): Promise<void> => {
+      const dbError = Object.assign(new Error("permission denied"), {
+        code: "42501",
+      });
+      const client = {
+        query: async (): Promise<{ rows: unknown[] }> => {
+          throw dbError;
+        },
+      } as unknown as pg.Client;
+
+      await assert.rejects(
+        (): Promise<void> =>
+          assertMigrationHistoryTableShape({
+            client,
+            qualifiedTableName: '"migration_history"',
+            table: "migration_history",
+          }),
+        (error: unknown): boolean => error === dbError,
       );
     });
   });

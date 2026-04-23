@@ -4,6 +4,18 @@ import { messages } from "./log-messages.js";
 import type { AppliedRow } from "./types.js";
 import { validateAppliedHistory } from "./validation.js";
 
+export async function migrationHistoryExists(
+  client: pg.Client,
+  qualifiedTableName: string,
+): Promise<boolean> {
+  const migrationTableQueryResult = await client.query(
+    `SELECT to_regclass($1) IS NOT NULL AS exists;`,
+    [qualifiedTableName],
+  );
+
+  return migrationTableQueryResult.rows[0].exists;
+}
+
 export async function ensureMigrationHistory(args: {
   client: pg.Client;
   log: Logger;
@@ -11,12 +23,7 @@ export async function ensureMigrationHistory(args: {
 }): Promise<void> {
   const { client, log, qualifiedTableName } = args;
 
-  const migrationTableQueryResult = await client.query(
-    `SELECT to_regclass($1) IS NOT NULL AS exists;`,
-    [qualifiedTableName],
-  );
-
-  if (!migrationTableQueryResult.rows[0].exists) {
+  if (!(await migrationHistoryExists(client, qualifiedTableName))) {
     log.info(messages.creatingTable());
     await client.query(`
       CREATE TABLE ${qualifiedTableName}
@@ -26,6 +33,31 @@ export async function ensureMigrationHistory(args: {
         applied_at timestamptz NOT NULL DEFAULT now()
       );
     `);
+  }
+}
+
+export async function assertMigrationHistoryTableShape(args: {
+  client: pg.Client;
+  qualifiedTableName: string;
+  table: string;
+}): Promise<void> {
+  const { client, qualifiedTableName, table } = args;
+  try {
+    // This only verifies that the expected column identifiers resolve.
+    // It does not validate the underlying column data types.
+    await client.query(
+      `SELECT filename, version, applied_at FROM ${qualifiedTableName} LIMIT 0;`,
+    );
+  } catch (error) {
+    const code = (error as { code?: unknown })?.code;
+    if (code === "42703") {
+      const detail = error instanceof Error ? `: ${error.message}` : "";
+      throw new Error(
+        `Invalid migration history table schema: ${table}. Expected columns filename, version, applied_at${detail}`,
+        { cause: error },
+      );
+    }
+    throw error;
   }
 }
 
