@@ -132,6 +132,9 @@ async function executeDownPlanDryRun(args: ExecutePlanArgs): Promise<void> {
   }
 }
 
+/**
+ * Executes planned `up` migration steps and records them in history.
+ */
 export async function executeUpPlan(args: {
   client: pg.Client;
   log: Logger;
@@ -155,6 +158,9 @@ export async function executeUpPlan(args: {
   await executeUpPlanNormal({ client, log, qualifiedTableName, steps });
 }
 
+/**
+ * Executes planned `down` migration steps and removes them from history.
+ */
 export async function executeDownPlan(args: {
   client: pg.Client;
   log: Logger;

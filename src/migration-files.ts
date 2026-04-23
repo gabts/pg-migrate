@@ -81,6 +81,9 @@ function parseMigrationSections(sql: string, file: string): ParsedMigrationSql {
   return { down: downSql, up: upSql };
 }
 
+/**
+ * Extracts a migration section (`up` or `down`) from raw migration SQL text.
+ */
 export function parseMigration(
   sql: string,
   direction: MigrationDirection,
@@ -90,6 +93,9 @@ export function parseMigration(
   return direction === "up" ? sections.up : sections.down;
 }
 
+/**
+ * Reads and parses SQL sections for each disk migration by file name.
+ */
 export function readMigrationSqlByFile(
   migrations: DiskMigration[],
 ): Map<string, ParsedMigrationSql> {
@@ -103,6 +109,9 @@ export function readMigrationSqlByFile(
   return sqlByFile;
 }
 
+/**
+ * Builds executable migration steps from pre-parsed SQL sections.
+ */
 export function materializeStepsFromSql(
   migrations: DiskMigration[],
   direction: MigrationDirection,
@@ -120,6 +129,9 @@ export function materializeStepsFromSql(
   });
 }
 
+/**
+ * Reads and materializes executable steps from migration files on disk.
+ */
 export function materializeSteps(
   migrations: DiskMigration[],
   direction: MigrationDirection,
@@ -131,6 +143,9 @@ export function materializeSteps(
   );
 }
 
+/**
+ * Loads, validates, and orders migration files from a directory.
+ */
 export function loadDiskMigrations(directory: string): LoadedMigrations {
   if (!fs.existsSync(directory) || !fs.statSync(directory).isDirectory()) {
     throw new Error(`Migration directory does not exist: ${directory}`);

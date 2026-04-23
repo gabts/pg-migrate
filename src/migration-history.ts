@@ -4,6 +4,9 @@ import { messages } from "./log-messages.js";
 import type { AppliedRow } from "./types.js";
 import { validateAppliedHistory } from "./validation.js";
 
+/**
+ * Returns whether the configured migration history table exists.
+ */
 export async function migrationHistoryExists(
   client: pg.Client,
   qualifiedTableName: string,
@@ -16,6 +19,9 @@ export async function migrationHistoryExists(
   return migrationTableQueryResult.rows[0].exists;
 }
 
+/**
+ * Creates the migration history table when it is missing.
+ */
 export async function ensureMigrationHistory(args: {
   client: pg.Client;
   log: Logger;
@@ -36,6 +42,9 @@ export async function ensureMigrationHistory(args: {
   }
 }
 
+/**
+ * Verifies the migration history table exposes required columns.
+ */
 export async function assertMigrationHistoryTableShape(args: {
   client: pg.Client;
   qualifiedTableName: string;
@@ -61,6 +70,9 @@ export async function assertMigrationHistoryTableShape(args: {
   }
 }
 
+/**
+ * Reads and validates applied migration rows from the history table.
+ */
 export async function readAppliedRows(
   client: pg.Client,
   qualifiedTableName: string,

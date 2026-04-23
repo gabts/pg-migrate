@@ -351,6 +351,9 @@ async function runCommand(
   return 0;
 }
 
+/**
+ * Executes the CLI command and returns the process exit code.
+ */
 export async function cli(args = process.argv): Promise<number> {
   const tokens = args.slice(2);
   // Sniff --no-color so parse-time errors aren't colorized when the user asked otherwise.

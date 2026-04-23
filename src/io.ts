@@ -10,6 +10,9 @@ interface WritableStreamLike {
   write(chunk: string): boolean;
 }
 
+/**
+ * Configuration options for the combined logger/output helper.
+ */
 export interface IoOptions {
   color?: ColorMode;
   json?: boolean;
@@ -19,6 +22,9 @@ export interface IoOptions {
   verbose?: boolean;
 }
 
+/**
+ * Logger plus command-result output helpers for CLI workflows.
+ */
 export interface Io extends Logger {
   json: boolean;
   quiet: boolean;
@@ -52,6 +58,9 @@ function asLine(value: unknown): string {
   return String(value);
 }
 
+/**
+ * Creates an `Io` instance with logging and structured output behavior.
+ */
 export function createIo(options: IoOptions = {}): Io {
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;

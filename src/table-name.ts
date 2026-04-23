@@ -6,6 +6,9 @@ interface TableNameParts {
 const conventionalTableNamePattern =
   /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?$/;
 
+/**
+ * Parses and validates the configured migration history table name.
+ */
 export function parseTableName(tableName: string): TableNameParts {
   if (!tableName.match(conventionalTableNamePattern)) {
     throw new Error(
@@ -28,6 +31,9 @@ export function parseTableName(tableName: string): TableNameParts {
   };
 }
 
+/**
+ * Quotes table-name parts for safe interpolation into SQL identifiers.
+ */
 export function qualifyTableName({ schema, table }: TableNameParts): string {
   return schema ? `"${schema}"."${table}"` : `"${table}"`;
 }

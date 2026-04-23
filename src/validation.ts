@@ -1,6 +1,9 @@
 import { getMigrationVersion } from "./migration-naming.js";
 import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
 
+/**
+ * Validates basic invariants for rows read from migration history.
+ */
 export function validateAppliedHistory(rows: AppliedRow[]): void {
   const seenFiles = new Set<string>();
   const seenVersions = new Set<string>();
@@ -30,6 +33,9 @@ export function validateAppliedHistory(rows: AppliedRow[]): void {
   }
 }
 
+/**
+ * Ensures each applied migration filename still exists on disk.
+ */
 export function validateAppliedFilesExistOnDisk(
   appliedRows: AppliedRow[],
   disk: LoadedMigrations,
@@ -105,6 +111,9 @@ function validateAppliedHistoryConsistency(
   return latestAppliedMigration;
 }
 
+/**
+ * Validates preconditions for rollback planning and resolves target.
+ */
 export function validateDownPreconditions(args: {
   appliedRows: AppliedRow[];
   disk: LoadedMigrations;
@@ -132,6 +141,9 @@ export function validateDownPreconditions(args: {
   return { targetMigration };
 }
 
+/**
+ * Validates preconditions for apply planning and resolves target bounds.
+ */
 export function validateUpPreconditions(args: {
   appliedRows: AppliedRow[];
   disk: LoadedMigrations;

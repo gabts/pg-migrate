@@ -1,5 +1,8 @@
 import type { ColorMode } from "./logger.js";
 
+/**
+ * Supported top-level CLI command names.
+ */
 export type CommandName = "create" | "up" | "down" | "validate";
 
 type FlagKind = "boolean" | "value";
@@ -108,11 +111,17 @@ function flagTokens(spec: FlagSpec): string {
   return [spec.canonical, ...spec.aliases].join(", ");
 }
 
+/**
+ * Parsed CLI flags and positional arguments.
+ */
 export interface ParsedTokens {
   flags: Map<string, string | true>;
   positional: readonly string[];
 }
 
+/**
+ * Parses CLI tokens into canonical flag values and positional arguments.
+ */
 export function parseTokens(tokens: readonly string[]): ParsedTokens {
   const flags = new Map<string, string | true>();
   const positional: string[] = [];
@@ -150,10 +159,16 @@ export function parseTokens(tokens: readonly string[]): ParsedTokens {
   return { flags, positional };
 }
 
+/**
+ * Returns whether help was requested in the raw token list.
+ */
 export function hasHelpFlag(tokens: readonly string[]): boolean {
   return tokens.includes("--help") || tokens.includes("-h");
 }
 
+/**
+ * Reads a string-valued flag from parsed tokens.
+ */
 export function valueFlag(
   parsed: ParsedTokens,
   canonical: string,
@@ -165,10 +180,16 @@ export function valueFlag(
   return value;
 }
 
+/**
+ * Returns whether a boolean flag is enabled.
+ */
 export function booleanFlag(parsed: ParsedTokens, canonical: string): boolean {
   return parsed.flags.get(canonical) === true;
 }
 
+/**
+ * Validates that all parsed flags are allowed for the selected command.
+ */
 export function assertFlagsAllowedFor(
   parsed: ParsedTokens,
   command: CommandName | undefined,
@@ -184,6 +205,9 @@ export function assertFlagsAllowedFor(
   }
 }
 
+/**
+ * Global CLI behavior toggles shared by all commands.
+ */
 export interface GlobalOptions {
   color: ColorMode;
   json: boolean;
@@ -191,6 +215,9 @@ export interface GlobalOptions {
   verbose: boolean;
 }
 
+/**
+ * Extracts global options from parsed CLI flags.
+ */
 export function extractGlobals(parsed: ParsedTokens): GlobalOptions {
   return {
     color: booleanFlag(parsed, "--no-color") ? false : "auto",
