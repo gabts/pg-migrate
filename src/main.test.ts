@@ -4,7 +4,13 @@ import * as os from "os";
 import * as path from "path";
 import * as pg from "pg";
 import { messages } from "./log-messages.js";
-import { down, up, type MigrationOptions } from "./main.js";
+import {
+  down,
+  up,
+  validate,
+  type MigrationOptions,
+  type ValidateOptions,
+} from "./main.js";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set to run integration tests");
@@ -119,6 +125,23 @@ async function dropTables(): Promise<void> {
   `);
 }
 
+async function createMigrationHistoryTable(
+  tableName = defaultMigrationHistoryTable,
+): Promise<void> {
+  const [schema] = tableName.includes(".") ? tableName.split(".") : [undefined];
+  if (schema) {
+    await client.query(`CREATE SCHEMA IF NOT EXISTS ${schema};`);
+  }
+  await client.query(`
+    CREATE TABLE ${tableName}
+    (
+      filename text PRIMARY KEY,
+      version text NOT NULL UNIQUE,
+      applied_at timestamptz NOT NULL DEFAULT now()
+    );
+  `);
+}
+
 async function runUp(args: MigrationOptions): Promise<void> {
   const captured = await captureStderr(async (): Promise<void> => {
     await up(databaseConfig, { quiet: true, ...args });
@@ -129,6 +152,13 @@ async function runUp(args: MigrationOptions): Promise<void> {
 async function runDown(args: MigrationOptions): Promise<void> {
   const captured = await captureStderr(async (): Promise<void> => {
     await down(databaseConfig, { quiet: true, ...args });
+  });
+  assert.equal(captured.stderr, "");
+}
+
+async function runValidate(args: ValidateOptions): Promise<void> {
+  const captured = await captureStderr(async (): Promise<void> => {
+    await validate(databaseConfig, { quiet: true, ...args });
   });
   assert.equal(captured.stderr, "");
 }
@@ -506,6 +536,88 @@ UPDATE person SET name = lower(name);
     }
   });
 
+  it("validate succeeds without mutating applied migration state", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+    await runUp({ directory, target: standardCreateFile });
+
+    await runValidate({ directory });
+
+    await assertMigration0();
+  });
+
+  it("validate does not create a missing history table", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+
+    await assert.rejects(
+      (): Promise<void> => runValidate({ directory }),
+      /Migration history table does not exist: migration_history/,
+    );
+
+    assert.equal(await queryTableExists(defaultMigrationHistoryTable), false);
+    assert.equal(await queryTableExists("person"), false);
+  });
+
+  it("validate rejects history gaps without mutating state", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+    await createMigrationHistoryTable();
+    await client.query(
+      `INSERT INTO ${defaultMigrationHistoryTable} (filename, version) VALUES ($1, $2);`,
+      [standardInsertFile, "20260416090100"],
+    );
+
+    await assert.rejects(
+      (): Promise<void> => runValidate({ directory }),
+      new RegExp(
+        `Gap in applied migration history: "${standardCreateFile}" is not applied`,
+      ),
+    );
+
+    const historyRows = await queryHistory();
+    assert.equal(historyRows.length, 1);
+    assert.equal(historyRows[0].file, standardInsertFile);
+    assert.equal(historyRows[0].version, "20260416090100");
+    assert.equal(await queryTableExists("person"), false);
+  });
+
+  it("validate rejects version mismatches without mutating state", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+    await createMigrationHistoryTable();
+    await client.query(
+      `INSERT INTO ${defaultMigrationHistoryTable} (filename, version) VALUES ($1, $2);`,
+      [standardCreateFile, "20260416090001"],
+    );
+
+    await assert.rejects(
+      (): Promise<void> => runValidate({ directory }),
+      new RegExp(
+        `Applied migration version mismatch for file "${standardCreateFile}": expected "20260416090000", got "20260416090001"`,
+      ),
+    );
+
+    const historyRows = await queryHistory();
+    assert.equal(historyRows.length, 1);
+    assert.equal(historyRows[0].file, standardCreateFile);
+    assert.equal(historyRows[0].version, "20260416090001");
+    assert.equal(await queryTableExists("person"), false);
+  });
+
+  it("validate supports schema-qualified migration history tables", async (): Promise<void> => {
+    const schema = "migratorosaurus_validate_test";
+    const table = `${schema}.migration_history`;
+    const directory = createStandardMigrationDirectory();
+
+    try {
+      await createMigrationHistoryTable(table);
+      await runValidate({ directory, table });
+
+      assert.ok(await queryTableExists(table));
+      assert.deepEqual(await queryHistory(table), []);
+      assert.equal(await queryTableExists("person"), false);
+    } finally {
+      await client.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE;`);
+    }
+  });
+
   describe("bulk migrations (100+)", function (this: Mocha.Suite): void {
     this.timeout(30000);
 
@@ -689,6 +801,44 @@ DELETE FROM bulk_test WHERE value = ${i};
 
       assert.match(captured.stderr, /started migration run/);
       assert.match(captured.stderr, /migration run aborted/);
+    });
+
+    it("logs lifecycle messages for validate in order", async (): Promise<void> => {
+      const directory = createStandardMigrationDirectory();
+      await runUp({ directory, target: standardCreateFile });
+
+      const captured = await captureStderr(async (): Promise<void> => {
+        await validate(databaseConfig, { color: false, directory });
+      });
+
+      const observed = captured.stderr.split("\n");
+      if (observed[observed.length - 1] === "") {
+        observed.pop();
+      }
+
+      assert.deepEqual(observed, [
+        messages.startedValidate(),
+        messages.validationSummary(1, 1, 1),
+        messages.completedValidate(),
+      ]);
+    });
+
+    it("logs abort message for validate failures", async (): Promise<void> => {
+      const missingDirectory = createMissingDirectory(
+        "migratorosaurus-validate-",
+      );
+      const captured = await captureStderr(async (): Promise<void> => {
+        await assert.rejects(
+          (): Promise<void> =>
+            validate("postgres://localhost:5432/example", {
+              color: false,
+              directory: missingDirectory,
+            }),
+        );
+      });
+
+      assert.match(captured.stderr, /started validation/);
+      assert.match(captured.stderr, /validation aborted/);
     });
 
     it("keeps abort logs in quiet mode while suppressing non-errors", async (): Promise<void> => {

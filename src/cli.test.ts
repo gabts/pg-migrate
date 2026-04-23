@@ -3,6 +3,7 @@ import * as assert from "assert";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import * as pg from "pg";
 import { cli } from "./cli.js";
 
 interface CliRunResult {
@@ -242,6 +243,14 @@ describe("cli", (): void => {
     assert.match(output, /target migration is excluded from rollback/);
   });
 
+  it("prints validate help text", async (): Promise<void> => {
+    const output = await runCliInProcess(["validate", "--help"]);
+
+    assert.ok(output.length > 0);
+    assert.match(output, /Validates migration files/);
+    assert.match(output, /Does not create missing migration history tables/);
+  });
+
   it("accepts slug migration names", async (): Promise<void> => {
     const output = await runCliInProcess([
       "create",
@@ -464,6 +473,16 @@ describe("cli", (): void => {
     );
   });
 
+  it("rejects validate when database URL is missing", async (): Promise<void> => {
+    await assert.rejects(
+      (): Promise<string> =>
+        withoutDatabaseUrl(
+          (): Promise<string> => runCliInProcess(["validate"]),
+        ),
+      /Database URL is required for validate/,
+    );
+  });
+
   it("rejects unknown up flags", async (): Promise<void> => {
     await assert.rejects(
       (): Promise<string> =>
@@ -473,6 +492,18 @@ describe("cli", (): void => {
           "--unknown",
         ]),
       /Unknown argument: --unknown/,
+    );
+  });
+
+  it("rejects dry-run on validate", async (): Promise<void> => {
+    await assert.rejects(
+      (): Promise<string> =>
+        runCliInProcess([
+          "validate",
+          "postgres://localhost:5432/example",
+          "--dry-run",
+        ]),
+      /Unknown argument: --dry-run/,
     );
   });
 
@@ -580,6 +611,43 @@ describe("cli", (): void => {
     );
   });
 
+  it("uses MIGRATION_DIRECTORY for validate when --directory is omitted", async (): Promise<void> => {
+    const missingDirectory = path.join(tempDir, "missing-from-env");
+
+    await assert.rejects(
+      (): Promise<string> =>
+        withEnvVars(
+          { MIGRATION_DIRECTORY: missingDirectory },
+          (): Promise<string> =>
+            runCliInProcess(["validate", "postgres://localhost:5432/example"]),
+        ),
+      new RegExp(`Migration directory does not exist: ${missingDirectory}`),
+    );
+  });
+
+  it("prefers validate --directory over MIGRATION_DIRECTORY", async (): Promise<void> => {
+    const explicitDirectory = path.join(tempDir, "empty-dir");
+    const missingDirectory = path.join(tempDir, "missing-from-env");
+    fs.mkdirSync(explicitDirectory);
+
+    await assert.rejects(
+      (): Promise<string> =>
+        withEnvVars(
+          { MIGRATION_DIRECTORY: missingDirectory },
+          (): Promise<string> =>
+            runCliInProcess([
+              "validate",
+              "postgres://localhost:5432/example",
+              "--directory",
+              explicitDirectory,
+            ]),
+        ),
+      new RegExp(
+        `No migration files found in directory: ${escapeRegExp(explicitDirectory)}`,
+      ),
+    );
+  });
+
   it("create help documents generated filename format", async (): Promise<void> => {
     const output = await runCliInProcess(["create", "--help"]);
 
@@ -622,6 +690,96 @@ describe("cli", (): void => {
     assert.equal(parsed.command, "create");
     assert.equal(path.dirname(parsed.file), tempDir);
     assert.equal(result.stderr, "");
+  });
+
+  it("emits parseable JSON for successful validate with no incidental stdout text", async function (this: Mocha.Context): Promise<void> {
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) {
+      this.skip();
+      return;
+    }
+
+    const createFile = "20260416090000_create.sql";
+    const insertFile = "20260416090100_insert.sql";
+    fs.writeFileSync(
+      path.join(tempDir, createFile),
+      `-- migrate:up
+CREATE TABLE cli_validate_person (
+  id SERIAL PRIMARY KEY
+);
+
+-- migrate:down
+DROP TABLE cli_validate_person;
+`,
+    );
+    fs.writeFileSync(
+      path.join(tempDir, insertFile),
+      `-- migrate:up
+INSERT INTO cli_validate_person DEFAULT VALUES;
+
+-- migrate:down
+DELETE FROM cli_validate_person;
+`,
+    );
+
+    const table = `migration_history_cli_validate_${Date.now()}_${process.pid}`;
+    const client = new pg.Client(databaseUrl);
+    await client.connect();
+
+    try {
+      await client.query(`
+        CREATE TABLE ${table}
+        (
+          filename text PRIMARY KEY,
+          version text NOT NULL UNIQUE,
+          applied_at timestamptz NOT NULL DEFAULT now()
+        );
+      `);
+
+      const result = await runCliInProcessRaw([
+        "validate",
+        "--url",
+        databaseUrl,
+        "--directory",
+        tempDir,
+        "--table",
+        table,
+        "--json",
+        "--quiet",
+      ]);
+
+      assert.equal(result.status, 0);
+      assert.equal(result.stdout.trimEnd().split("\n").length, 1);
+      const parsed = JSON.parse(result.stdout);
+      assert.deepEqual(Object.keys(parsed).sort(), ["command", "ok"]);
+      assert.equal(parsed.command, "validate");
+      assert.equal(parsed.ok, true);
+      assert.equal(result.stderr, "");
+    } finally {
+      await client.query(`DROP TABLE IF EXISTS ${table};`);
+      await client.end();
+    }
+  });
+
+  it("keeps json stdout empty for validate failures", async (): Promise<void> => {
+    const missingDirectory = path.join(tempDir, "missing");
+    const result = await runCliInProcessRaw([
+      "validate",
+      "--url",
+      "postgres://localhost:5432/example",
+      "--directory",
+      missingDirectory,
+      "--json",
+    ]);
+
+    assert.equal(result.status, 1);
+    assert.match(
+      stripAnsi(result.stderr),
+      new RegExp(
+        `Migration directory does not exist: ${escapeRegExp(missingDirectory)}`,
+      ),
+    );
+    assert.equal(result.stdout, "");
   });
 
   it("keeps json stdout clean while sending verbose logs to stderr", async (): Promise<void> => {

@@ -1,6 +1,6 @@
 import type { ColorMode } from "./logger.js";
 
-export type CommandName = "create" | "up" | "down";
+export type CommandName = "create" | "up" | "down" | "validate";
 
 type FlagKind = "boolean" | "value";
 type CommandScope = "all" | readonly CommandName[];
@@ -52,7 +52,7 @@ const flagSpecs: readonly FlagSpec[] = [
   {
     aliases: ["-d"],
     canonical: "--directory",
-    commands: ["create", "up", "down"],
+    commands: ["create", "up", "down", "validate"],
     kind: "value",
     label: "Directory",
   },
@@ -66,7 +66,7 @@ const flagSpecs: readonly FlagSpec[] = [
   {
     aliases: [],
     canonical: "--url",
-    commands: ["up", "down"],
+    commands: ["up", "down", "validate"],
     kind: "value",
     label: "Database URL",
   },
@@ -80,7 +80,7 @@ const flagSpecs: readonly FlagSpec[] = [
   {
     aliases: [],
     canonical: "--table",
-    commands: ["up", "down"],
+    commands: ["up", "down", "validate"],
     kind: "value",
     label: "Table",
   },

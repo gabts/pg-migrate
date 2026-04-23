@@ -13,17 +13,26 @@ export const messages = {
   startedDown: (dryRun?: boolean): string => {
     return `🦖 started rollback${dryRunSuffix(dryRun)}`;
   },
+  startedValidate: (): string => {
+    return "🦖 started validation";
+  },
   completedUp: (): string => {
     return "🌋 migration run complete";
   },
   completedDown: (): string => {
     return "🌋 rollback complete";
   },
+  completedValidate: (): string => {
+    return "🌋 validation complete";
+  },
   abortedUp: (): string => {
     return "☄️ migration run aborted";
   },
   abortedDown: (): string => {
     return "☄️ rollback aborted";
+  },
+  abortedValidate: (): string => {
+    return "☄️ validation aborted";
   },
   nothingToRollback: (): string => {
     return "- no migrations to roll back";
@@ -36,6 +45,13 @@ export const messages = {
   },
   pending: (count: number): string => {
     return `🧬 pending migrations: ${count}`;
+  },
+  validationSummary: (
+    pendingUpCount: number,
+    rollbackableDownCount: number,
+    nextDownCount: number,
+  ): string => {
+    return `🧪 validation summary: pending_up=${pendingUpCount} rollbackable_down=${rollbackableDownCount} next_down=${nextDownCount}`;
   },
   target: (file: string): string => {
     return `- target version: "${displayName(file)}"`;

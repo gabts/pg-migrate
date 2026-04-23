@@ -10,8 +10,8 @@ import { planDownExecution, planUpExecution } from "./planning.js";
 import { withMigrationSession } from "./transaction.js";
 import type { ClientConfig } from "./types.js";
 import {
-  validateDownPreconditions,
   validateUpPreconditions,
+  validateDownPreconditions,
 } from "./validation.js";
 
 export interface MigrationOptions {
@@ -21,6 +21,14 @@ export interface MigrationOptions {
   quiet?: boolean;
   table?: string;
   target?: string;
+  verbose?: boolean;
+}
+
+export interface ValidateOptions {
+  color?: ColorMode;
+  directory?: string;
+  quiet?: boolean;
+  table?: string;
   verbose?: boolean;
 }
 
@@ -156,6 +164,62 @@ export async function down(
     log.info(messages.completedDown());
   } catch (error) {
     log.error(messages.abortedDown());
+    throw error;
+  }
+}
+
+export async function validate(
+  clientConfig: ClientConfig,
+  args: ValidateOptions = {},
+): Promise<void> {
+  const { log, directory, table } = normalizeOptions(args);
+
+  log.debug(
+    `run=validate directory=${JSON.stringify(directory)} table=${JSON.stringify(table)}`,
+  );
+  log.info(messages.startedValidate());
+
+  try {
+    const disk = loadDiskMigrations(directory);
+    // Validate and parse the full migration set before opening a DB session.
+    void readMigrationSqlByFile(disk.all);
+
+    await withMigrationSession({
+      clientConfig,
+      initializeHistory: false,
+      log,
+      table,
+      run: async ({ appliedRows }): Promise<void> => {
+        const { latestAppliedMigration } = validateUpPreconditions({
+          appliedRows,
+          disk,
+        });
+
+        const pendingUp = planUpExecution({
+          disk,
+          latestAppliedMigration,
+          targetMigration: null,
+        });
+
+        const nextDown = planDownExecution({
+          appliedRows,
+          disk,
+          targetMigration: null,
+        });
+
+        log.info(
+          messages.validationSummary(
+            pendingUp.length,
+            appliedRows.length,
+            nextDown.length,
+          ),
+        );
+      },
+    });
+
+    log.info(messages.completedValidate());
+  } catch (error) {
+    log.error(messages.abortedValidate());
     throw error;
   }
 }

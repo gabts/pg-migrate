@@ -205,11 +205,24 @@ describe("args", (): void => {
     it("accepts shared flags across commands", (): void => {
       const parsed = parseTokens(["--directory", "migrations"]);
 
-      for (const command of ["create", "up", "down"] as const) {
+      for (const command of ["create", "up", "down", "validate"] as const) {
         assert.doesNotThrow((): void => {
           assertFlagsAllowedFor(parsed, command);
         });
       }
+    });
+
+    it("accepts --url and --table on validate", (): void => {
+      const parsed = parseTokens([
+        "--url",
+        "postgres://localhost:5432/example",
+        "--table",
+        "migration_history",
+      ]);
+
+      assert.doesNotThrow((): void => {
+        assertFlagsAllowedFor(parsed, "validate");
+      });
     });
 
     it("rejects --dry-run on create", (): void => {
@@ -218,6 +231,14 @@ describe("args", (): void => {
       assert.throws((): void => {
         assertFlagsAllowedFor(parsed, "create");
       }, /Unknown argument: --dry-run/);
+    });
+
+    it("rejects --target on validate", (): void => {
+      const parsed = parseTokens(["--target", "x.sql"]);
+
+      assert.throws((): void => {
+        assertFlagsAllowedFor(parsed, "validate");
+      }, /Unknown argument: --target/);
     });
 
     it("accepts global flags when no command is given", (): void => {

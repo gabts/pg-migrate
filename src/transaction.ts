@@ -1,7 +1,9 @@
 import type { Logger } from "./logger.js";
 import * as pg from "pg";
 import {
+  assertMigrationHistoryTableShape,
   ensureMigrationHistory,
+  migrationHistoryExists,
   readAppliedRows,
 } from "./migration-history.js";
 import { parseTableName, qualifyTableName } from "./table-name.js";
@@ -33,19 +35,44 @@ async function withMigrationSessionNormal<T>(args: {
   client: pg.Client;
   log: Logger;
   qualifiedTableName: string;
+  table: string;
   run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
 }): Promise<T> {
-  const { client, log, qualifiedTableName, run } = args;
+  const { client, log, qualifiedTableName, run, table } = args;
 
-  await runInTransaction(
+  await runInTransaction(client, async (): Promise<void> => {
+    await ensureMigrationHistory({
+      client,
+      log,
+      qualifiedTableName,
+    });
+    await assertMigrationHistoryTableShape({
+      client,
+      qualifiedTableName,
+      table,
+    });
+  });
+
+  const appliedRows = await readAppliedRows(client, qualifiedTableName);
+  return await run({ appliedRows, client });
+}
+
+async function withMigrationSessionValidateOnly<T>(args: {
+  client: pg.Client;
+  qualifiedTableName: string;
+  table: string;
+  run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
+}): Promise<T> {
+  const { client, qualifiedTableName, table, run } = args;
+  const tableExists = await migrationHistoryExists(client, qualifiedTableName);
+  if (!tableExists) {
+    throw new Error(`Migration history table does not exist: ${table}`);
+  }
+  await assertMigrationHistoryTableShape({
     client,
-    (): Promise<void> =>
-      ensureMigrationHistory({
-        client,
-        log,
-        qualifiedTableName,
-      }),
-  );
+    qualifiedTableName,
+    table,
+  });
 
   const appliedRows = await readAppliedRows(client, qualifiedTableName);
   return await run({ appliedRows, client });
@@ -55,9 +82,10 @@ async function withMigrationSessionDryRun<T>(args: {
   client: pg.Client;
   log: Logger;
   qualifiedTableName: string;
+  table: string;
   run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
 }): Promise<T> {
-  const { client, log, qualifiedTableName, run } = args;
+  const { client, log, qualifiedTableName, run, table } = args;
 
   await client.query("BEGIN;");
   try {
@@ -65,6 +93,11 @@ async function withMigrationSessionDryRun<T>(args: {
       client,
       log,
       qualifiedTableName,
+    });
+    await assertMigrationHistoryTableShape({
+      client,
+      qualifiedTableName,
+      table,
     });
     const appliedRows = await readAppliedRows(client, qualifiedTableName);
     return await run({ appliedRows, client });
@@ -84,10 +117,18 @@ export async function withMigrationSession<T>(args: {
   clientConfig: ClientConfig;
   log: Logger;
   dryRun?: boolean;
+  initializeHistory?: boolean;
   run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
   table: string;
 }): Promise<T> {
-  const { clientConfig, log, dryRun = false, run, table } = args;
+  const {
+    clientConfig,
+    log,
+    dryRun = false,
+    initializeHistory = true,
+    run,
+    table,
+  } = args;
   const parsedTableName = parseTableName(table);
   const qualifiedTableName = qualifyTableName(parsedTableName);
   const client = new pg.Client(clientConfig);
@@ -116,12 +157,22 @@ export async function withMigrationSession<T>(args: {
     }
     lockKey = computedLockKey;
 
+    if (!initializeHistory) {
+      return await withMigrationSessionValidateOnly({
+        client,
+        qualifiedTableName,
+        run,
+        table,
+      });
+    }
+
     if (dryRun) {
       return await withMigrationSessionDryRun({
         client,
         log,
         qualifiedTableName,
         run,
+        table,
       });
     }
 
@@ -130,6 +181,7 @@ export async function withMigrationSession<T>(args: {
       log,
       qualifiedTableName,
       run,
+      table,
     });
   } finally {
     if (lockKey !== null) {
