@@ -1,3 +1,6 @@
+/**
+ * Logging contract used throughout the migrator runtime.
+ */
 export interface Logger {
   info(message: string): void;
   warn(message: string): void;
@@ -5,6 +8,9 @@ export interface Logger {
   debug(message: string): void;
 }
 
+/**
+ * Color rendering mode for log output.
+ */
 export type ColorMode = boolean | "auto";
 
 interface WritableStreamLike {
@@ -12,6 +18,9 @@ interface WritableStreamLike {
   write(chunk: string): boolean;
 }
 
+/**
+ * Options for creating a configured logger instance.
+ */
 export interface LoggerOptions {
   color?: ColorMode;
   quiet?: boolean;
@@ -39,6 +48,9 @@ function formatLevelPrefix(
   return `\u001B[${colorCode}m${label}:\u001B[0m`;
 }
 
+/**
+ * Creates a logger that writes leveled messages to stderr.
+ */
 export function createLogger(options: LoggerOptions = {}): Logger {
   const stderr = options.stderr ?? process.stderr;
   const quiet = options.quiet ?? false;
@@ -76,6 +88,9 @@ export function createLogger(options: LoggerOptions = {}): Logger {
   };
 }
 
+/**
+ * Resolves whether ANSI color should be enabled for output.
+ */
 export function resolveSupportsColor(
   color: ColorMode | undefined,
   isTTY: boolean,

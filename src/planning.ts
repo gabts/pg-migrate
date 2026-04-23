@@ -1,5 +1,8 @@
 import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
 
+/**
+ * Computes the ordered set of migrations to apply for an `up` run.
+ */
 export function planUpExecution(args: {
   disk: LoadedMigrations;
   latestAppliedMigration: DiskMigration | null;
@@ -15,6 +18,9 @@ export function planUpExecution(args: {
   return args.disk.all.slice(startIndex, endIndex);
 }
 
+/**
+ * Computes the ordered set of migrations to revert for a `down` run.
+ */
 export function planDownExecution(args: {
   appliedRows: AppliedRow[];
   disk: LoadedMigrations;

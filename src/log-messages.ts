@@ -6,6 +6,9 @@ function dryRunSuffix(dryRun?: boolean): string {
   return dryRun ? " (dry run)" : "";
 }
 
+/**
+ * Standardized user-facing log message builders used across commands.
+ */
 export const messages = {
   startedUp: (dryRun?: boolean): string => {
     return `🦖 started migration run${dryRunSuffix(dryRun)}`;

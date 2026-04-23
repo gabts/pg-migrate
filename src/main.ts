@@ -14,6 +14,9 @@ import {
   validateDownPreconditions,
 } from "./validation.js";
 
+/**
+ * Runtime options shared by `up` and `down` migration commands.
+ */
 export interface MigrationOptions {
   color?: ColorMode;
   directory?: string;
@@ -24,6 +27,9 @@ export interface MigrationOptions {
   verbose?: boolean;
 }
 
+/**
+ * Runtime options for migration validation runs.
+ */
 export interface ValidateOptions {
   color?: ColorMode;
   directory?: string;
@@ -54,6 +60,9 @@ function normalizeOptions(args: MigrationOptions): {
   };
 }
 
+/**
+ * Applies pending migrations up to an optional target file.
+ */
 export async function up(
   clientConfig: ClientConfig,
   args: MigrationOptions = {},
@@ -111,6 +120,9 @@ export async function up(
   }
 }
 
+/**
+ * Rolls back migrations according to optional target semantics.
+ */
 export async function down(
   clientConfig: ClientConfig,
   args: MigrationOptions = {},
@@ -168,6 +180,9 @@ export async function down(
   }
 }
 
+/**
+ * Validates migration files and applied migration history consistency.
+ */
 export async function validate(
   clientConfig: ClientConfig,
   args: ValidateOptions = {},

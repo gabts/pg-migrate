@@ -9,6 +9,9 @@ import {
 import { parseTableName, qualifyTableName } from "./table-name.js";
 import type { AppliedRow, ClientConfig } from "./types.js";
 
+/**
+ * Runs a callback inside a transaction with rollback-on-error semantics.
+ */
 export async function runInTransaction<T>(
   client: pg.Client,
   fn: () => Promise<T>,
@@ -113,6 +116,9 @@ async function withMigrationSessionDryRun<T>(args: {
 
 // Errors thrown from `run` (or from session setup) propagate unchanged.
 // Callers are responsible for emitting aborted-run logs around the call.
+/**
+ * Opens a DB session, acquires the migration lock, and runs migration work.
+ */
 export async function withMigrationSession<T>(args: {
   clientConfig: ClientConfig;
   log: Logger;
