@@ -1,5 +1,15 @@
 import * as fs from "fs";
 import * as path from "path";
+import {
+  assertFlagsAllowedFor,
+  booleanFlag,
+  extractGlobals,
+  hasHelpFlag,
+  parseTokens,
+  valueFlag,
+  type CommandName,
+  type ParsedTokens,
+} from "./args.js";
 import { createIo, type Io } from "./io.js";
 import type { ColorMode } from "./logger.js";
 import { down as runDown, up as runUp } from "./main.js";
@@ -96,16 +106,13 @@ Examples:
   migratorosaurus down --dry-run
 `;
 
+function getDefaultMigrationDirectory(): string {
+  return process.env[migrationDirectoryEnvVar] || "migrations";
+}
+
 interface CreateOptions {
   directory: string;
   name?: string;
-}
-
-interface GlobalOptions {
-  color: ColorMode;
-  json: boolean;
-  quiet: boolean;
-  verbose: boolean;
 }
 
 interface MigrationRunOptions {
@@ -116,170 +123,40 @@ interface MigrationRunOptions {
   target?: string;
 }
 
-function showHelp(io: Io, text: string): number {
-  io.result(text);
-  return 0;
-}
-
-function parseGlobalOptions(args: string[]): {
-  argsWithoutGlobalFlags: string[];
-  global: GlobalOptions;
-} {
-  const global: GlobalOptions = {
-    color: "auto",
-    json: false,
-    quiet: false,
-    verbose: false,
-  };
-  const argsWithoutGlobalFlags: string[] = [
-    args[0] ?? "node",
-    args[1] ?? "migratorosaurus",
-  ];
-
-  for (const arg of args.slice(2)) {
-    switch (arg) {
-      case "--json":
-        global.json = true;
-        break;
-      case "--quiet":
-        global.quiet = true;
-        break;
-      case "--verbose":
-      case "-v":
-        global.verbose = true;
-        break;
-      case "--no-color":
-        global.color = false;
-        break;
-      default:
-        argsWithoutGlobalFlags.push(arg);
-        break;
-    }
+function buildCreateOptions(
+  parsed: ParsedTokens,
+  extraPositional: readonly string[],
+): CreateOptions {
+  if (extraPositional.length > 0) {
+    throw new Error(`Unexpected argument: ${extraPositional[0]}`);
   }
 
   return {
-    argsWithoutGlobalFlags,
-    global,
+    directory:
+      valueFlag(parsed, "--directory") ?? getDefaultMigrationDirectory(),
+    name: valueFlag(parsed, "--name")?.replace(/\.sql$/, ""),
   };
 }
 
-function getFlagValue(
-  label: string,
-  flags: string,
-  args: readonly string[],
-  index: number,
-): string {
-  const value = args[index + 1];
-  if (value === undefined) {
-    throw new Error(`${label} flag (${flags}) requires a value`);
-  }
-  return value;
-}
-
-function hasHelpFlag(args: readonly string[]): boolean {
-  return args.includes("-h") || args.includes("--help");
-}
-
-function getDefaultMigrationDirectory(): string {
-  return process.env[migrationDirectoryEnvVar] || "migrations";
-}
-
-function parseCreateArgs(args: readonly string[]): CreateOptions {
-  const opts: CreateOptions = {
-    directory: getDefaultMigrationDirectory(),
-  };
-
-  let i = 0;
-
-  while (i < args.length) {
-    const arg = args[i];
-
-    switch (arg) {
-      case "-d":
-      case "--directory":
-        opts.directory = getFlagValue("Directory", "--directory, -d", args, i);
-        i += 2;
-        break;
-      case "-n":
-      case "--name":
-        opts.name = getFlagValue("Name", "--name, -n", args, i).replace(
-          /\.sql$/,
-          "",
-        );
-        i += 2;
-        break;
-      default:
-        throw new Error(`Unknown argument: ${arg}`);
-    }
-  }
-
-  return opts;
-}
-
-function parseMigrationRunArgs(
-  args: readonly string[],
+function buildMigrationRunOptions(
+  parsed: ParsedTokens,
+  extraPositional: readonly string[],
   command: "up" | "down",
 ): MigrationRunOptions {
-  const opts: Omit<MigrationRunOptions, "clientConfig"> = {
-    directory: getDefaultMigrationDirectory(),
-    dryRun: false,
-    table: "migration_history",
-  };
-
-  let clientConfig = process.env.DATABASE_URL;
-  let explicitClientConfig = false;
-  let i = 0;
-
-  while (i < args.length) {
-    const arg = args[i];
-    if (arg === undefined) {
-      break;
-    }
-
-    if (!arg.startsWith("-")) {
-      if (!explicitClientConfig) {
-        clientConfig = arg;
-        explicitClientConfig = true;
-        i += 1;
-        continue;
-      }
-      throw new Error(`Unexpected argument: ${arg}`);
-    }
-
-    switch (arg) {
-      case "--url":
-        if (explicitClientConfig) {
-          throw new Error(
-            "Database URL provided multiple times; use either <database-url> or --url",
-          );
-        }
-        clientConfig = getFlagValue("Database URL", "--url", args, i);
-        explicitClientConfig = true;
-        i += 2;
-        break;
-      case "--dry-run":
-        opts.dryRun = true;
-        i += 1;
-        break;
-      case "-d":
-      case "--directory":
-        opts.directory = getFlagValue("Directory", "--directory, -d", args, i);
-        i += 2;
-        break;
-      case "--table":
-        opts.table = getFlagValue("Table", "--table", args, i);
-        i += 2;
-        break;
-      case "-t":
-      case "--target":
-        opts.target = getFlagValue("Target", "--target, -t", args, i);
-        i += 2;
-        break;
-      default:
-        throw new Error(`Unknown argument: ${arg}`);
-    }
+  if (extraPositional.length > 1) {
+    throw new Error(`Unexpected argument: ${extraPositional[1]}`);
   }
 
+  const positionalUrl = extraPositional[0];
+  const flagUrl = valueFlag(parsed, "--url");
+
+  if (positionalUrl !== undefined && flagUrl !== undefined) {
+    throw new Error(
+      "Database URL provided multiple times; use either <database-url> or --url",
+    );
+  }
+
+  const clientConfig = positionalUrl ?? flagUrl ?? process.env.DATABASE_URL;
   if (!clientConfig) {
     throw new Error(
       `Database URL is required for ${command}; pass it as an argument, --url, or set DATABASE_URL`,
@@ -288,7 +165,11 @@ function parseMigrationRunArgs(
 
   return {
     clientConfig,
-    ...opts,
+    directory:
+      valueFlag(parsed, "--directory") ?? getDefaultMigrationDirectory(),
+    dryRun: booleanFlag(parsed, "--dry-run"),
+    table: valueFlag(parsed, "--table") ?? "migration_history",
+    target: valueFlag(parsed, "--target"),
   };
 }
 
@@ -344,103 +225,113 @@ function formatErrorMessage(error: unknown): string {
   return String(error);
 }
 
-async function executeCommand(
-  args: readonly string[],
-  io: Io,
-  color: ColorMode,
-): Promise<number> {
-  const command = args[2];
-  const commandArgs = args.slice(3);
-
+function helpTextFor(command: CommandName | undefined): string {
   switch (command) {
+    case "create":
+      return createHelpText;
+    case "up":
+      return upHelpText;
+    case "down":
+      return downHelpText;
     case undefined:
-    case "-h":
-    case "--help":
-      return showHelp(io, helpText);
-    case "create": {
-      if (hasHelpFlag(commandArgs)) {
-        return showHelp(io, createHelpText);
-      }
-
-      const options = parseCreateArgs(commandArgs);
-      io.debug(
-        `command=create directory=${JSON.stringify(options.directory)} name=${JSON.stringify(options.name ?? "")}`,
-      );
-      const filePath = createMigration(options);
-
-      if (io.json) {
-        io.result({
-          command: "create",
-          file: filePath,
-        });
-      } else {
-        io.result(filePath);
-      }
-      return 0;
-    }
-    case "up": {
-      if (hasHelpFlag(commandArgs)) {
-        return showHelp(io, upHelpText);
-      }
-
-      const options = parseMigrationRunArgs(commandArgs, "up");
-      await runUp(options.clientConfig, {
-        color,
-        directory: options.directory,
-        dryRun: options.dryRun,
-        quiet: io.quiet,
-        table: options.table,
-        target: options.target,
-        verbose: io.verbose,
-      });
-
-      if (io.json) {
-        io.result({
-          command: "up",
-          dryRun: options.dryRun,
-          ok: true,
-          target: options.target ?? null,
-        });
-      }
-      return 0;
-    }
-    case "down": {
-      if (hasHelpFlag(commandArgs)) {
-        return showHelp(io, downHelpText);
-      }
-
-      const options = parseMigrationRunArgs(commandArgs, "down");
-      await runDown(options.clientConfig, {
-        color,
-        directory: options.directory,
-        dryRun: options.dryRun,
-        quiet: io.quiet,
-        table: options.table,
-        target: options.target,
-        verbose: io.verbose,
-      });
-
-      if (io.json) {
-        io.result({
-          command: "down",
-          dryRun: options.dryRun,
-          ok: true,
-          target: options.target ?? null,
-        });
-      }
-      return 0;
-    }
-    default:
-      throw new Error(`Unknown command: ${command}`);
+      return helpText;
   }
 }
 
+async function runCommand(
+  command: CommandName,
+  parsed: ParsedTokens,
+  extraPositional: readonly string[],
+  io: Io,
+  color: ColorMode,
+): Promise<number> {
+  if (command === "create") {
+    const options = buildCreateOptions(parsed, extraPositional);
+    io.debug(
+      `command=create directory=${JSON.stringify(options.directory)} name=${JSON.stringify(options.name ?? "")}`,
+    );
+    const filePath = createMigration(options);
+
+    if (io.json) {
+      io.result({
+        command: "create",
+        file: filePath,
+      });
+    } else {
+      io.result(filePath);
+    }
+    return 0;
+  }
+
+  const runOptions = buildMigrationRunOptions(parsed, extraPositional, command);
+  const runFn = command === "up" ? runUp : runDown;
+  await runFn(runOptions.clientConfig, {
+    color,
+    directory: runOptions.directory,
+    dryRun: runOptions.dryRun,
+    quiet: io.quiet,
+    table: runOptions.table,
+    target: runOptions.target,
+    verbose: io.verbose,
+  });
+
+  if (io.json) {
+    io.result({
+      command,
+      dryRun: runOptions.dryRun,
+      ok: true,
+      target: runOptions.target ?? null,
+    });
+  }
+  return 0;
+}
+
 export async function cli(args = process.argv): Promise<number> {
-  const { argsWithoutGlobalFlags, global } = parseGlobalOptions(args);
-  const io = createIo(global);
+  const tokens = args.slice(2);
+  // Sniff --no-color so parse-time errors aren't colorized when the user asked otherwise.
+  // Other global flags (--json/--quiet/--verbose) don't affect error output.
+  const initialColor: ColorMode = tokens.includes("--no-color")
+    ? false
+    : "auto";
+  let io: Io = createIo({ color: initialColor });
 
   try {
-    return await executeCommand(argsWithoutGlobalFlags, io, global.color);
+    const parsed = parseTokens(tokens);
+    const globals = extractGlobals(parsed);
+    io = createIo(globals);
+
+    const [commandToken, ...extraPositional] = parsed.positional;
+    let command: CommandName | undefined;
+    if (commandToken !== undefined) {
+      if (
+        commandToken !== "create" &&
+        commandToken !== "up" &&
+        commandToken !== "down"
+      ) {
+        throw new Error(`Unknown command: ${commandToken}`);
+      }
+      command = commandToken;
+    }
+
+    if (hasHelpFlag(tokens)) {
+      io.result(helpTextFor(command));
+      return 0;
+    }
+
+    assertFlagsAllowedFor(parsed, command);
+
+    if (command === undefined) {
+      io.result(helpText);
+      return 0;
+    }
+
+    return await runCommand(
+      command,
+      parsed,
+      extraPositional,
+      io,
+      globals.color,
+    );
   } catch (error) {
     io.error(formatErrorMessage(error));
     return 1;

@@ -422,6 +422,32 @@ describe("cli", (): void => {
     );
   });
 
+  it("rejects unknown commands even when --help is passed", async (): Promise<void> => {
+    const result = await runCliInProcessRaw(["unknown", "--help"]);
+
+    assert.equal(result.status, 1);
+    assert.match(stripAnsi(result.stderr), /Unknown command: unknown/);
+    assert.equal(result.stdout, "");
+  });
+
+  it("rejects command-scoped flags when no command is given", async (): Promise<void> => {
+    await assert.rejects(
+      (): Promise<string> => runCliInProcess(["--dry-run"]),
+      /Unknown argument: --dry-run/,
+    );
+    await assert.rejects(
+      (): Promise<string> => runCliInProcess(["--name", "x"]),
+      /Unknown argument: --name/,
+    );
+  });
+
+  it("still shows help when --help is passed alongside command-scoped flags without a command", async (): Promise<void> => {
+    const output = await runCliInProcess(["--name", "x", "--help"]);
+
+    assert.ok(output.length > 0);
+    assert.match(output, /Usage: migratorosaurus/);
+  });
+
   it("rejects up when database URL is missing", async (): Promise<void> => {
     await assert.rejects(
       (): Promise<string> =>
@@ -672,6 +698,41 @@ describe("cli", (): void => {
 
     assert.equal(helpResult.status, 0);
     assert.equal(errorResult.status, 1);
+  });
+
+  describe("--no-color on parse-time errors", (): void => {
+    async function runWithTty(args: string[]): Promise<CliRunResult> {
+      const originalIsTTY = process.stderr.isTTY;
+      Object.defineProperty(process.stderr, "isTTY", {
+        configurable: true,
+        value: true,
+        writable: true,
+      });
+      try {
+        return await runCliInProcessRaw(args);
+      } finally {
+        Object.defineProperty(process.stderr, "isTTY", {
+          configurable: true,
+          value: originalIsTTY,
+          writable: true,
+        });
+      }
+    }
+
+    it("emits ANSI color on parse errors under a tty by default", async (): Promise<void> => {
+      const result = await runWithTty(["--bogus"]);
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /\x1b\[[0-9;]*m/);
+    });
+
+    it("suppresses ANSI color on parse errors when --no-color is set", async (): Promise<void> => {
+      const result = await runWithTty(["--no-color", "--bogus"]);
+
+      assert.equal(result.status, 1);
+      assert.doesNotMatch(result.stderr, /\x1b\[[0-9;]*m/);
+      assert.match(stripAnsi(result.stderr), /Unknown argument: --bogus/);
+    });
   });
 
   it("does not output ANSI color sequences in non-tty mode", (): void => {
