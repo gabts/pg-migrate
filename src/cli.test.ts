@@ -215,10 +215,49 @@ describe("cli", (): void => {
     assert.ok(output.length > 0);
   });
 
+  it("emits parseable JSON for help when --json is set", async (): Promise<void> => {
+    const result = await runCliInProcessRaw(["--json", "--help"]);
+
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout.trimEnd().split("\n").length, 1);
+    const parsed = JSON.parse(result.stdout);
+    assert.deepEqual(Object.keys(parsed).sort(), ["command", "help", "ok"]);
+    assert.equal(parsed.command, null);
+    assert.equal(parsed.ok, true);
+    assert.match(parsed.help, /Usage: migratorosaurus/);
+    assert.equal(result.stderr, "");
+  });
+
+  it("emits parseable JSON for default help when --json is set", async (): Promise<void> => {
+    const result = await runCliInProcessRaw(["--json"]);
+
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout.trimEnd().split("\n").length, 1);
+    const parsed = JSON.parse(result.stdout);
+    assert.deepEqual(Object.keys(parsed).sort(), ["command", "help", "ok"]);
+    assert.equal(parsed.command, null);
+    assert.equal(parsed.ok, true);
+    assert.match(parsed.help, /Usage: migratorosaurus/);
+    assert.equal(result.stderr, "");
+  });
+
   it("prints create help text", async (): Promise<void> => {
     const output = await runCliInProcess(["create", "--help"]);
 
     assert.ok(output.length > 0);
+  });
+
+  it("emits parseable JSON for command help when --json is set", async (): Promise<void> => {
+    const result = await runCliInProcessRaw(["create", "--json", "--help"]);
+
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout.trimEnd().split("\n").length, 1);
+    const parsed = JSON.parse(result.stdout);
+    assert.deepEqual(Object.keys(parsed).sort(), ["command", "help", "ok"]);
+    assert.equal(parsed.command, "create");
+    assert.equal(parsed.ok, true);
+    assert.match(parsed.help, /Usage: migratorosaurus create/);
+    assert.equal(result.stderr, "");
   });
 
   it("prints create help text even when help appears after another flag", async (): Promise<void> => {
@@ -761,7 +800,7 @@ DELETE FROM cli_validate_person;
     }
   });
 
-  it("keeps json stdout empty for validate failures", async (): Promise<void> => {
+  it("emits parseable JSON for validate failures while keeping logs on stderr", async (): Promise<void> => {
     const missingDirectory = path.join(tempDir, "missing");
     const result = await runCliInProcessRaw([
       "validate",
@@ -773,13 +812,23 @@ DELETE FROM cli_validate_person;
     ]);
 
     assert.equal(result.status, 1);
+    assert.equal(result.stdout.trimEnd().split("\n").length, 1);
+    const parsed = JSON.parse(result.stdout);
+    assert.deepEqual(Object.keys(parsed).sort(), ["command", "error", "ok"]);
+    assert.equal(parsed.command, "validate");
+    assert.equal(parsed.ok, false);
+    assert.match(
+      parsed.error,
+      new RegExp(
+        `Migration directory does not exist: ${escapeRegExp(missingDirectory)}`,
+      ),
+    );
     assert.match(
       stripAnsi(result.stderr),
       new RegExp(
         `Migration directory does not exist: ${escapeRegExp(missingDirectory)}`,
       ),
     );
-    assert.equal(result.stdout, "");
   });
 
   it("keeps json stdout clean while sending verbose logs to stderr", async (): Promise<void> => {
@@ -858,6 +907,32 @@ DELETE FROM cli_validate_person;
     assert.equal(errorResult.status, 1);
   });
 
+  it("emits parseable JSON on parse-time failures when --json is set", async (): Promise<void> => {
+    const result = await runCliInProcessRaw(["--json", "--bogus"]);
+
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout.trimEnd().split("\n").length, 1);
+    const parsed = JSON.parse(result.stdout);
+    assert.deepEqual(Object.keys(parsed).sort(), ["command", "error", "ok"]);
+    assert.equal(parsed.command, null);
+    assert.equal(parsed.ok, false);
+    assert.match(parsed.error, /Unknown argument: --bogus/);
+    assert.match(stripAnsi(result.stderr), /Unknown argument: --bogus/);
+  });
+
+  it("does not treat --json as a parse-time global when it is a flag value", async (): Promise<void> => {
+    const result = await runCliInProcessRaw([
+      "create",
+      "--name",
+      "--json",
+      "--bogus",
+    ]);
+
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, "");
+    assert.match(stripAnsi(result.stderr), /Unknown argument: --bogus/);
+  });
+
   describe("--no-color on parse-time errors", (): void => {
     async function runWithTty(args: string[]): Promise<CliRunResult> {
       const originalIsTTY = process.stderr.isTTY;
@@ -889,6 +964,19 @@ DELETE FROM cli_validate_person;
 
       assert.equal(result.status, 1);
       assert.doesNotMatch(result.stderr, /\x1b\[[0-9;]*m/);
+      assert.match(stripAnsi(result.stderr), /Unknown argument: --bogus/);
+    });
+
+    it("does not treat --no-color as a parse-time global when it is a flag value", async (): Promise<void> => {
+      const result = await runWithTty([
+        "create",
+        "--name",
+        "--no-color",
+        "--bogus",
+      ]);
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /\x1b\[[0-9;]*m/);
       assert.match(stripAnsi(result.stderr), /Unknown argument: --bogus/);
     });
   });

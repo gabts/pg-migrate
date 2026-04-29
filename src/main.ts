@@ -1,4 +1,4 @@
-import { createLogger, type ColorMode, type Logger } from "./logger.js";
+import { createLogger, withLoggerOptions, type Logger } from "./logger.js";
 import { executeDownPlan, executeUpPlan } from "./execution.js";
 import { messages } from "./log-messages.js";
 import {
@@ -15,12 +15,17 @@ import {
 } from "./validation.js";
 
 /**
+ * Logger contract accepted by public runtime options.
+ */
+export type { Logger } from "./logger.js";
+
+/**
  * Runtime options shared by `up` and `down` migration commands.
  */
 export interface MigrationOptions {
-  color?: ColorMode;
   directory?: string;
   dryRun?: boolean;
+  logger?: Logger;
   quiet?: boolean;
   table?: string;
   target?: string;
@@ -31,28 +36,33 @@ export interface MigrationOptions {
  * Runtime options for migration validation runs.
  */
 export interface ValidateOptions {
-  color?: ColorMode;
   directory?: string;
+  logger?: Logger;
   quiet?: boolean;
   table?: string;
   verbose?: boolean;
 }
 
 function normalizeOptions(args: MigrationOptions): {
-  log: Logger;
+  logger: Logger;
   directory: string;
   dryRun: boolean;
   table: string;
   target?: string;
 } {
-  const log = createLogger({
-    color: args.color,
-    quiet: args.quiet,
-    verbose: args.verbose,
-  });
+  const logger =
+    args.logger === undefined
+      ? createLogger({
+          quiet: args.quiet,
+          verbose: args.verbose,
+        })
+      : withLoggerOptions(args.logger, {
+          quiet: args.quiet,
+          verbose: args.verbose ?? false,
+        });
 
   return {
-    log,
+    logger,
     directory: args.directory ?? "migrations",
     dryRun: args.dryRun ?? false,
     table: args.table ?? "migration_history",
@@ -67,14 +77,14 @@ export async function up(
   clientConfig: ClientConfig,
   args: MigrationOptions = {},
 ): Promise<void> {
-  const { log, directory, dryRun, table, target } = normalizeOptions(args);
+  const { logger, directory, dryRun, table, target } = normalizeOptions(args);
 
-  log.debug(
+  logger.debug(
     `run=up directory=${JSON.stringify(directory)} table=${JSON.stringify(table)} dryRun=${String(dryRun)} target=${JSON.stringify(target ?? null)}`,
   );
-  log.info(messages.startedUp(dryRun));
+  logger.info(messages.startedUp(dryRun));
   if (target) {
-    log.info(messages.target(target));
+    logger.info(messages.target(target));
   }
 
   try {
@@ -85,7 +95,7 @@ export async function up(
 
     await withMigrationSession({
       clientConfig,
-      log,
+      logger,
       dryRun,
       table,
       run: async ({ appliedRows, client }): Promise<void> => {
@@ -103,19 +113,19 @@ export async function up(
         });
 
         const steps = materializeStepsFromSql(migrations, "up", sqlByFile);
-        log.info(messages.pending(steps.length));
+        logger.info(messages.pending(steps.length));
 
         if (steps.length === 0) {
           return;
         }
 
-        await executeUpPlan({ client, log, dryRun, steps, table });
+        await executeUpPlan({ client, logger, dryRun, steps, table });
       },
     });
 
-    log.info(messages.completedUp());
+    logger.info(messages.completedUp());
   } catch (error) {
-    log.error(messages.abortedUp());
+    logger.error(messages.abortedUp());
     throw error;
   }
 }
@@ -127,14 +137,14 @@ export async function down(
   clientConfig: ClientConfig,
   args: MigrationOptions = {},
 ): Promise<void> {
-  const { log, directory, dryRun, table, target } = normalizeOptions(args);
+  const { logger, directory, dryRun, table, target } = normalizeOptions(args);
 
-  log.debug(
+  logger.debug(
     `run=down directory=${JSON.stringify(directory)} table=${JSON.stringify(table)} dryRun=${String(dryRun)} target=${JSON.stringify(target ?? null)}`,
   );
-  log.info(messages.startedDown(dryRun));
+  logger.info(messages.startedDown(dryRun));
   if (target) {
-    log.info(messages.target(target));
+    logger.info(messages.target(target));
   }
 
   try {
@@ -145,7 +155,7 @@ export async function down(
 
     await withMigrationSession({
       clientConfig,
-      log,
+      logger,
       dryRun,
       table,
       run: async ({ appliedRows, client }): Promise<void> => {
@@ -162,20 +172,20 @@ export async function down(
         });
 
         const steps = materializeStepsFromSql(migrations, "down", sqlByFile);
-        log.info(messages.pending(steps.length));
+        logger.info(messages.pending(steps.length));
 
         if (steps.length === 0) {
-          log.info(messages.nothingToRollback());
+          logger.info(messages.nothingToRollback());
           return;
         }
 
-        await executeDownPlan({ client, log, dryRun, steps, table });
+        await executeDownPlan({ client, logger, dryRun, steps, table });
       },
     });
 
-    log.info(messages.completedDown());
+    logger.info(messages.completedDown());
   } catch (error) {
-    log.error(messages.abortedDown());
+    logger.error(messages.abortedDown());
     throw error;
   }
 }
@@ -187,12 +197,12 @@ export async function validate(
   clientConfig: ClientConfig,
   args: ValidateOptions = {},
 ): Promise<void> {
-  const { log, directory, table } = normalizeOptions(args);
+  const { logger, directory, table } = normalizeOptions(args);
 
-  log.debug(
+  logger.debug(
     `run=validate directory=${JSON.stringify(directory)} table=${JSON.stringify(table)}`,
   );
-  log.info(messages.startedValidate());
+  logger.info(messages.startedValidate());
 
   try {
     const disk = loadDiskMigrations(directory);
@@ -202,7 +212,7 @@ export async function validate(
     await withMigrationSession({
       clientConfig,
       initializeHistory: false,
-      log,
+      logger,
       table,
       run: async ({ appliedRows }): Promise<void> => {
         const { latestAppliedMigration } = validateUpPreconditions({
@@ -222,7 +232,7 @@ export async function validate(
           targetMigration: null,
         });
 
-        log.info(
+        logger.info(
           messages.validationSummary(
             pendingUp.length,
             appliedRows.length,
@@ -232,9 +242,9 @@ export async function validate(
       },
     });
 
-    log.info(messages.completedValidate());
+    logger.info(messages.completedValidate());
   } catch (error) {
-    log.error(messages.abortedValidate());
+    logger.error(messages.abortedValidate());
     throw error;
   }
 }

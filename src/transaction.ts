@@ -36,17 +36,17 @@ export async function runInTransaction<T>(
 
 async function withMigrationSessionNormal<T>(args: {
   client: pg.Client;
-  log: Logger;
+  logger: Logger;
   qualifiedTableName: string;
   table: string;
   run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
 }): Promise<T> {
-  const { client, log, qualifiedTableName, run, table } = args;
+  const { client, logger, qualifiedTableName, run, table } = args;
 
   await runInTransaction(client, async (): Promise<void> => {
     await ensureMigrationHistory({
       client,
-      log,
+      logger,
       qualifiedTableName,
     });
     await assertMigrationHistoryTableShape({
@@ -83,18 +83,18 @@ async function withMigrationSessionValidateOnly<T>(args: {
 
 async function withMigrationSessionDryRun<T>(args: {
   client: pg.Client;
-  log: Logger;
+  logger: Logger;
   qualifiedTableName: string;
   table: string;
   run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
 }): Promise<T> {
-  const { client, log, qualifiedTableName, run, table } = args;
+  const { client, logger, qualifiedTableName, run, table } = args;
 
   await client.query("BEGIN;");
   try {
     await ensureMigrationHistory({
       client,
-      log,
+      logger,
       qualifiedTableName,
     });
     await assertMigrationHistoryTableShape({
@@ -121,7 +121,7 @@ async function withMigrationSessionDryRun<T>(args: {
  */
 export async function withMigrationSession<T>(args: {
   clientConfig: ClientConfig;
-  log: Logger;
+  logger: Logger;
   dryRun?: boolean;
   initializeHistory?: boolean;
   run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
@@ -129,7 +129,7 @@ export async function withMigrationSession<T>(args: {
 }): Promise<T> {
   const {
     clientConfig,
-    log,
+    logger,
     dryRun = false,
     initializeHistory = true,
     run,
@@ -175,7 +175,7 @@ export async function withMigrationSession<T>(args: {
     if (dryRun) {
       return await withMigrationSessionDryRun({
         client,
-        log,
+        logger,
         qualifiedTableName,
         run,
         table,
@@ -184,7 +184,7 @@ export async function withMigrationSession<T>(args: {
 
     return await withMigrationSessionNormal({
       client,
-      log,
+      logger,
       qualifiedTableName,
       run,
       table,

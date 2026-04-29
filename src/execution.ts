@@ -8,18 +8,17 @@ import type { MigrationStep } from "./types.js";
 
 interface ExecutePlanArgs {
   client: pg.Client;
-  log: Logger;
+  logger: Logger;
   qualifiedTableName: string;
   steps: MigrationStep[];
 }
 
 async function executeUpPlanNormal(args: ExecutePlanArgs): Promise<void> {
-  const { client, log, qualifiedTableName, steps } = args;
+  const { client, logger, qualifiedTableName, steps } = args;
 
   for (const { file, sql } of steps) {
     const version = getMigrationVersion(file);
-    log.info("");
-    log.info(messages.applying(file));
+    logger.info(messages.applying(file));
     const started = Date.now();
 
     try {
@@ -31,23 +30,22 @@ async function executeUpPlanNormal(args: ExecutePlanArgs): Promise<void> {
         );
       });
 
-      log.info(messages.applied(file, Date.now() - started));
+      logger.info(messages.applied(file, Date.now() - started));
     } catch (error) {
-      log.error(messages.failed(file, Date.now() - started));
-      log.error(messages.errorDetails(error));
-      log.error(messages.failureRolledBack());
+      logger.error(messages.failed(file, Date.now() - started));
+      logger.error(messages.errorDetails(error));
+      logger.error(messages.failureRolledBack());
       throw error;
     }
   }
 }
 
 async function executeUpPlanDryRun(args: ExecutePlanArgs): Promise<void> {
-  const { client, log, qualifiedTableName, steps } = args;
+  const { client, logger, qualifiedTableName, steps } = args;
 
   for (const { file, sql } of steps) {
     const version = getMigrationVersion(file);
-    log.info("");
-    log.info(messages.applying(file));
+    logger.info(messages.applying(file));
     const started = Date.now();
 
     try {
@@ -57,23 +55,22 @@ async function executeUpPlanDryRun(args: ExecutePlanArgs): Promise<void> {
         [file, version],
       );
 
-      log.info(messages.applied(file, Date.now() - started));
+      logger.info(messages.applied(file, Date.now() - started));
     } catch (error) {
-      log.error(messages.failed(file, Date.now() - started));
-      log.error(messages.errorDetails(error));
-      log.error(messages.failureRolledBack());
+      logger.error(messages.failed(file, Date.now() - started));
+      logger.error(messages.errorDetails(error));
+      logger.error(messages.failureRolledBack());
       throw error;
     }
   }
 }
 
 async function executeDownPlanNormal(args: ExecutePlanArgs): Promise<void> {
-  const { client, log, qualifiedTableName, steps } = args;
+  const { client, logger, qualifiedTableName, steps } = args;
 
   for (const { file, sql } of steps) {
     const hasSql = sql !== "";
-    log.info("");
-    log.info(messages.reverting(file, hasSql));
+    logger.info(messages.reverting(file, hasSql));
     const started = Date.now();
 
     try {
@@ -92,12 +89,12 @@ async function executeDownPlanNormal(args: ExecutePlanArgs): Promise<void> {
         );
       }
 
-      log.info(messages.reverted(file, Date.now() - started));
+      logger.info(messages.reverted(file, Date.now() - started));
     } catch (error) {
-      log.error(messages.failed(file, Date.now() - started));
-      log.error(messages.errorDetails(error));
+      logger.error(messages.failed(file, Date.now() - started));
+      logger.error(messages.errorDetails(error));
       if (hasSql) {
-        log.error(messages.failureRolledBack());
+        logger.error(messages.failureRolledBack());
       }
       throw error;
     }
@@ -105,12 +102,11 @@ async function executeDownPlanNormal(args: ExecutePlanArgs): Promise<void> {
 }
 
 async function executeDownPlanDryRun(args: ExecutePlanArgs): Promise<void> {
-  const { client, log, qualifiedTableName, steps } = args;
+  const { client, logger, qualifiedTableName, steps } = args;
 
   for (const { file, sql } of steps) {
     const hasSql = sql !== "";
-    log.info("");
-    log.info(messages.reverting(file, hasSql));
+    logger.info(messages.reverting(file, hasSql));
     const started = Date.now();
 
     try {
@@ -122,11 +118,11 @@ async function executeDownPlanDryRun(args: ExecutePlanArgs): Promise<void> {
         [file],
       );
 
-      log.info(messages.reverted(file, Date.now() - started));
+      logger.info(messages.reverted(file, Date.now() - started));
     } catch (error) {
-      log.error(messages.failed(file, Date.now() - started));
-      log.error(messages.errorDetails(error));
-      log.error(messages.failureRolledBack());
+      logger.error(messages.failed(file, Date.now() - started));
+      logger.error(messages.errorDetails(error));
+      logger.error(messages.failureRolledBack());
       throw error;
     }
   }
@@ -137,25 +133,25 @@ async function executeDownPlanDryRun(args: ExecutePlanArgs): Promise<void> {
  */
 export async function executeUpPlan(args: {
   client: pg.Client;
-  log: Logger;
+  logger: Logger;
   dryRun?: boolean;
   steps: MigrationStep[];
   table: string;
 }): Promise<void> {
-  const { client, log, dryRun = false, steps, table } = args;
+  const { client, logger, dryRun = false, steps, table } = args;
   const qualifiedTableName = qualifyTableName(parseTableName(table));
 
   if (dryRun) {
     await executeUpPlanDryRun({
       client,
-      log,
+      logger,
       qualifiedTableName,
       steps,
     });
     return;
   }
 
-  await executeUpPlanNormal({ client, log, qualifiedTableName, steps });
+  await executeUpPlanNormal({ client, logger, qualifiedTableName, steps });
 }
 
 /**
@@ -163,18 +159,18 @@ export async function executeUpPlan(args: {
  */
 export async function executeDownPlan(args: {
   client: pg.Client;
-  log: Logger;
+  logger: Logger;
   dryRun?: boolean;
   steps: MigrationStep[];
   table: string;
 }): Promise<void> {
-  const { client, log, dryRun = false, steps, table } = args;
+  const { client, logger, dryRun = false, steps, table } = args;
   const qualifiedTableName = qualifyTableName(parseTableName(table));
 
   if (dryRun) {
     await executeDownPlanDryRun({
       client,
-      log,
+      logger,
       qualifiedTableName,
       steps,
     });
@@ -183,7 +179,7 @@ export async function executeDownPlan(args: {
 
   await executeDownPlanNormal({
     client,
-    log,
+    logger,
     qualifiedTableName,
     steps,
   });

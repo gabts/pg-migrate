@@ -12,14 +12,17 @@ interface EnsurePlan {
   tableExists: boolean;
 }
 
-function createCapturedLog(logs: string[]): Logger {
+function createCapturedLogger(logs: string[]): Logger {
   const capture = (message: string): void => {
     logs.push(message);
+  };
+  const captureError = (input: unknown): void => {
+    logs.push(String(input));
   };
 
   return {
     debug: capture,
-    error: capture,
+    error: captureError,
     info: capture,
     warn: capture,
   };
@@ -59,7 +62,7 @@ describe("migration-history", (): void => {
 
       await ensureMigrationHistory({
         client,
-        log: createCapturedLog(logs),
+        logger: createCapturedLogger(logs),
         qualifiedTableName: '"migration_history"',
       });
 
@@ -86,7 +89,7 @@ describe("migration-history", (): void => {
 
       await ensureMigrationHistory({
         client,
-        log: createCapturedLog(logs),
+        logger: createCapturedLogger(logs),
         qualifiedTableName: '"migration_history"',
       });
 

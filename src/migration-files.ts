@@ -117,7 +117,7 @@ export function materializeStepsFromSql(
   direction: MigrationDirection,
   sqlByFile: Map<string, ParsedMigrationSql>,
 ): MigrationStep[] {
-  return migrations.map(({ file }) => {
+  return migrations.map(({ file }): MigrationStep => {
     const parsedSql = sqlByFile.get(file);
     if (!parsedSql) {
       throw new Error(`Missing parsed migration SQL for file: ${file}`);
@@ -158,12 +158,14 @@ export function loadDiskMigrations(directory: string): LoadedMigrations {
     throw new Error(`No migration files found in directory: ${directory}`);
   }
 
-  const filesWithVersions = migrationFiles.map((file) => {
-    assertValidMigrationFilename(file);
-    return { file, version: getMigrationVersion(file) };
-  });
+  const filesWithVersions = migrationFiles.map(
+    (file): { file: string; version: string } => {
+      assertValidMigrationFilename(file);
+      return { file, version: getMigrationVersion(file) };
+    },
+  );
 
-  filesWithVersions.sort((a, b) => {
+  filesWithVersions.sort((a, b): number => {
     if (a.version < b.version) return -1;
     if (a.version > b.version) return 1;
     return 0;

@@ -122,8 +122,8 @@ CLI stream conventions:
 
 - Command results are written to `stdout` only
 - Logs (info/warn/error/debug) are written to `stderr`
-- In `--json` mode, `stdout` contains only structured JSON output
-- ANSI color in logs is enabled only when `stderr` is a TTY
+- In `--json` mode, `stdout` contains only structured JSON output (including help and failures)
+- ANSI color in human-friendly CLI logs is enabled only when `stderr` is a TTY
 
 ## 👩‍🔬 Configuration
 
@@ -133,13 +133,14 @@ The second argument is an optional configuration object:
 - **directory** The directory that contains your migration `.sql` files. Defaults to `"migrations"`.
 - **quiet** Suppress non-error logs.
 - **verbose** Enable debug logs.
-- **color** Enable/disable ANSI color in logs (TTY-aware by default).
+- **logger** Optional custom `Logger` implementation.
 - **table** The name of the database table that stores migration history. Defaults to `"migration_history"`.
   Valid values must use conventional PostgreSQL-style names only: `table_name` or `schema_name.table_name`. Table names may only use lowercase letters, numbers, and `_`, and must start with a letter or `_`. If you use a schema-qualified name, the schema must already exist.
 - **target** An exact migration filename.
 
-By default, `up()` and `down()` emit logs to `stderr` using the same conventions as the CLI.
-`validate()` also logs to `stderr` and performs checks only (no migration SQL execution).
+By default, `up()` and `down()` emit newline-delimited JSON logs to `stderr` unless you pass a custom `logger`.
+`validate()` uses the same default logging behavior and performs checks only (no migration SQL execution).
+The CLI configures a custom log writer that renders structured log objects as human-friendly terminal output.
 
 Use `up(config, { target })` to migrate forward until that migration has been applied.
 Use `down(config)` to roll back exactly one migration.

@@ -64,7 +64,7 @@ function validateAppliedVersionsMatchDisk(
 }
 
 function getAppliedFiles(appliedRows: AppliedRow[]): Set<string> {
-  return new Set(appliedRows.map(({ filename }) => filename));
+  return new Set(appliedRows.map(({ filename }): string => filename));
 }
 
 function getLatestAppliedMigration(
