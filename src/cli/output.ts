@@ -1,6 +1,7 @@
 import { resolveSupportsColor, type ColorMode } from "./color.js";
-import { formatHumanLogEvent } from "../logging/format.js";
-import type { LogObject, LogWriter } from "../logging/logger.js";
+import { formatHumanLogRecord } from "../logging/format.js";
+import type { LogRecord } from "../logging/schema.js";
+import { createJsonLogWriter, type LogSink } from "../logging/writers.js";
 import { appendNewline, serializeValue } from "../logging/serialize.js";
 
 interface CliWritable {
@@ -10,6 +11,7 @@ interface CliWritable {
 
 interface CliLogWriterOptions {
   color?: ColorMode;
+  json?: boolean;
 }
 
 /**
@@ -25,22 +27,26 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Creates a writer that renders structured log objects for CLI stderr.
+ * Creates a writer that renders structured log records for CLI stderr.
  */
 export function createCliLogWriter(
   stream: CliWritable,
   options?: CliLogWriterOptions,
-): LogWriter {
+): LogSink {
+  if (options?.json) {
+    return createJsonLogWriter(stream);
+  }
+
   const supportsColor = resolveSupportsColor(
     options?.color,
     stream.isTTY ?? false,
   );
 
   return {
-    write(event: LogObject): void {
+    write(record: LogRecord): void {
       stream.write(
         appendNewline(
-          formatHumanLogEvent(event, {
+          formatHumanLogRecord(record, {
             prefixes: true,
             supportsColor,
           }),

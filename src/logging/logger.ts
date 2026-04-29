@@ -1,150 +1,107 @@
-import { appendNewline, serializeValue } from "./serialize.js";
-
-type LogFields = Record<string, unknown>;
+import { randomUUID } from "crypto";
+import type { LogFields, LogRecord } from "./schema.js";
+import { createJsonLogWriter, type LogSink } from "./writers.js";
 
 /**
  * Logging contract used throughout the migrator runtime.
  */
 export interface Logger {
-  info(message: string, fields?: LogFields): void;
-  warn(message: string, fields?: LogFields): void;
-  error(message: string, fields?: LogFields): void;
-  debug(message: string, fields?: LogFields): void;
-}
-
-/**
- * Structured log object emitted by the logger.
- */
-export interface LogObject {
-  logLevel: string;
-  message: string;
-  fields?: LogFields;
-}
-
-/**
- * Consumes structured log objects.
- */
-export interface LogWriter {
-  write(event: LogObject): void;
-}
-
-interface LogJsonWritable {
-  write(chunk: string): boolean | void;
+  emit(record: LogRecord): void;
 }
 
 interface LoggerOptions {
+  clock?: () => Date;
   quiet?: boolean;
+  correlationId?: string;
+  serviceVersion?: string;
+  sink?: LogSink;
   verbose?: boolean;
-  writer?: LogWriter;
 }
 
-/**
- * Applies standard logger options to a logger implementation.
- */
-export function withLoggerOptions(
-  logger: Logger,
-  options: Pick<LoggerOptions, "quiet" | "verbose"> = {},
-): Logger {
-  const quiet = options.quiet ?? false;
-  const verbose = options.verbose;
+function shouldEmit(
+  record: LogRecord,
+  options: Pick<LoggerOptions, "quiet" | "verbose">,
+): boolean {
+  if (options.quiet && record.level !== "error") {
+    return false;
+  }
+  return (
+    (record.level !== "debug" && record.level !== "trace") ||
+    options.verbose !== false
+  );
+}
+
+function isLogFields(value: unknown): value is LogFields {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function enrichFields(
+  fields: LogFields | undefined,
+  correlationId: string,
+): LogFields {
+  const migratorosaurus = isLogFields(fields?.migratorosaurus)
+    ? fields.migratorosaurus
+    : {};
 
   return {
-    info(message: string, fields?: LogFields): void {
-      if (quiet) {
-        return;
-      }
-      logger.info(message, fields);
-    },
-    warn(message: string, fields?: LogFields): void {
-      if (quiet) {
-        return;
-      }
-      logger.warn(message, fields);
-    },
-    error(message: string, fields?: LogFields): void {
-      logger.error(message, fields);
-    },
-    debug(message: string, fields?: LogFields): void {
-      if (quiet || verbose === false) {
-        return;
-      }
-      logger.debug(message, fields);
+    ...(fields ?? {}),
+    migratorosaurus: {
+      ...migratorosaurus,
+      correlation_id: correlationId,
     },
   };
 }
 
-function serializeLogObject(event: LogObject): string {
-  try {
-    const serialized = JSON.stringify(event);
-    if (serialized !== undefined) {
-      return serialized;
-    }
-  } catch {
-    // Fallback for values JSON cannot serialize (e.g. BigInt, circular refs).
-  }
-
-  const fallback: LogObject = {
-    logLevel: event.logLevel,
-    message: event.message,
-  };
-  if (event.fields && Object.keys(event.fields).length > 0) {
-    fallback.fields = Object.fromEntries(
-      Object.entries(event.fields).map(([key, value]): [string, string] => [
-        key,
-        serializeValue(value),
-      ]),
-    );
-  }
-
-  return JSON.stringify(fallback);
-}
-
-/**
- * Creates a writer that writes structured log objects as newline-delimited JSON.
- */
-export function createJsonLogWriter(stream: LogJsonWritable): LogWriter {
+function enrichService(
+  service: LogRecord["service"],
+  serviceVersion: string | undefined,
+): NonNullable<LogRecord["service"]> {
   return {
-    write(event: LogObject): void {
-      stream.write(appendNewline(serializeLogObject(event)));
-    },
+    ...(service ?? {}),
+    ...(serviceVersion === undefined ? {} : { version: serviceVersion }),
+    name: "migratorosaurus",
+  };
+}
+
+function enrichLogRecord(
+  record: LogRecord,
+  options: Required<Pick<LoggerOptions, "clock" | "correlationId">> &
+    Pick<LoggerOptions, "serviceVersion">,
+): LogRecord {
+  return {
+    ...record,
+    event: { ...record.event },
+    fields: enrichFields(record.fields, options.correlationId),
+    service: enrichService(record.service, options.serviceVersion),
+    time: record.time ?? options.clock().toISOString(),
   };
 }
 
 /**
- * Creates a logger that emits structured log objects.
+ * Creates a logger that emits enriched structured log records.
  */
 export function createLogger(options: LoggerOptions = {}): Logger {
-  const writer = options.writer ?? createJsonLogWriter(process.stderr);
+  const sink = options.sink ?? createJsonLogWriter(process.stderr);
+  const clock = options.clock ?? ((): Date => new Date());
+  const correlationId = options.correlationId ?? randomUUID();
 
-  function write(logLevel: string, message: string, fields?: LogFields): void {
-    const event: LogObject = {
-      logLevel,
-      message,
-    };
-    if (fields && Object.keys(fields).length > 0) {
-      event.fields = fields;
-    }
-    writer.write(event);
-  }
-
-  return withLoggerOptions(
-    {
-      info(message: string, fields?: LogFields): void {
-        write("info", message, fields);
-      },
-      warn(message: string, fields?: LogFields): void {
-        write("warn", message, fields);
-      },
-      error(message: string, fields?: LogFields): void {
-        write("error", message, fields);
-      },
-      debug(message: string, fields?: LogFields): void {
-        write("debug", message, fields);
-      },
+  return {
+    emit(record: LogRecord): void {
+      if (
+        !shouldEmit(record, {
+          quiet: options.quiet ?? false,
+          verbose: options.verbose ?? false,
+        })
+      ) {
+        return;
+      }
+      sink.write(
+        enrichLogRecord(record, {
+          clock,
+          correlationId,
+          serviceVersion: options.serviceVersion,
+        }),
+      );
     },
-    {
-      quiet: options.quiet,
-      verbose: options.verbose ?? false,
-    },
-  );
+  };
 }

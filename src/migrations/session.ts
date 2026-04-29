@@ -25,6 +25,7 @@ async function withMigrationSessionNormal<T>(args: {
       client,
       logger,
       qualifiedTableName,
+      table,
     });
     await assertMigrationHistoryTableShape({
       client,
@@ -73,6 +74,7 @@ async function withMigrationSessionDryRun<T>(args: {
       client,
       logger,
       qualifiedTableName,
+      table,
     });
     await assertMigrationHistoryTableShape({
       client,

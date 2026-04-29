@@ -1,6 +1,6 @@
 import type { Logger } from "../logging/logger.js";
 import type * as pg from "pg";
-import { messages } from "../logging/messages.js";
+import { events } from "../logging/events.js";
 import { getMigrationVersion } from "./naming.js";
 import { parseTableName, qualifyTableName } from "../db/table-name.js";
 import { runInTransaction } from "../db/transaction.js";
@@ -8,121 +8,125 @@ import type { MigrationStep } from "./types.js";
 
 interface ExecutePlanArgs {
   client: pg.Client;
+  dryRun: boolean;
   logger: Logger;
   qualifiedTableName: string;
   steps: MigrationStep[];
 }
 
-async function executeUpPlanNormal(args: ExecutePlanArgs): Promise<void> {
-  const { client, logger, qualifiedTableName, steps } = args;
+async function executeStep(args: {
+  client: pg.Client;
+  usesTransaction: boolean;
+  work: () => Promise<void>;
+}): Promise<void> {
+  const { client, usesTransaction, work } = args;
+
+  if (usesTransaction) {
+    await runInTransaction(client, work);
+    return;
+  }
+
+  await work();
+}
+
+async function executeUpPlanSteps(args: ExecutePlanArgs): Promise<void> {
+  const { client, dryRun, logger, qualifiedTableName, steps } = args;
+  const usesTransaction = !dryRun;
 
   for (const { file, sql } of steps) {
     const version = getMigrationVersion(file);
-    logger.info(messages.applying(file));
+    logger.emit(events.migrationApplying(file));
     const started = Date.now();
 
     try {
-      await runInTransaction(client, async (): Promise<void> => {
-        await client.query(sql);
-        await client.query(
-          `INSERT INTO ${qualifiedTableName} ( filename, version, applied_at ) VALUES ( $1, $2, clock_timestamp() );`,
-          [file, version],
-        );
+      await executeStep({
+        client,
+        usesTransaction,
+        work: async (): Promise<void> => {
+          await client.query(sql);
+          await client.query(
+            `INSERT INTO ${qualifiedTableName} ( filename, version, applied_at ) VALUES ( $1, $2, clock_timestamp() );`,
+            [file, version],
+          );
+        },
       });
 
-      logger.info(messages.applied(file, Date.now() - started));
-    } catch (error) {
-      logger.error(messages.failed(file, Date.now() - started));
-      logger.error(messages.errorDetails(error));
-      logger.error(messages.failureRolledBack());
-      throw error;
-    }
-  }
-}
-
-async function executeUpPlanDryRun(args: ExecutePlanArgs): Promise<void> {
-  const { client, logger, qualifiedTableName, steps } = args;
-
-  for (const { file, sql } of steps) {
-    const version = getMigrationVersion(file);
-    logger.info(messages.applying(file));
-    const started = Date.now();
-
-    try {
-      await client.query(sql);
-      await client.query(
-        `INSERT INTO ${qualifiedTableName} ( filename, version, applied_at ) VALUES ( $1, $2, clock_timestamp() );`,
-        [file, version],
+      logger.emit(
+        events.migrationApplied({
+          durationMs: Date.now() - started,
+          file,
+        }),
       );
-
-      logger.info(messages.applied(file, Date.now() - started));
     } catch (error) {
-      logger.error(messages.failed(file, Date.now() - started));
-      logger.error(messages.errorDetails(error));
-      logger.error(messages.failureRolledBack());
+      logger.emit(
+        events.migrationFailed({
+          direction: "up",
+          durationMs: Date.now() - started,
+          error,
+          file,
+        }),
+      );
+      if (usesTransaction) {
+        logger.emit(
+          events.migrationTransactionRolledBack({
+            direction: "up",
+            file,
+          }),
+        );
+      }
       throw error;
     }
   }
 }
 
-async function executeDownPlanNormal(args: ExecutePlanArgs): Promise<void> {
-  const { client, logger, qualifiedTableName, steps } = args;
+async function executeDownPlanSteps(args: ExecutePlanArgs): Promise<void> {
+  const { client, dryRun, logger, qualifiedTableName, steps } = args;
 
   for (const { file, sql } of steps) {
     const hasSql = sql !== "";
-    logger.info(messages.reverting(file, hasSql));
+    const usesTransaction = !dryRun && hasSql;
+    logger.emit(events.migrationReverting({ file, hasSql }));
     const started = Date.now();
 
     try {
-      if (hasSql) {
-        await runInTransaction(client, async (): Promise<void> => {
-          await client.query(sql);
+      await executeStep({
+        client,
+        usesTransaction,
+        work: async (): Promise<void> => {
+          if (hasSql) {
+            await client.query(sql);
+          }
           await client.query(
             `DELETE FROM ${qualifiedTableName} WHERE filename = $1;`,
             [file],
           );
-        });
-      } else {
-        await client.query(
-          `DELETE FROM ${qualifiedTableName} WHERE filename = $1;`,
-          [file],
+        },
+      });
+
+      logger.emit(
+        events.migrationReverted({
+          durationMs: Date.now() - started,
+          file,
+          hasSql,
+        }),
+      );
+    } catch (error) {
+      logger.emit(
+        events.migrationFailed({
+          direction: "down",
+          durationMs: Date.now() - started,
+          error,
+          file,
+        }),
+      );
+      if (usesTransaction) {
+        logger.emit(
+          events.migrationTransactionRolledBack({
+            direction: "down",
+            file,
+          }),
         );
       }
-
-      logger.info(messages.reverted(file, Date.now() - started));
-    } catch (error) {
-      logger.error(messages.failed(file, Date.now() - started));
-      logger.error(messages.errorDetails(error));
-      if (hasSql) {
-        logger.error(messages.failureRolledBack());
-      }
-      throw error;
-    }
-  }
-}
-
-async function executeDownPlanDryRun(args: ExecutePlanArgs): Promise<void> {
-  const { client, logger, qualifiedTableName, steps } = args;
-
-  for (const { file, sql } of steps) {
-    const hasSql = sql !== "";
-    logger.info(messages.reverting(file, hasSql));
-    const started = Date.now();
-
-    try {
-      if (hasSql) {
-        await client.query(sql);
-      }
-      await client.query(
-        `DELETE FROM ${qualifiedTableName} WHERE filename = $1;`,
-        [file],
-      );
-
-      logger.info(messages.reverted(file, Date.now() - started));
-    } catch (error) {
-      logger.error(messages.failed(file, Date.now() - started));
-      logger.error(messages.errorDetails(error));
-      logger.error(messages.failureRolledBack());
       throw error;
     }
   }
@@ -141,17 +145,13 @@ export async function executeUpPlan(args: {
   const { client, logger, dryRun = false, steps, table } = args;
   const qualifiedTableName = qualifyTableName(parseTableName(table));
 
-  if (dryRun) {
-    await executeUpPlanDryRun({
-      client,
-      logger,
-      qualifiedTableName,
-      steps,
-    });
-    return;
-  }
-
-  await executeUpPlanNormal({ client, logger, qualifiedTableName, steps });
+  await executeUpPlanSteps({
+    client,
+    dryRun,
+    logger,
+    qualifiedTableName,
+    steps,
+  });
 }
 
 /**
@@ -167,18 +167,9 @@ export async function executeDownPlan(args: {
   const { client, logger, dryRun = false, steps, table } = args;
   const qualifiedTableName = qualifyTableName(parseTableName(table));
 
-  if (dryRun) {
-    await executeDownPlanDryRun({
-      client,
-      logger,
-      qualifiedTableName,
-      steps,
-    });
-    return;
-  }
-
-  await executeDownPlanNormal({
+  await executeDownPlanSteps({
     client,
+    dryRun,
     logger,
     qualifiedTableName,
     steps,

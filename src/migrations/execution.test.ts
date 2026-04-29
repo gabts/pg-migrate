@@ -1,7 +1,6 @@
 import * as assert from "assert";
 import type * as pg from "pg";
 import { executeDownPlan, executeUpPlan } from "./execution.js";
-import { messages } from "../logging/messages.js";
 import type { Logger } from "../logging/logger.js";
 import type { MigrationStep } from "./types.js";
 
@@ -15,25 +14,14 @@ interface QueryCall {
 }
 
 const noopLogger: Logger = {
-  debug: (): void => undefined,
-  error: (): void => undefined,
-  info: (): void => undefined,
-  warn: (): void => undefined,
+  emit: (): void => undefined,
 };
 
 function createCapturedLogger(logs: string[]): Logger {
-  const capture = (message: string): void => {
-    logs.push(message);
-  };
-  const captureError = (input: unknown): void => {
-    logs.push(String(input));
-  };
-
   return {
-    debug: capture,
-    error: captureError,
-    info: capture,
-    warn: capture,
+    emit(event): void {
+      logs.push(event.message);
+    },
   };
 }
 
@@ -82,10 +70,10 @@ describe("execution", (): void => {
       assert.deepEqual(
         logs.map(normalizeMs),
         [
-          messages.applying("20260416090000_create.sql"),
-          messages.applied("20260416090000_create.sql", 0),
-          messages.applying("20260416090100_insert.sql"),
-          messages.applied("20260416090100_insert.sql", 0),
+          "Applying migration",
+          "Migration applied",
+          "Applying migration",
+          "Migration applied",
         ].map(normalizeMs),
       );
       assert.deepEqual(queries, [
@@ -168,16 +156,11 @@ describe("execution", (): void => {
       assert.deepEqual(
         logs.map(normalizeMs),
         [
-          messages.applying("20260416090000_create.sql"),
-          messages.applied("20260416090000_create.sql", 0),
-          messages.applying("20260416090100_break.sql"),
-          messages.failed("20260416090100_break.sql", 0),
-          messages.errorDetails(
-            Object.assign(new Error("syntax error at BROKEN"), {
-              code: "42601",
-            }),
-          ),
-          messages.failureRolledBack(),
+          "Applying migration",
+          "Migration applied",
+          "Applying migration",
+          "Migration failed",
+          "Migration transaction rolled back",
         ].map(normalizeMs),
       );
     });
@@ -223,10 +206,10 @@ describe("execution", (): void => {
       assert.deepEqual(
         logs.map(normalizeMs),
         [
-          messages.applying("20260416090000_create.sql"),
-          messages.applied("20260416090000_create.sql", 0),
-          messages.applying("20260416090100_insert.sql"),
-          messages.applied("20260416090100_insert.sql", 0),
+          "Applying migration",
+          "Migration applied",
+          "Applying migration",
+          "Migration applied",
         ].map(normalizeMs),
       );
       assert.deepEqual(queries, [
@@ -308,10 +291,7 @@ describe("execution", (): void => {
 
       assert.deepEqual(
         logs.map(normalizeMs),
-        [
-          messages.reverting("20260416090100_insert.sql", true),
-          messages.reverted("20260416090100_insert.sql", 0),
-        ].map(normalizeMs),
+        ["Reverting migration", "Migration reverted"].map(normalizeMs),
       );
       assert.deepEqual(queries, [
         { sql: "DELETE FROM person;", params: undefined },
@@ -392,7 +372,7 @@ describe("execution", (): void => {
       assert.deepEqual(boundaries, []);
     });
 
-    it("logs failureRolledBack for an irreversible step failure", async (): Promise<void> => {
+    it("does not log transaction rollback for an irreversible step failure", async (): Promise<void> => {
       const client = {
         query: async (sql: string): Promise<{ rows: unknown[] }> => {
           if (
@@ -424,9 +404,9 @@ describe("execution", (): void => {
         /constraint violation/,
       );
 
-      assert.ok(
-        logs.some((l): boolean => l === messages.failureRolledBack()),
-        "expected failureRolledBack to be logged for irreversible step in dry run",
+      assert.deepEqual(
+        logs.map(normalizeMs),
+        ["Reverting migration", "Migration failed"].map(normalizeMs),
       );
     });
   });
@@ -452,10 +432,7 @@ describe("execution", (): void => {
 
       assert.deepEqual(
         logs.map(normalizeMs),
-        [
-          messages.reverting("20260416090000_create.sql", true),
-          messages.reverted("20260416090000_create.sql", 0),
-        ].map(normalizeMs),
+        ["Reverting migration", "Migration reverted"].map(normalizeMs),
       );
       assert.deepEqual(queries, [
         { sql: "BEGIN;", params: undefined },
@@ -488,10 +465,7 @@ describe("execution", (): void => {
 
       assert.deepEqual(
         logs.map(normalizeMs),
-        [
-          messages.reverting("20260416090000_backfill.sql", false),
-          messages.reverted("20260416090000_backfill.sql", 0),
-        ].map(normalizeMs),
+        ["Reverting migration", "Migration reverted"].map(normalizeMs),
       );
       assert.deepEqual(queries, [
         {
@@ -529,15 +503,14 @@ describe("execution", (): void => {
       assert.deepEqual(
         logs.map(normalizeMs),
         [
-          messages.reverting("20260416090000_create.sql", true),
-          messages.failed("20260416090000_create.sql", 0),
-          messages.errorDetails(new Error("cannot drop")),
-          messages.failureRolledBack(),
+          "Reverting migration",
+          "Migration failed",
+          "Migration transaction rolled back",
         ].map(normalizeMs),
       );
     });
 
-    it("does not log failureRolledBack when an irreversible down step fails", async (): Promise<void> => {
+    it("does not log rollback when an irreversible down step fails", async (): Promise<void> => {
       const client = {
         query: async (): Promise<{ rows: unknown[] }> => {
           throw new Error("history write failed");
@@ -561,11 +534,7 @@ describe("execution", (): void => {
 
       assert.deepEqual(
         logs.map(normalizeMs),
-        [
-          messages.reverting("20260416090000_backfill.sql", false),
-          messages.failed("20260416090000_backfill.sql", 0),
-          messages.errorDetails(new Error("history write failed")),
-        ].map(normalizeMs),
+        ["Reverting migration", "Migration failed"].map(normalizeMs),
       );
     });
 

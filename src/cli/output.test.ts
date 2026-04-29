@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import { createCliLogWriter, createCliResultWriter } from "./output.js";
+import type { LogRecord } from "../logging/schema.js";
 
 interface CapturedWritable {
   chunks: string[];
@@ -24,20 +25,54 @@ function createWritable(isTTY = false): CapturedWritable {
   };
 }
 
+function record(overrides: Partial<LogRecord>): LogRecord {
+  return {
+    event: {
+      action: "test.error",
+    },
+    level: "error",
+    message: "Migration failed",
+    service: { name: "migratorosaurus" },
+    time: "2026-04-29T12:00:00.000Z",
+    ...overrides,
+  };
+}
+
 describe("output", (): void => {
-  it("writes log events as human-friendly lines", (): void => {
+  it("writes log records as human-friendly lines", (): void => {
     const output = createWritable(false);
     const writer = createCliLogWriter(output.stream);
 
-    writer.write({
-      fields: { file: "20260416090000_create.sql" },
-      logLevel: "error",
-      message: "migration failed",
-    });
+    writer.write(
+      record({
+        event: {
+          action: "migration.failed",
+        },
+        fields: {
+          migratorosaurus: {
+            migration: {
+              name: "20260416090000_create",
+            },
+          },
+        },
+      }),
+    );
 
     assert.equal(
       output.chunks.join(""),
-      'Error: migration failed {"file":"20260416090000_create.sql"}\n',
+      "Error: Migration failed migration=20260416090000_create\n",
+    );
+  });
+
+  it("writes JSON log records when json mode is enabled", (): void => {
+    const output = createWritable(false);
+    const writer = createCliLogWriter(output.stream, { json: true });
+
+    writer.write(record({ message: "Migration failed" }));
+
+    assert.equal(
+      JSON.parse(output.chunks.join("")).message,
+      "Migration failed",
     );
   });
 
@@ -45,18 +80,18 @@ describe("output", (): void => {
     const output = createWritable(true);
     const writer = createCliLogWriter(output.stream);
 
-    writer.write({ logLevel: "error", message: "boom" });
+    writer.write(record({ message: "Boom" }));
 
-    assert.equal(output.chunks.join(""), "\u001B[31mError:\u001B[0m boom\n");
+    assert.equal(output.chunks.join(""), "\u001B[31mError:\u001B[0m Boom\n");
   });
 
   it("allows color to be explicitly disabled for tty streams", (): void => {
     const output = createWritable(true);
     const writer = createCliLogWriter(output.stream, { color: false });
 
-    writer.write({ logLevel: "error", message: "boom" });
+    writer.write(record({ message: "Boom" }));
 
-    assert.equal(output.chunks.join(""), "Error: boom\n");
+    assert.equal(output.chunks.join(""), "Error: Boom\n");
   });
 
   it("writes string command results as lines", (): void => {
