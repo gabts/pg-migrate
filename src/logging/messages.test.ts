@@ -1,7 +1,7 @@
 import * as assert from "assert";
-import { messages } from "./log-messages.js";
+import { messages } from "./messages.js";
 
-describe("log-messages", (): void => {
+describe("messages", (): void => {
   describe("lifecycle", (): void => {
     it("formats migration-run lifecycle", (): void => {
       assert.equal(messages.startedUp(), "🦖 started migration run");

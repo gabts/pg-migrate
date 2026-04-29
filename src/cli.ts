@@ -8,15 +8,15 @@ import {
   valueFlag,
   type CommandName,
   type ParsedTokens,
-} from "./args.js";
-import { createLogger, type Logger } from "./logger.js";
+} from "./cli/args.js";
+import { createLogger, type Logger } from "./logging/logger.js";
 import { down, up, validate } from "./main.js";
-import { assertValidMigrationName } from "./migration-naming.js";
+import { assertValidMigrationName } from "./migrations/naming.js";
 import {
   createCliLogWriter,
   createCliResultWriter,
   type CliResultWriter,
-} from "./cli-format.js";
+} from "./cli/output.js";
 
 const migrationDirectoryEnvVar = "MIGRATION_DIRECTORY";
 

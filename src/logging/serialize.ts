@@ -19,7 +19,7 @@ export function serializeValue(value: unknown): string {
 }
 
 /**
- * Ensures rendered output ends with exactly one trailing newline.
+ * Ensures rendered output ends with a trailing newline.
  */
 export function appendNewline(value: string): string {
   if (value.endsWith("\n")) {

@@ -1,8 +1,8 @@
 import * as assert from "assert";
 import * as pg from "pg";
-import { messages } from "./log-messages.js";
-import type { Logger } from "./logger.js";
-import { withMigrationSession } from "./transaction.js";
+import { messages } from "../logging/messages.js";
+import type { Logger } from "../logging/logger.js";
+import { withMigrationSession } from "./session.js";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set to run integration tests");
@@ -116,7 +116,7 @@ async function createMissingVersionMigrationHistoryTable(): Promise<void> {
   `);
 }
 
-describe("transaction", (): void => {
+describe("session", (): void => {
   before(async (): Promise<void> => {
     await client.connect();
     await dropTables();

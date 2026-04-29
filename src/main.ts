@@ -1,23 +1,25 @@
-import { createLogger, withLoggerOptions, type Logger } from "./logger.js";
-import { executeDownPlan, executeUpPlan } from "./execution.js";
-import { messages } from "./log-messages.js";
+import {
+  createLogger,
+  withLoggerOptions,
+  type Logger,
+} from "./logging/logger.js";
+import { executeDownPlan, executeUpPlan } from "./migrations/execution.js";
+import { messages } from "./logging/messages.js";
 import {
   loadDiskMigrations,
   materializeStepsFromSql,
   readMigrationSqlByFile,
-} from "./migration-files.js";
-import { planDownExecution, planUpExecution } from "./planning.js";
-import { withMigrationSession } from "./transaction.js";
-import type { ClientConfig } from "./types.js";
+} from "./migrations/files.js";
+import { planDownExecution, planUpExecution } from "./migrations/planning.js";
+import { withMigrationSession } from "./migrations/session.js";
+import type { ClientConfig } from "./db/types.js";
 import {
   validateUpPreconditions,
   validateDownPreconditions,
-} from "./validation.js";
+} from "./migrations/validation.js";
 
-/**
- * Logger contract accepted by public runtime options.
- */
-export type { Logger } from "./logger.js";
+export type { Logger } from "./logging/logger.js";
+export type { ClientConfig } from "./db/types.js";
 
 /**
  * Runtime options shared by `up` and `down` migration commands.

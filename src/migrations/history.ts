@@ -1,6 +1,6 @@
-import type { Logger } from "./logger.js";
+import type { Logger } from "../logging/logger.js";
 import type * as pg from "pg";
-import { messages } from "./log-messages.js";
+import { messages } from "../logging/messages.js";
 import type { AppliedRow } from "./types.js";
 import { validateAppliedHistory } from "./validation.js";
 

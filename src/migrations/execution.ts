@@ -1,9 +1,9 @@
-import type { Logger } from "./logger.js";
+import type { Logger } from "../logging/logger.js";
 import type * as pg from "pg";
-import { messages } from "./log-messages.js";
-import { getMigrationVersion } from "./migration-naming.js";
-import { parseTableName, qualifyTableName } from "./table-name.js";
-import { runInTransaction } from "./transaction.js";
+import { messages } from "../logging/messages.js";
+import { getMigrationVersion } from "./naming.js";
+import { parseTableName, qualifyTableName } from "../db/table-name.js";
+import { runInTransaction } from "../db/transaction.js";
 import type { MigrationStep } from "./types.js";
 
 interface ExecutePlanArgs {

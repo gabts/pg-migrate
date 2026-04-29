@@ -1,4 +1,4 @@
-import type { ColorMode } from "./cli-color.js";
+import type { ColorMode } from "./color.js";
 
 /**
  * Supported top-level CLI command names.
@@ -132,10 +132,7 @@ function toCommandName(token: string | undefined): CommandName | undefined {
   }
 }
 
-/**
- * Global CLI behavior toggles shared by all commands.
- */
-export interface GlobalOptions {
+interface GlobalOptions {
   color: ColorMode;
   json: boolean;
   quiet: boolean;

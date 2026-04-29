@@ -1,38 +1,15 @@
-import type { Logger } from "./logger.js";
 import * as pg from "pg";
+import { parseTableName, qualifyTableName } from "../db/table-name.js";
+import { runInTransaction } from "../db/transaction.js";
+import type { ClientConfig } from "../db/types.js";
+import type { Logger } from "../logging/logger.js";
 import {
   assertMigrationHistoryTableShape,
   ensureMigrationHistory,
   migrationHistoryExists,
   readAppliedRows,
-} from "./migration-history.js";
-import { parseTableName, qualifyTableName } from "./table-name.js";
-import type { AppliedRow, ClientConfig } from "./types.js";
-
-/**
- * Runs a callback inside a transaction with rollback-on-error semantics.
- */
-export async function runInTransaction<T>(
-  client: pg.Client,
-  fn: () => Promise<T>,
-): Promise<T> {
-  let committed = false;
-  await client.query("BEGIN;");
-  try {
-    const result = await fn();
-    await client.query("COMMIT;");
-    committed = true;
-    return result;
-  } finally {
-    if (!committed) {
-      try {
-        await client.query("ROLLBACK;");
-      } catch {
-        // Ignore rollback errors and surface the original failure.
-      }
-    }
-  }
-}
+} from "./history.js";
+import type { AppliedRow } from "./types.js";
 
 async function withMigrationSessionNormal<T>(args: {
   client: pg.Client;

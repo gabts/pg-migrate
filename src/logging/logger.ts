@@ -1,5 +1,7 @@
 import { appendNewline, serializeValue } from "./serialize.js";
 
+type LogFields = Record<string, unknown>;
+
 /**
  * Logging contract used throughout the migrator runtime.
  */
@@ -9,11 +11,6 @@ export interface Logger {
   error(message: string, fields?: LogFields): void;
   debug(message: string, fields?: LogFields): void;
 }
-
-/**
- * Structured log fields attached to log events.
- */
-export type LogFields = Record<string, unknown>;
 
 /**
  * Structured log object emitted by the logger.
@@ -35,10 +32,7 @@ interface LogJsonWritable {
   write(chunk: string): boolean | void;
 }
 
-/**
- * Options for creating a configured logger instance.
- */
-export interface LoggerOptions {
+interface LoggerOptions {
   quiet?: boolean;
   verbose?: boolean;
   writer?: LogWriter;
