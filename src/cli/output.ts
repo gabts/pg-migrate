@@ -1,7 +1,7 @@
-import { resolveSupportsColor, type ColorMode } from "./cli-color.js";
-import { formatHumanLogEvent } from "./logger-format.js";
-import type { LogObject, LogWriter } from "./logger.js";
-import { appendNewline, serializeValue } from "./serialize.js";
+import { resolveSupportsColor, type ColorMode } from "./color.js";
+import { formatHumanLogEvent } from "../logging/format.js";
+import type { LogObject, LogWriter } from "../logging/logger.js";
+import { appendNewline, serializeValue } from "../logging/serialize.js";
 
 interface CliWritable {
   isTTY?: boolean;

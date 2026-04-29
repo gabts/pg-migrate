@@ -1,12 +1,13 @@
 import * as assert from "assert";
 import type * as pg from "pg";
-import type { Logger } from "./logger.js";
-import { messages } from "./log-messages.js";
+import type { Logger } from "../logging/logger.js";
+import { messages } from "../logging/messages.js";
 import {
   assertMigrationHistoryTableShape,
   ensureMigrationHistory,
+  migrationHistoryExists,
   readAppliedRows,
-} from "./migration-history.js";
+} from "./history.js";
 
 interface EnsurePlan {
   tableExists: boolean;
@@ -52,7 +53,48 @@ function createEnsureFakeClient(plan: EnsurePlan): {
   return { client, queries };
 }
 
-describe("migration-history", (): void => {
+describe("history", (): void => {
+  describe("migrationHistoryExists", (): void => {
+    it("checks whether the qualified history table exists", async (): Promise<void> => {
+      const queries: Array<{ sql: string; params?: unknown[] }> = [];
+      const client = {
+        query: async (
+          sql: string,
+          params?: unknown[],
+        ): Promise<{ rows: unknown[] }> => {
+          queries.push({ sql, params });
+          return { rows: [{ exists: true }] };
+        },
+      } as unknown as pg.Client;
+
+      const exists = await migrationHistoryExists(
+        client,
+        '"migration_history"',
+      );
+
+      assert.equal(exists, true);
+      assert.deepEqual(queries, [
+        {
+          sql: "SELECT to_regclass($1) IS NOT NULL AS exists;",
+          params: ['"migration_history"'],
+        },
+      ]);
+    });
+
+    it("returns false when the history table is missing", async (): Promise<void> => {
+      const client = {
+        query: async (): Promise<{ rows: unknown[] }> => {
+          return { rows: [{ exists: false }] };
+        },
+      } as unknown as pg.Client;
+
+      assert.equal(
+        await migrationHistoryExists(client, '"migration_history"'),
+        false,
+      );
+    });
+  });
+
   describe("ensureMigrationHistory", (): void => {
     it("creates the history table with filename/version columns and logs creation", async (): Promise<void> => {
       const { client, queries } = createEnsureFakeClient({

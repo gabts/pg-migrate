@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as pg from "pg";
-import { messages } from "./log-messages.js";
+import { messages } from "./logging/messages.js";
 import {
   down,
   up,

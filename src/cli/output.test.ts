@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import { createCliLogWriter, createCliResultWriter } from "./cli-format.js";
+import { createCliLogWriter, createCliResultWriter } from "./output.js";
 
 interface CapturedWritable {
   chunks: string[];
@@ -24,7 +24,7 @@ function createWritable(isTTY = false): CapturedWritable {
   };
 }
 
-describe("cli-format", (): void => {
+describe("output", (): void => {
   it("writes log events as human-friendly lines", (): void => {
     const output = createWritable(false);
     const writer = createCliLogWriter(output.stream);

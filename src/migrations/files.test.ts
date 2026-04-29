@@ -8,7 +8,7 @@ import {
   materializeStepsFromSql,
   parseMigration,
   readMigrationSqlByFile,
-} from "./migration-files.js";
+} from "./files.js";
 
 const validMigration = `-- migrate:up
 CREATE TABLE person (id integer);
@@ -36,7 +36,7 @@ function withMigrationDirectory(
   }
 }
 
-describe("migration-files", (): void => {
+describe("files", (): void => {
   describe("parseMigration", (): void => {
     it("extracts up and down SQL from a migration file", (): void => {
       assert.equal(

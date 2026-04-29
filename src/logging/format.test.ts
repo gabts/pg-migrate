@@ -1,7 +1,7 @@
 import * as assert from "assert";
-import { formatHumanLogEvent } from "./logger-format.js";
+import { formatHumanLogEvent } from "./format.js";
 
-describe("logger-format", (): void => {
+describe("format", (): void => {
   it("formats info messages without a prefix by default", (): void => {
     assert.equal(
       formatHumanLogEvent({

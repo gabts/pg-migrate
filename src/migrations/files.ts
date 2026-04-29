@@ -1,16 +1,18 @@
 import * as fs from "fs";
 import * as path from "path";
-import {
-  assertValidMigrationFilename,
-  getMigrationVersion,
-} from "./migration-naming.js";
+import { assertValidMigrationFilename, getMigrationVersion } from "./naming.js";
 import type {
   DiskMigration,
   LoadedMigrations,
-  MigrationDirection,
   MigrationStep,
-  ParsedMigrationSql,
 } from "./types.js";
+
+type MigrationDirection = "up" | "down";
+
+interface ParsedMigrationSql {
+  down: string;
+  up: string;
+}
 
 const migrationMarkers = {
   up: "-- migrate:up",

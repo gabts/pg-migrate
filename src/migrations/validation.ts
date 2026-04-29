@@ -1,4 +1,4 @@
-import { getMigrationVersion } from "./migration-naming.js";
+import { getMigrationVersion } from "./naming.js";
 import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
 
 /**

@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import { getMigrationVersion } from "./migration-naming.js";
+import { getMigrationVersion } from "./naming.js";
 import { planDownExecution, planUpExecution } from "./planning.js";
 import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
 
