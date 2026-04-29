@@ -1,69 +1,222 @@
 import * as assert from "assert";
-import { formatHumanLogEvent } from "./format.js";
+import { formatHumanLogRecord } from "./format.js";
+import type { LogRecord } from "./schema.js";
+
+function record(overrides: Partial<LogRecord>): LogRecord {
+  return {
+    event: {
+      action: "test.info",
+    },
+    level: "info",
+    message: "Migration run started",
+    service: { name: "migratorosaurus" },
+    time: "2026-04-29T12:00:00.000Z",
+    ...overrides,
+  };
+}
 
 describe("format", (): void => {
   it("formats info messages without a prefix by default", (): void => {
     assert.equal(
-      formatHumanLogEvent({
-        logLevel: "info",
-        message: "migration run started",
-      }),
-      "migration run started",
+      formatHumanLogRecord(record({ message: "Migration run started" })),
+      "Migration run started",
     );
   });
 
   it("formats warning, error, and debug prefixes when requested", (): void => {
     assert.equal(
-      formatHumanLogEvent(
-        { logLevel: "warn", message: "careful" },
-        { prefixes: true },
-      ),
-      "Warning: careful",
+      formatHumanLogRecord(record({ level: "warn", message: "Careful" }), {
+        prefixes: true,
+      }),
+      "Warning: Careful",
     );
     assert.equal(
-      formatHumanLogEvent(
-        { logLevel: "error", message: "boom" },
-        { prefixes: true },
-      ),
-      "Error: boom",
+      formatHumanLogRecord(record({ level: "error", message: "Boom" }), {
+        prefixes: true,
+      }),
+      "Error: Boom",
     );
     assert.equal(
-      formatHumanLogEvent(
-        { logLevel: "debug", message: "details" },
-        { prefixes: true },
-      ),
-      "Debug: details",
+      formatHumanLogRecord(record({ level: "debug", message: "Details" }), {
+        prefixes: true,
+      }),
+      "Debug: Details",
     );
   });
 
   it("adds ANSI color to prefixes when requested", (): void => {
     assert.equal(
-      formatHumanLogEvent(
-        { logLevel: "error", message: "boom" },
-        { prefixes: true, supportsColor: true },
-      ),
-      "\u001B[31mError:\u001B[0m boom",
-    );
-  });
-
-  it("appends fields as JSON", (): void => {
-    assert.equal(
-      formatHumanLogEvent({
-        fields: { file: "20260416090000_create.sql" },
-        logLevel: "error",
-        message: "migration failed",
+      formatHumanLogRecord(record({ level: "error", message: "Boom" }), {
+        prefixes: true,
+        supportsColor: true,
       }),
-      'migration failed {"file":"20260416090000_create.sql"}',
+      "\u001B[31mError:\u001B[0m Boom",
     );
   });
 
-  it("formats unknown levels without a prefix", (): void => {
+  it("appends selected migration fields without dumping JSON", (): void => {
     assert.equal(
-      formatHumanLogEvent(
-        { logLevel: "trace", message: "ignored prefix" },
+      formatHumanLogRecord(
+        record({
+          event: {
+            action: "migration.applied",
+            duration: 41_000_000,
+          },
+          fields: {
+            migratorosaurus: {
+              migration: {
+                file: "20260416090000_create.sql",
+                name: "20260416090000_create",
+                version: "20260416090000",
+              },
+            },
+          },
+          message: "Migration applied",
+        }),
+      ),
+      "Migration applied migration=20260416090000_create duration=41ms",
+    );
+  });
+
+  it("formats validation summary counts", (): void => {
+    assert.equal(
+      formatHumanLogRecord(
+        record({
+          event: {
+            action: "validation.summary",
+          },
+          fields: {
+            migratorosaurus: {
+              next_down_count: 1,
+              pending_up_count: 3,
+              rollbackable_down_count: 2,
+            },
+          },
+          message: "Validation summary",
+        }),
+      ),
+      "Validation summary pending_up=3 rollbackable_down=2 next_down=1",
+    );
+  });
+
+  it("formats safety-relevant runtime fields for info logs", (): void => {
+    assert.equal(
+      formatHumanLogRecord(
+        record({
+          fields: {
+            migratorosaurus: {
+              command: "up",
+              directory: "migrations",
+              dry_run: true,
+              table: "migration_history",
+            },
+          },
+          message: "Migration run started",
+        }),
+      ),
+      "Migration run started table=migration_history dry_run=true",
+    );
+    assert.equal(
+      formatHumanLogRecord(
+        record({
+          fields: {
+            migratorosaurus: {
+              has_sql: false,
+              migration: {
+                name: "20260416090000_backfill",
+              },
+            },
+          },
+          message: "Reverting migration",
+        }),
+      ),
+      "Reverting migration migration=20260416090000_backfill has_sql=false",
+    );
+  });
+
+  it("formats error details without duplicating command failure messages", (): void => {
+    assert.equal(
+      formatHumanLogRecord(
+        record({
+          error: {
+            code: "42601",
+            message: "syntax error",
+            type: "Error",
+          },
+          level: "error",
+          message: "Migration failed",
+        }),
         { prefixes: true },
       ),
-      "ignored prefix",
+      "Error: Migration failed code=42601 error=syntax error",
+    );
+    assert.equal(
+      formatHumanLogRecord(
+        record({
+          error: {
+            message: "Unknown argument: --bogus",
+            type: "Error",
+          },
+          level: "error",
+          message: "Unknown argument: --bogus",
+        }),
+        { prefixes: true },
+      ),
+      "Error: Unknown argument: --bogus",
+    );
+  });
+
+  it("keeps human logs on one line", (): void => {
+    assert.equal(
+      formatHumanLogRecord(
+        record({
+          error: {
+            message: "line one\nline two",
+            type: "Error",
+          },
+          level: "error",
+          message: "Migration failed",
+        }),
+        { prefixes: true },
+      ),
+      "Error: Migration failed error=line one\\nline two",
+    );
+  });
+
+  it("includes remaining structured fields for debug logs", (): void => {
+    assert.equal(
+      formatHumanLogRecord(
+        record({
+          fields: {
+            migratorosaurus: {
+              dry_run: true,
+              nested: { a: 1 },
+              correlation_id: "correlation-1",
+              table: "migration_history",
+            },
+          },
+          level: "debug",
+          message: "Details",
+        }),
+        { prefixes: true },
+      ),
+      'Debug: Details table=migration_history dry_run=true nested={"a":1}',
+    );
+  });
+
+  it("ignores array-shaped migratorosaurus field groups", (): void => {
+    assert.equal(
+      formatHumanLogRecord(
+        record({
+          fields: {
+            migratorosaurus: ["not", "a", "field", "object"],
+          },
+          level: "debug",
+          message: "Details",
+        }),
+        { prefixes: true },
+      ),
+      "Debug: Details",
     );
   });
 });

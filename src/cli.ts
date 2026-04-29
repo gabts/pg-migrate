@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import {
@@ -10,6 +11,7 @@ import {
   type ParsedTokens,
 } from "./cli/args.js";
 import { createLogger, type Logger } from "./logging/logger.js";
+import type { LogSink } from "./logging/writers.js";
 import { down, up, validate } from "./main.js";
 import { assertValidMigrationName } from "./migrations/naming.js";
 import {
@@ -17,6 +19,7 @@ import {
   createCliResultWriter,
   type CliResultWriter,
 } from "./cli/output.js";
+import { events } from "./logging/events.js";
 
 const migrationDirectoryEnvVar = "MIGRATION_DIRECTORY";
 
@@ -29,7 +32,7 @@ Commands:
   create            Create a new migration file
 
 Global options:
-  --json                    Emit structured command results to stdout
+  --json                    Emit structured command results and logs
   --quiet                   Suppress non-error logs
   --verbose, -v             Show debug logs
   --no-color                Disable ANSI color in logs
@@ -42,7 +45,7 @@ const createHelpText = `Usage: migratorosaurus create --name <name> [options]
 Options:
   -n, --name <name>         Migration name slug
   -d, --directory <dir>     Output directory, defaults to MIGRATION_DIRECTORY or migrations
-  --json                    Emit structured command result
+  --json                    Emit structured command result and logs
   --quiet                   Suppress non-error logs
   --verbose, -v             Show debug logs
   --no-color                Disable ANSI color in logs
@@ -67,7 +70,7 @@ Options:
   -t, --target <filename>   Apply pending migrations up to and including target
   --table <table-name>      Migration history table, defaults to migration_history
   --dry-run                 Run planned SQL and history writes, then roll back
-  --json                    Emit structured command result
+  --json                    Emit structured command result and logs
   --quiet                   Suppress non-error logs
   --verbose, -v             Show debug logs
   --no-color                Disable ANSI color in logs
@@ -92,7 +95,7 @@ Options:
   -t, --target <filename>   Roll back newer migrations; target remains applied
   --table <table-name>      Migration history table, defaults to migration_history
   --dry-run                 Run planned SQL and history writes, then roll back
-  --json                    Emit structured command result
+  --json                    Emit structured command result and logs
   --quiet                   Suppress non-error logs
   --verbose, -v             Show debug logs
   --no-color                Disable ANSI color in logs
@@ -116,7 +119,7 @@ Options:
   --url <database-url>      Database URL (alternative to positional URL)
   -d, --directory <dir>     Migrations directory, defaults to MIGRATION_DIRECTORY or migrations
   --table <table-name>      Migration history table, defaults to migration_history
-  --json                    Emit structured command result
+  --json                    Emit structured command result and logs
   --quiet                   Suppress non-error logs
   --verbose, -v             Show debug logs
   --no-color                Disable ANSI color in logs
@@ -269,21 +272,6 @@ function formatErrorMessage(error: unknown): string {
   return String(error);
 }
 
-function errorLogFields(error: unknown): Record<string, unknown> {
-  if (error instanceof Error) {
-    return {
-      error: {
-        message: error.message,
-        name: error.name,
-      },
-    };
-  }
-
-  return {
-    error: String(error),
-  };
-}
-
 function helpTextFor(command: CommandName | undefined): string {
   switch (command) {
     case "create":
@@ -324,16 +312,22 @@ async function runCommand(
   extraPositional: readonly string[],
   resultWriter: CliResultWriter,
   logger: Logger,
+  logSink: LogSink,
   runtime: {
     json: boolean;
     quiet: boolean;
+    correlationId: string;
     verbose: boolean;
   },
 ): Promise<number> {
   if (command === "create") {
     const options = buildCreateOptions(parsed, extraPositional);
-    logger.debug(
-      `command=create directory=${JSON.stringify(options.directory)} name=${JSON.stringify(options.name ?? "")}`,
+    logger.emit(
+      events.commandOptions({
+        command: "create",
+        directory: options.directory,
+        name: options.name ?? null,
+      }),
     );
     const filePath = createMigration(options);
 
@@ -354,13 +348,15 @@ async function runCommand(
       extraPositional,
       command,
     );
-    await validate(runOptions.clientConfig, {
+    const validateOptions = {
       directory: runOptions.directory,
-      logger,
+      logSink,
       quiet: runtime.quiet,
+      correlationId: runtime.correlationId,
       table: runOptions.table,
       verbose: runtime.verbose,
-    });
+    };
+    await validate(runOptions.clientConfig, validateOptions);
     if (runtime.json) {
       resultWriter.writeJson({
         command,
@@ -372,15 +368,17 @@ async function runCommand(
 
   const runOptions = buildMigrationRunOptions(parsed, extraPositional, command);
   const runFn = command === "up" ? up : down;
-  await runFn(runOptions.clientConfig, {
+  const migrationOptions = {
     directory: runOptions.directory,
     dryRun: runOptions.dryRun,
-    logger,
+    logSink,
     quiet: runtime.quiet,
+    correlationId: runtime.correlationId,
     table: runOptions.table,
     target: runOptions.target,
     verbose: runtime.verbose,
-  });
+  };
+  await runFn(runOptions.clientConfig, migrationOptions);
 
   if (runtime.json) {
     resultWriter.writeJson({
@@ -403,23 +401,22 @@ export async function cli(args = process.argv): Promise<number> {
   const { globals } = parsed;
 
   const resultWriter = createCliResultWriter(process.stdout);
-  const logWriter = createCliLogWriter(process.stderr, {
+  const logSink = createCliLogWriter(process.stderr, {
     color: globals.color,
+    json: globals.json,
   });
 
   const json = globals.json;
+  const correlationId = randomUUID();
   let currentCommand: CommandName | null = null;
-  let logger: Logger = createLogger({
-    writer: logWriter,
+  const logger: Logger = createLogger({
+    quiet: globals.quiet,
+    correlationId,
+    sink: logSink,
+    verbose: globals.verbose,
   });
 
   try {
-    logger = createLogger({
-      quiet: globals.quiet,
-      writer: logWriter,
-      verbose: globals.verbose,
-    });
-
     const command = commandName(parsed);
     if (
       parsed.validationIssues.length === 0 &&
@@ -446,14 +443,16 @@ export async function cli(args = process.argv): Promise<number> {
       parsed.extraPositional,
       resultWriter,
       logger,
+      logSink,
       {
         json: globals.json,
         quiet: globals.quiet,
+        correlationId,
         verbose: globals.verbose,
       },
     );
   } catch (error) {
-    logger.error(formatErrorMessage(error), errorLogFields(error));
+    logger.emit(events.commandFailed({ command: currentCommand, error }));
     if (json) {
       resultWriter.writeJson({
         command: currentCommand,

@@ -1,6 +1,5 @@
 import * as assert from "assert";
 import * as pg from "pg";
-import { messages } from "../logging/messages.js";
 import type { Logger } from "../logging/logger.js";
 import { withMigrationSession } from "./session.js";
 
@@ -17,25 +16,14 @@ const createFile = "20260416090000_create.sql";
 const createVersion = "20260416090000";
 
 const noopLogger: Logger = {
-  debug: (): void => undefined,
-  error: (): void => undefined,
-  info: (): void => undefined,
-  warn: (): void => undefined,
+  emit: (): void => undefined,
 };
 
 function createCapturedLogger(logs: string[]): Logger {
-  const capture = (message: string): void => {
-    logs.push(message);
-  };
-  const captureError = (input: unknown): void => {
-    logs.push(String(input));
-  };
-
   return {
-    debug: capture,
-    error: captureError,
-    info: capture,
-    warn: capture,
+    emit(event): void {
+      logs.push(event.message);
+    },
   };
 }
 
@@ -144,7 +132,7 @@ describe("session", (): void => {
     });
 
     assert.equal(result, "done");
-    assert.deepEqual(logs, [messages.creatingTable()]);
+    assert.deepEqual(logs, ["Creating migration history table"]);
     assert.ok(await queryTableExists(defaultMigrationHistoryTable));
     assert.deepEqual(await queryHistory(), []);
   });
@@ -239,7 +227,7 @@ describe("session", (): void => {
       /runner failed/,
     );
 
-    assert.deepEqual(logs, [messages.creatingTable()]);
+    assert.deepEqual(logs, ["Creating migration history table"]);
     // The history table is created in its own transaction and survives
     // runner failures — only the failing migration's transaction is rolled
     // back, not the session setup.

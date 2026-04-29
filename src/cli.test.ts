@@ -711,8 +711,8 @@ describe("cli", (): void => {
     assert.notEqual(result.status, 0);
     assert.equal(result.status, 1);
     assert.equal(result.stdout, "");
-    assert.match(result.stderr, /started migration run/);
-    assert.match(result.stderr, /migration run aborted/);
+    assert.match(result.stderr, /Migration run started/);
+    assert.match(result.stderr, /Migration run aborted/);
     assert.match(
       result.stderr,
       new RegExp(`Migration directory does not exist: ${missingDirectory}`),
@@ -829,11 +829,39 @@ DELETE FROM cli_validate_person;
         `Migration directory does not exist: ${escapeRegExp(missingDirectory)}`,
       ),
     );
-    assert.match(
-      stripAnsi(result.stderr),
-      new RegExp(
-        `Migration directory does not exist: ${escapeRegExp(missingDirectory)}`,
+    const logs = result.stderr
+      .trimEnd()
+      .split("\n")
+      .map(
+        (
+          line,
+        ): {
+          error?: { message?: string };
+          fields?: { migratorosaurus?: { correlation_id?: string } };
+          message?: string;
+        } => JSON.parse(line),
+      );
+    assert.ok(
+      logs.some(
+        (log): boolean =>
+          log.error?.message ===
+          `Migration directory does not exist: ${missingDirectory}`,
       ),
+    );
+    assert.ok(
+      logs.every(
+        (log): boolean =>
+          typeof log.fields?.migratorosaurus?.correlation_id === "string",
+      ),
+    );
+    assert.equal(
+      new Set(
+        logs.map(
+          (log): string | undefined =>
+            log.fields?.migratorosaurus?.correlation_id,
+        ),
+      ).size,
+      1,
     );
   });
 
@@ -852,7 +880,26 @@ DELETE FROM cli_validate_person;
     assert.equal(result.stdout.trimEnd().split("\n").length, 1);
     const parsed = JSON.parse(result.stdout);
     assert.equal(parsed.command, "create");
-    assert.match(stripAnsi(result.stderr), /Debug: command=create/);
+    const logs = result.stderr
+      .trimEnd()
+      .split("\n")
+      .map(
+        (
+          line,
+        ): {
+          event?: { action?: string };
+          fields?: { migratorosaurus?: { command?: string } };
+          level?: string;
+        } => JSON.parse(line),
+      );
+    assert.ok(
+      logs.some(
+        (log): boolean =>
+          log.level === "debug" &&
+          log.event?.action === "command.options" &&
+          log.fields?.migratorosaurus?.command === "create",
+      ),
+    );
   });
 
   it("suppresses non-error logs in quiet mode", async (): Promise<void> => {
@@ -867,8 +914,8 @@ DELETE FROM cli_validate_person;
 
     assert.equal(result.status, 1);
     assert.equal(result.stdout, "");
-    assert.doesNotMatch(result.stderr, /started migration run/);
-    assert.match(result.stderr, /migration run aborted/);
+    assert.doesNotMatch(result.stderr, /Migration run started/);
+    assert.match(result.stderr, /Migration run aborted/);
     assert.match(
       result.stderr,
       new RegExp(`Migration directory does not exist: ${missingDirectory}`),
@@ -886,7 +933,8 @@ DELETE FROM cli_validate_person;
     ]);
 
     assert.equal(result.status, 0);
-    assert.match(stripAnsi(result.stderr), /Debug: command=create/);
+    assert.match(stripAnsi(result.stderr), /Debug: Command options parsed/);
+    assert.match(stripAnsi(result.stderr), /command=create/);
     assert.ok(result.stdout.trim().length > 0);
   });
 
@@ -901,8 +949,9 @@ DELETE FROM cli_validate_person;
     ]);
 
     assert.equal(result.status, 1);
-    assert.match(stripAnsi(result.stderr), /Debug: run=up /);
-    assert.doesNotMatch(stripAnsi(result.stderr), /Debug: command=up/);
+    assert.match(stripAnsi(result.stderr), /Debug: Run options parsed/);
+    assert.match(stripAnsi(result.stderr), /command=up/);
+    assert.doesNotMatch(stripAnsi(result.stderr), /Command options parsed/);
   });
 
   it("returns status code 0 for help and non-zero for failures", (): void => {

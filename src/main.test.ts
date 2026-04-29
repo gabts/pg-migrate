@@ -3,12 +3,13 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as pg from "pg";
-import { messages } from "./logging/messages.js";
 import {
   down,
   up,
   validate,
-  type Logger,
+  type ClientConfig,
+  type LogRecord,
+  type LogSink,
   type MigrationOptions,
   type ValidateOptions,
 } from "./main.js";
@@ -21,7 +22,7 @@ function normalizeMs(s: string): string {
   return s.replace(/\d+ms/, "<ms>");
 }
 
-const databaseConfig: string | pg.ClientConfig = process.env.DATABASE_URL;
+const databaseConfig: ClientConfig = process.env.DATABASE_URL;
 const client = new pg.Client(databaseConfig);
 const defaultMigrationHistoryTable = "migration_history";
 const tempMigrationDirectories: string[] = [];
@@ -234,6 +235,14 @@ function stderrLogMessages(stderr: string): string[] {
       const event = JSON.parse(line) as { message?: unknown };
       return typeof event.message === "string" ? event.message : "";
     });
+}
+
+function createCapturedLogSink(records: LogRecord[]): LogSink {
+  return {
+    write(record: LogRecord): void {
+      records.push(record);
+    },
+  };
 }
 
 describe("main", (): void => {
@@ -776,19 +785,19 @@ DELETE FROM bulk_test WHERE value = ${i};
       assert.deepEqual(
         observed.map(normalizeMs),
         [
-          messages.startedUp(),
-          messages.creatingTable(),
-          messages.pending(2),
-          messages.applying(standardCreateFile),
-          messages.applied(standardCreateFile, 0),
-          messages.applying(standardInsertFile),
-          messages.applied(standardInsertFile, 0),
-          messages.completedUp(),
-          messages.startedDown(),
-          messages.pending(1),
-          messages.reverting(standardInsertFile, true),
-          messages.reverted(standardInsertFile, 0),
-          messages.completedDown(),
+          "Migration run started",
+          "Creating migration history table",
+          "Migration steps planned",
+          "Applying migration",
+          "Migration applied",
+          "Applying migration",
+          "Migration applied",
+          "Migration run completed",
+          "Rollback started",
+          "Migration steps planned",
+          "Reverting migration",
+          "Migration reverted",
+          "Rollback completed",
         ].map(normalizeMs),
       );
     });
@@ -804,8 +813,8 @@ DELETE FROM bulk_test WHERE value = ${i};
         );
       });
 
-      assert.match(captured.stderr, /started migration run/);
-      assert.match(captured.stderr, /migration run aborted/);
+      assert.match(captured.stderr, /Migration run started/);
+      assert.match(captured.stderr, /Migration run aborted/);
     });
 
     it("logs lifecycle messages for validate in order", async (): Promise<void> => {
@@ -819,9 +828,9 @@ DELETE FROM bulk_test WHERE value = ${i};
       const observed = stderrLogMessages(captured.stderr);
 
       assert.deepEqual(observed, [
-        messages.startedValidate(),
-        messages.validationSummary(1, 1, 1),
-        messages.completedValidate(),
+        "Validation started",
+        "Validation summary",
+        "Validation completed",
       ]);
     });
 
@@ -838,8 +847,8 @@ DELETE FROM bulk_test WHERE value = ${i};
         );
       });
 
-      assert.match(captured.stderr, /started validation/);
-      assert.match(captured.stderr, /validation aborted/);
+      assert.match(captured.stderr, /Validation started/);
+      assert.match(captured.stderr, /Validation aborted/);
     });
 
     it("keeps abort logs in quiet mode while suppressing non-errors", async (): Promise<void> => {
@@ -854,75 +863,50 @@ DELETE FROM bulk_test WHERE value = ${i};
         );
       });
 
-      assert.doesNotMatch(captured.stderr, /started rollback/);
-      assert.match(captured.stderr, /rollback aborted/);
+      assert.doesNotMatch(captured.stderr, /Rollback started/);
+      assert.match(captured.stderr, /Rollback aborted/);
     });
 
-    it("applies quiet and verbose filtering to custom loggers", async (): Promise<void> => {
+    it("applies quiet and verbose filtering to custom log sinks", async (): Promise<void> => {
       const missingDirectory = createMissingDirectory(
-        "migratorosaurus-custom-logger-",
+        "migratorosaurus-custom-log-sink-",
       );
-      const logs: string[] = [];
-      const logger: Logger = {
-        debug(message: string): void {
-          logs.push(`debug:${message}`);
-        },
-        error(message: string): void {
-          logs.push(`error:${message}`);
-        },
-        info(message: string): void {
-          logs.push(`info:${message}`);
-        },
-        warn(message: string): void {
-          logs.push(`warn:${message}`);
-        },
-      };
+      const records: LogRecord[] = [];
 
       await assert.rejects(
         (): Promise<void> =>
           validate("postgres://localhost:5432/example", {
             directory: missingDirectory,
-            logger,
+            logSink: createCapturedLogSink(records),
             quiet: true,
             verbose: true,
           }),
       );
 
-      assert.deepEqual(logs, [`error:${messages.abortedValidate()}`]);
+      assert.deepEqual(
+        records.map((record): string => `${record.level}:${record.message}`),
+        ["error:Validation aborted"],
+      );
     });
 
-    it("suppresses custom logger debug messages unless verbose is enabled", async (): Promise<void> => {
+    it("suppresses debug log sink records unless verbose is enabled", async (): Promise<void> => {
       const missingDirectory = createMissingDirectory(
-        "migratorosaurus-custom-logger-debug-",
+        "migratorosaurus-custom-log-sink-debug-",
       );
-      const logs: string[] = [];
-      const logger: Logger = {
-        debug(message: string): void {
-          logs.push(`debug:${message}`);
-        },
-        error(message: string): void {
-          logs.push(`error:${message}`);
-        },
-        info(message: string): void {
-          logs.push(`info:${message}`);
-        },
-        warn(message: string): void {
-          logs.push(`warn:${message}`);
-        },
-      };
+      const records: LogRecord[] = [];
 
       await assert.rejects(
         (): Promise<void> =>
           validate("postgres://localhost:5432/example", {
             directory: missingDirectory,
-            logger,
+            logSink: createCapturedLogSink(records),
           }),
       );
 
-      assert.deepEqual(logs, [
-        `info:${messages.startedValidate()}`,
-        `error:${messages.abortedValidate()}`,
-      ]);
+      assert.deepEqual(
+        records.map((record): string => `${record.level}:${record.message}`),
+        ["info:Validation started", "error:Validation aborted"],
+      );
     });
   });
 });

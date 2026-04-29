@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import type * as pg from "pg";
+import type { LogRecord } from "../logging/schema.js";
 import type { Logger } from "../logging/logger.js";
-import { messages } from "../logging/messages.js";
 import {
   assertMigrationHistoryTableShape,
   ensureMigrationHistory,
@@ -13,19 +13,12 @@ interface EnsurePlan {
   tableExists: boolean;
 }
 
-function createCapturedLogger(logs: string[]): Logger {
-  const capture = (message: string): void => {
-    logs.push(message);
-  };
-  const captureError = (input: unknown): void => {
-    logs.push(String(input));
-  };
-
+function createCapturedLogger(logs: string[], records?: LogRecord[]): Logger {
   return {
-    debug: capture,
-    error: captureError,
-    info: capture,
-    warn: capture,
+    emit(event: LogRecord): void {
+      logs.push(event.message);
+      records?.push(event);
+    },
   };
 }
 
@@ -93,6 +86,19 @@ describe("history", (): void => {
         false,
       );
     });
+
+    it("returns false when the existence query returns no rows", async (): Promise<void> => {
+      const client = {
+        query: async (): Promise<{ rows: unknown[] }> => {
+          return { rows: [] };
+        },
+      } as unknown as pg.Client;
+
+      assert.equal(
+        await migrationHistoryExists(client, '"migration_history"'),
+        false,
+      );
+    });
   });
 
   describe("ensureMigrationHistory", (): void => {
@@ -101,14 +107,21 @@ describe("history", (): void => {
         tableExists: false,
       });
       const logs: string[] = [];
+      const records: LogRecord[] = [];
 
       await ensureMigrationHistory({
         client,
-        logger: createCapturedLogger(logs),
+        logger: createCapturedLogger(logs, records),
         qualifiedTableName: '"migration_history"',
+        table: "migration_history",
       });
 
-      assert.deepEqual(logs, [messages.creatingTable()]);
+      assert.deepEqual(logs, ["Creating migration history table"]);
+      assert.deepEqual(records[0]?.fields, {
+        migratorosaurus: {
+          table: "migration_history",
+        },
+      });
       assert.ok(
         queries.some(
           ({ sql }): boolean =>
@@ -133,6 +146,7 @@ describe("history", (): void => {
         client,
         logger: createCapturedLogger(logs),
         qualifiedTableName: '"migration_history"',
+        table: "migration_history",
       });
 
       assert.deepEqual(logs, []);

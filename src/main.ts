@@ -1,10 +1,7 @@
-import {
-  createLogger,
-  withLoggerOptions,
-  type Logger,
-} from "./logging/logger.js";
+import { createLogger, type Logger } from "./logging/logger.js";
+import type { LogSink } from "./logging/writers.js";
 import { executeDownPlan, executeUpPlan } from "./migrations/execution.js";
-import { messages } from "./logging/messages.js";
+import { events } from "./logging/events.js";
 import {
   loadDiskMigrations,
   materializeStepsFromSql,
@@ -18,7 +15,8 @@ import {
   validateDownPreconditions,
 } from "./migrations/validation.js";
 
-export type { Logger } from "./logging/logger.js";
+export type { LogRecord } from "./logging/schema.js";
+export type { LogSink } from "./logging/writers.js";
 export type { ClientConfig } from "./db/types.js";
 
 /**
@@ -27,8 +25,9 @@ export type { ClientConfig } from "./db/types.js";
 export interface MigrationOptions {
   directory?: string;
   dryRun?: boolean;
-  logger?: Logger;
+  logSink?: LogSink;
   quiet?: boolean;
+  correlationId?: string;
   table?: string;
   target?: string;
   verbose?: boolean;
@@ -39,36 +38,34 @@ export interface MigrationOptions {
  */
 export interface ValidateOptions {
   directory?: string;
-  logger?: Logger;
+  logSink?: LogSink;
   quiet?: boolean;
+  correlationId?: string;
   table?: string;
   verbose?: boolean;
 }
 
-function normalizeOptions(args: MigrationOptions): {
+type CommonOptions = Pick<
+  MigrationOptions,
+  "directory" | "logSink" | "quiet" | "correlationId" | "table" | "verbose"
+>;
+
+function normalizeCommonOptions(args: CommonOptions): {
   logger: Logger;
   directory: string;
-  dryRun: boolean;
   table: string;
-  target?: string;
 } {
-  const logger =
-    args.logger === undefined
-      ? createLogger({
-          quiet: args.quiet,
-          verbose: args.verbose,
-        })
-      : withLoggerOptions(args.logger, {
-          quiet: args.quiet,
-          verbose: args.verbose ?? false,
-        });
+  const logger = createLogger({
+    quiet: args.quiet,
+    correlationId: args.correlationId,
+    sink: args.logSink,
+    verbose: args.verbose,
+  });
 
   return {
     logger,
     directory: args.directory ?? "migrations",
-    dryRun: args.dryRun ?? false,
     table: args.table ?? "migration_history",
-    target: args.target,
   };
 }
 
@@ -79,14 +76,30 @@ export async function up(
   clientConfig: ClientConfig,
   args: MigrationOptions = {},
 ): Promise<void> {
-  const { logger, directory, dryRun, table, target } = normalizeOptions(args);
+  const { logger, directory, table } = normalizeCommonOptions(args);
+  const dryRun = args.dryRun ?? false;
+  const target = args.target;
 
-  logger.debug(
-    `run=up directory=${JSON.stringify(directory)} table=${JSON.stringify(table)} dryRun=${String(dryRun)} target=${JSON.stringify(target ?? null)}`,
+  logger.emit(
+    events.runTelemetry({
+      command: "up",
+      directory,
+      dry_run: dryRun,
+      table,
+      ...(target === undefined ? {} : { target }),
+    }),
   );
-  logger.info(messages.startedUp(dryRun));
+  logger.emit(
+    events.runStarted({
+      command: "up",
+      directory,
+      dryRun,
+      table,
+      target,
+    }),
+  );
   if (target) {
-    logger.info(messages.target(target));
+    logger.emit(events.targetSelected(target));
   }
 
   try {
@@ -115,7 +128,7 @@ export async function up(
         });
 
         const steps = materializeStepsFromSql(migrations, "up", sqlByFile);
-        logger.info(messages.pending(steps.length));
+        logger.emit(events.migrationStepsPlanned(steps.length));
 
         if (steps.length === 0) {
           return;
@@ -125,9 +138,9 @@ export async function up(
       },
     });
 
-    logger.info(messages.completedUp());
+    logger.emit(events.runCompleted("up"));
   } catch (error) {
-    logger.error(messages.abortedUp());
+    logger.emit(events.runAborted({ command: "up", error }));
     throw error;
   }
 }
@@ -139,14 +152,30 @@ export async function down(
   clientConfig: ClientConfig,
   args: MigrationOptions = {},
 ): Promise<void> {
-  const { logger, directory, dryRun, table, target } = normalizeOptions(args);
+  const { logger, directory, table } = normalizeCommonOptions(args);
+  const dryRun = args.dryRun ?? false;
+  const target = args.target;
 
-  logger.debug(
-    `run=down directory=${JSON.stringify(directory)} table=${JSON.stringify(table)} dryRun=${String(dryRun)} target=${JSON.stringify(target ?? null)}`,
+  logger.emit(
+    events.runTelemetry({
+      command: "down",
+      directory,
+      dry_run: dryRun,
+      table,
+      ...(target === undefined ? {} : { target }),
+    }),
   );
-  logger.info(messages.startedDown(dryRun));
+  logger.emit(
+    events.runStarted({
+      command: "down",
+      directory,
+      dryRun,
+      table,
+      target,
+    }),
+  );
   if (target) {
-    logger.info(messages.target(target));
+    logger.emit(events.targetSelected(target));
   }
 
   try {
@@ -174,10 +203,10 @@ export async function down(
         });
 
         const steps = materializeStepsFromSql(migrations, "down", sqlByFile);
-        logger.info(messages.pending(steps.length));
+        logger.emit(events.migrationStepsPlanned(steps.length));
 
         if (steps.length === 0) {
-          logger.info(messages.nothingToRollback());
+          logger.emit(events.noMigrationsToRollback());
           return;
         }
 
@@ -185,9 +214,9 @@ export async function down(
       },
     });
 
-    logger.info(messages.completedDown());
+    logger.emit(events.runCompleted("down"));
   } catch (error) {
-    logger.error(messages.abortedDown());
+    logger.emit(events.runAborted({ command: "down", error }));
     throw error;
   }
 }
@@ -199,17 +228,27 @@ export async function validate(
   clientConfig: ClientConfig,
   args: ValidateOptions = {},
 ): Promise<void> {
-  const { logger, directory, table } = normalizeOptions(args);
+  const { logger, directory, table } = normalizeCommonOptions(args);
 
-  logger.debug(
-    `run=validate directory=${JSON.stringify(directory)} table=${JSON.stringify(table)}`,
+  logger.emit(
+    events.runTelemetry({
+      command: "validate",
+      directory,
+      table,
+    }),
   );
-  logger.info(messages.startedValidate());
+  logger.emit(
+    events.runStarted({
+      command: "validate",
+      directory,
+      table,
+    }),
+  );
 
   try {
     const disk = loadDiskMigrations(directory);
-    // Validate and parse the full migration set before opening a DB session.
-    void readMigrationSqlByFile(disk.all);
+    // Parse only; throws on malformed SQL before opening a DB session.
+    readMigrationSqlByFile(disk.all);
 
     await withMigrationSession({
       clientConfig,
@@ -234,19 +273,19 @@ export async function validate(
           targetMigration: null,
         });
 
-        logger.info(
-          messages.validationSummary(
-            pendingUp.length,
-            appliedRows.length,
-            nextDown.length,
-          ),
+        logger.emit(
+          events.validationSummary({
+            nextDownCount: nextDown.length,
+            pendingUpCount: pendingUp.length,
+            rollbackableDownCount: appliedRows.length,
+          }),
         );
       },
     });
 
-    logger.info(messages.completedValidate());
+    logger.emit(events.runCompleted("validate"));
   } catch (error) {
-    logger.error(messages.abortedValidate());
+    logger.emit(events.runAborted({ command: "validate", error }));
     throw error;
   }
 }
