@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as pg from "pg";
+import { fileURLToPath } from "url";
 import { cli } from "./cli.js";
 
 interface CliRunResult {
@@ -13,7 +14,12 @@ interface CliRunResult {
 }
 
 function runCliRaw(args: string[]): CliRunResult {
-  const cliPath = path.join(__dirname, "..", "bin", "cli.js");
+  const cliPath = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "bin",
+    "cli.js",
+  );
   const result = spawnSync("node", [cliPath, ...args], {
     encoding: "utf8",
   });

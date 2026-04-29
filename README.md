@@ -16,7 +16,7 @@ npm install --save migratorosaurus
 ```
 
 Your environment should have a [PostgreSQL](https://www.postgresql.org/) database setup.
-This package requires Node.js `>=22`.
+This package is ESM-only and requires Node.js `>=22`.
 
 ## 🧬 Quick Start
 

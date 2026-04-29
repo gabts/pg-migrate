@@ -2,7 +2,7 @@
   "compilerOptions": {
     "declaration": true,
     "declarationMap": true,
-    "lib": ["ES2023"],
+    "lib": ["ES2024"],
     "module": "node20",
     "noEmitOnError": true,
     "noUncheckedIndexedAccess": true,
@@ -11,7 +11,7 @@
     "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
-    "target": "ES2023",
+    "target": "ES2024",
     "types": ["node", "mocha"]
   },
   "include": ["src"]
