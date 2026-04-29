@@ -1,103 +1,156 @@
+import { appendNewline, serializeValue } from "./serialize.js";
+
 /**
  * Logging contract used throughout the migrator runtime.
  */
 export interface Logger {
-  info(message: string): void;
-  warn(message: string): void;
-  error(message: string): void;
-  debug(message: string): void;
+  info(message: string, fields?: LogFields): void;
+  warn(message: string, fields?: LogFields): void;
+  error(message: string, fields?: LogFields): void;
+  debug(message: string, fields?: LogFields): void;
 }
 
 /**
- * Color rendering mode for log output.
+ * Structured log fields attached to log events.
  */
-export type ColorMode = boolean | "auto";
+export type LogFields = Record<string, unknown>;
 
-interface WritableStreamLike {
-  isTTY?: boolean;
-  write(chunk: string): boolean;
+/**
+ * Structured log object emitted by the logger.
+ */
+export interface LogObject {
+  logLevel: string;
+  message: string;
+  fields?: LogFields;
+}
+
+/**
+ * Consumes structured log objects.
+ */
+export interface LogWriter {
+  write(event: LogObject): void;
+}
+
+interface LogJsonWritable {
+  write(chunk: string): boolean | void;
 }
 
 /**
  * Options for creating a configured logger instance.
  */
 export interface LoggerOptions {
-  color?: ColorMode;
   quiet?: boolean;
-  stderr?: WritableStreamLike;
   verbose?: boolean;
-}
-
-function writeLine(stream: WritableStreamLike, value: string): void {
-  if (value.endsWith("\n")) {
-    stream.write(value);
-    return;
-  }
-
-  stream.write(`${value}\n`);
-}
-
-function formatLevelPrefix(
-  label: string,
-  colorCode: number,
-  supportsColor: boolean,
-): string {
-  if (!supportsColor) {
-    return `${label}:`;
-  }
-  return `\u001B[${colorCode}m${label}:\u001B[0m`;
+  writer?: LogWriter;
 }
 
 /**
- * Creates a logger that writes leveled messages to stderr.
+ * Applies standard logger options to a logger implementation.
  */
-export function createLogger(options: LoggerOptions = {}): Logger {
-  const stderr = options.stderr ?? process.stderr;
+export function withLoggerOptions(
+  logger: Logger,
+  options: Pick<LoggerOptions, "quiet" | "verbose"> = {},
+): Logger {
   const quiet = options.quiet ?? false;
-  const verbose = options.verbose ?? false;
-  const supportsColor = resolveSupportsColor(
-    options.color,
-    Boolean(stderr.isTTY),
-  );
+  const verbose = options.verbose;
 
   return {
-    info(message: string): void {
+    info(message: string, fields?: LogFields): void {
       if (quiet) {
         return;
       }
-      writeLine(stderr, message);
+      logger.info(message, fields);
     },
-    warn(message: string): void {
+    warn(message: string, fields?: LogFields): void {
       if (quiet) {
         return;
       }
-      const prefix = formatLevelPrefix("Warning", 33, supportsColor);
-      writeLine(stderr, `${prefix} ${message}`);
+      logger.warn(message, fields);
     },
-    error(message: string): void {
-      const prefix = formatLevelPrefix("Error", 31, supportsColor);
-      writeLine(stderr, `${prefix} ${message}`);
+    error(message: string, fields?: LogFields): void {
+      logger.error(message, fields);
     },
-    debug(message: string): void {
-      if (!verbose || quiet) {
+    debug(message: string, fields?: LogFields): void {
+      if (quiet || verbose === false) {
         return;
       }
-      const prefix = formatLevelPrefix("Debug", 36, supportsColor);
-      writeLine(stderr, `${prefix} ${message}`);
+      logger.debug(message, fields);
+    },
+  };
+}
+
+function serializeLogObject(event: LogObject): string {
+  try {
+    const serialized = JSON.stringify(event);
+    if (serialized !== undefined) {
+      return serialized;
+    }
+  } catch {
+    // Fallback for values JSON cannot serialize (e.g. BigInt, circular refs).
+  }
+
+  const fallback: LogObject = {
+    logLevel: event.logLevel,
+    message: event.message,
+  };
+  if (event.fields && Object.keys(event.fields).length > 0) {
+    fallback.fields = Object.fromEntries(
+      Object.entries(event.fields).map(([key, value]): [string, string] => [
+        key,
+        serializeValue(value),
+      ]),
+    );
+  }
+
+  return JSON.stringify(fallback);
+}
+
+/**
+ * Creates a writer that writes structured log objects as newline-delimited JSON.
+ */
+export function createJsonLogWriter(stream: LogJsonWritable): LogWriter {
+  return {
+    write(event: LogObject): void {
+      stream.write(appendNewline(serializeLogObject(event)));
     },
   };
 }
 
 /**
- * Resolves whether ANSI color should be enabled for output.
+ * Creates a logger that emits structured log objects.
  */
-export function resolveSupportsColor(
-  color: ColorMode | undefined,
-  isTTY: boolean,
-): boolean {
-  const mode = color ?? "auto";
-  if (mode === "auto") {
-    return isTTY;
+export function createLogger(options: LoggerOptions = {}): Logger {
+  const writer = options.writer ?? createJsonLogWriter(process.stderr);
+
+  function write(logLevel: string, message: string, fields?: LogFields): void {
+    const event: LogObject = {
+      logLevel,
+      message,
+    };
+    if (fields && Object.keys(fields).length > 0) {
+      event.fields = fields;
+    }
+    writer.write(event);
   }
-  return mode;
+
+  return withLoggerOptions(
+    {
+      info(message: string, fields?: LogFields): void {
+        write("info", message, fields);
+      },
+      warn(message: string, fields?: LogFields): void {
+        write("warn", message, fields);
+      },
+      error(message: string, fields?: LogFields): void {
+        write("error", message, fields);
+      },
+      debug(message: string, fields?: LogFields): void {
+        write("debug", message, fields);
+      },
+    },
+    {
+      quiet: options.quiet,
+      verbose: options.verbose ?? false,
+    },
+  );
 }

@@ -1,125 +1,217 @@
 import * as assert from "assert";
-import { createLogger } from "./logger.js";
+import {
+  createJsonLogWriter,
+  createLogger,
+  type LogObject,
+  type LogWriter,
+  withLoggerOptions,
+} from "./logger.js";
 
-interface FakeWritable {
-  chunks: string[];
-  isTTY: boolean;
-  write(chunk: string): boolean;
+interface CapturedLogWriter {
+  chunks: LogObject[];
+  writer: LogWriter;
 }
 
-function createWritable(isTTY = false): FakeWritable {
-  const chunks: string[] = [];
-
+function createCapturedLogWriter(): CapturedLogWriter {
+  const chunks: LogObject[] = [];
   return {
     chunks,
-    isTTY,
-    write(chunk: string): boolean {
-      chunks.push(chunk);
-      return true;
+    writer: {
+      write(event: LogObject): void {
+        chunks.push(event);
+      },
     },
   };
 }
 
 describe("logger", (): void => {
-  it("writes info/warn/error to stderr and hides debug by default", (): void => {
-    const stderr = createWritable(false);
-    const log = createLogger({ stderr });
+  it("emits info/warn/error objects and hides debug by default", (): void => {
+    const capture = createCapturedLogWriter();
+    const logger = createLogger({
+      writer: capture.writer,
+    });
 
-    log.info("hello");
-    log.warn("careful");
-    log.error("boom");
-    log.debug("details");
+    logger.info("hello");
+    logger.warn("careful");
+    logger.error("boom");
+    logger.debug("details");
 
-    assert.equal(
-      stderr.chunks.join(""),
-      ["hello\n", "Warning: careful\n", "Error: boom\n"].join(""),
-    );
+    assert.deepEqual(capture.chunks, [
+      { logLevel: "info", message: "hello" },
+      { logLevel: "warn", message: "careful" },
+      { logLevel: "error", message: "boom" },
+    ]);
   });
 
   it("suppresses non-error logs in quiet mode", (): void => {
-    const stderr = createWritable(false);
-    const log = createLogger({
+    const capture = createCapturedLogWriter();
+    const logger = createLogger({
       quiet: true,
-      stderr,
       verbose: true,
+      writer: capture.writer,
     });
 
-    log.info("hello");
-    log.warn("careful");
-    log.debug("details");
-    log.error("boom");
+    logger.info("hello");
+    logger.warn("careful");
+    logger.debug("details");
+    logger.error("boom");
 
-    assert.equal(stderr.chunks.join(""), "Error: boom\n");
+    assert.deepEqual(capture.chunks, [{ logLevel: "error", message: "boom" }]);
   });
 
   it("prints debug when verbose is enabled", (): void => {
-    const stderr = createWritable(false);
-    const log = createLogger({
-      stderr,
+    const capture = createCapturedLogWriter();
+    const logger = createLogger({
       verbose: true,
+      writer: capture.writer,
     });
 
-    log.debug("details");
+    logger.debug("details");
 
-    assert.equal(stderr.chunks.join(""), "Debug: details\n");
+    assert.deepEqual(capture.chunks, [
+      { logLevel: "debug", message: "details" },
+    ]);
   });
 
-  it("uses ANSI prefixes in auto mode only when stderr is a tty", (): void => {
-    const ttyStderr = createWritable(true);
-    const withColor = createLogger({
-      stderr: ttyStderr,
-      verbose: true,
-    });
-
-    withColor.warn("careful");
-    withColor.error("boom");
-    withColor.debug("details");
-
-    const ttyText = ttyStderr.chunks.join("");
-    assert.match(ttyText, /\u001B\[33mWarning:\u001B\[0m careful\n/);
-    assert.match(ttyText, /\u001B\[31mError:\u001B\[0m boom\n/);
-    assert.match(ttyText, /\u001B\[36mDebug:\u001B\[0m details\n/);
-
-    const noColorStderr = createWritable(true);
-    const noColor = createLogger({
-      color: false,
-      stderr: noColorStderr,
-      verbose: true,
-    });
-    noColor.warn("careful");
-    noColor.error("boom");
-    noColor.debug("details");
-
-    assert.equal(
-      noColorStderr.chunks.join(""),
-      ["Warning: careful\n", "Error: boom\n", "Debug: details\n"].join(""),
+  it("applies quiet and verbose filtering to wrapped loggers", (): void => {
+    const capture = createCapturedLogWriter();
+    const logger = withLoggerOptions(
+      createLogger({
+        verbose: true,
+        writer: capture.writer,
+      }),
+      {
+        quiet: true,
+        verbose: true,
+      },
     );
+
+    logger.info("hello");
+    logger.warn("careful");
+    logger.debug("details");
+    logger.error("boom");
+
+    assert.deepEqual(capture.chunks, [{ logLevel: "error", message: "boom" }]);
   });
 
-  it("allows forcing ANSI prefixes when color is true on non-tty streams", (): void => {
-    const stderr = createWritable(false);
-    const log = createLogger({
-      color: true,
-      stderr,
-      verbose: true,
+  it("leaves wrapped logger debug behavior unchanged when verbose is omitted", (): void => {
+    const capture = createCapturedLogWriter();
+    const logger = withLoggerOptions({
+      debug(message: string): void {
+        capture.writer.write({ logLevel: "debug", message });
+      },
+      error(message: string): void {
+        capture.writer.write({ logLevel: "error", message });
+      },
+      info(message: string): void {
+        capture.writer.write({ logLevel: "info", message });
+      },
+      warn(message: string): void {
+        capture.writer.write({ logLevel: "warn", message });
+      },
     });
 
-    log.warn("careful");
-    log.error("boom");
-    log.debug("details");
+    logger.debug("details");
 
-    const text = stderr.chunks.join("");
-    assert.match(text, /\u001B\[33mWarning:\u001B\[0m careful\n/);
-    assert.match(text, /\u001B\[31mError:\u001B\[0m boom\n/);
-    assert.match(text, /\u001B\[36mDebug:\u001B\[0m details\n/);
+    assert.deepEqual(capture.chunks, [
+      { logLevel: "debug", message: "details" },
+    ]);
   });
 
-  it("does not append a second newline for newline-terminated messages", (): void => {
-    const stderr = createWritable(false);
-    const log = createLogger({ stderr });
+  it("emits error messages", (): void => {
+    const capture = createCapturedLogWriter();
+    const logger = createLogger({
+      writer: capture.writer,
+    });
 
-    log.info("hello\n");
+    logger.error("db down");
 
-    assert.equal(stderr.chunks.join(""), "hello\n");
+    assert.deepEqual(capture.chunks, [
+      { logLevel: "error", message: "db down" },
+    ]);
+  });
+
+  it("supports structured fields for all levels", (): void => {
+    const capture = createCapturedLogWriter();
+    const logger = createLogger({
+      verbose: true,
+      writer: capture.writer,
+    });
+
+    logger.info("hello", { run: "up" });
+    logger.warn("careful", { count: 2 });
+    logger.error("migration failed", {
+      file: "20260416090000_create.sql",
+    });
+    logger.debug("details", {
+      dryRun: true,
+    });
+
+    assert.deepEqual(capture.chunks, [
+      {
+        fields: { run: "up" },
+        logLevel: "info",
+        message: "hello",
+      },
+      {
+        fields: { count: 2 },
+        logLevel: "warn",
+        message: "careful",
+      },
+      {
+        fields: { file: "20260416090000_create.sql" },
+        logLevel: "error",
+        message: "migration failed",
+      },
+      {
+        fields: { dryRun: true },
+        logLevel: "debug",
+        message: "details",
+      },
+    ]);
+  });
+
+  it("writes JSON lines with the JSON writer", (): void => {
+    const chunks: string[] = [];
+    const stringOnlyStream = {
+      write(chunk: string): boolean {
+        chunks.push(chunk);
+        return true;
+      },
+    };
+    const logger = createLogger({
+      writer: createJsonLogWriter(stringOnlyStream),
+    });
+
+    logger.info("hello");
+    logger.error("migration failed", {
+      file: "20260416090000_create.sql",
+    });
+
+    assert.deepEqual(chunks, [
+      '{"logLevel":"info","message":"hello"}\n',
+      '{"logLevel":"error","message":"migration failed","fields":{"file":"20260416090000_create.sql"}}\n',
+    ]);
+  });
+
+  it("serializes non-JSON field values safely with the JSON writer", (): void => {
+    const chunks: string[] = [];
+    const stringOnlyStream = {
+      write(chunk: string): boolean {
+        chunks.push(chunk);
+        return true;
+      },
+    };
+    const logger = createLogger({
+      writer: createJsonLogWriter(stringOnlyStream),
+    });
+
+    logger.info("hello", {
+      count: 1n,
+    });
+
+    assert.deepEqual(chunks, [
+      '{"logLevel":"info","message":"hello","fields":{"count":"1"}}\n',
+    ]);
   });
 });

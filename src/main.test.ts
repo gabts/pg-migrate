@@ -8,6 +8,7 @@ import {
   down,
   up,
   validate,
+  type Logger,
   type MigrationOptions,
   type ValidateOptions,
 } from "./main.js";
@@ -223,6 +224,16 @@ async function captureStderr<T>(run: () => Promise<T>): Promise<{
       writable: true,
     });
   }
+}
+
+function stderrLogMessages(stderr: string): string[] {
+  return stderr
+    .split("\n")
+    .filter((line): boolean => line !== "")
+    .map((line): string => {
+      const event = JSON.parse(line) as { message?: unknown };
+      return typeof event.message === "string" ? event.message : "";
+    });
 }
 
 describe("main", (): void => {
@@ -756,14 +767,11 @@ DELETE FROM bulk_test WHERE value = ${i};
     it("logs lifecycle messages for up and down in order", async (): Promise<void> => {
       const directory = createStandardMigrationDirectory();
       const captured = await captureStderr(async (): Promise<void> => {
-        await up(databaseConfig, { color: false, directory });
-        await down(databaseConfig, { color: false, directory });
+        await up(databaseConfig, { directory });
+        await down(databaseConfig, { directory });
       });
 
-      const observed = captured.stderr.split("\n");
-      if (observed[observed.length - 1] === "") {
-        observed.pop();
-      }
+      const observed = stderrLogMessages(captured.stderr);
 
       assert.deepEqual(
         observed.map(normalizeMs),
@@ -771,16 +779,13 @@ DELETE FROM bulk_test WHERE value = ${i};
           messages.startedUp(),
           messages.creatingTable(),
           messages.pending(2),
-          "",
           messages.applying(standardCreateFile),
           messages.applied(standardCreateFile, 0),
-          "",
           messages.applying(standardInsertFile),
           messages.applied(standardInsertFile, 0),
           messages.completedUp(),
           messages.startedDown(),
           messages.pending(1),
-          "",
           messages.reverting(standardInsertFile, true),
           messages.reverted(standardInsertFile, 0),
           messages.completedDown(),
@@ -808,13 +813,10 @@ DELETE FROM bulk_test WHERE value = ${i};
       await runUp({ directory, target: standardCreateFile });
 
       const captured = await captureStderr(async (): Promise<void> => {
-        await validate(databaseConfig, { color: false, directory });
+        await validate(databaseConfig, { directory });
       });
 
-      const observed = captured.stderr.split("\n");
-      if (observed[observed.length - 1] === "") {
-        observed.pop();
-      }
+      const observed = stderrLogMessages(captured.stderr);
 
       assert.deepEqual(observed, [
         messages.startedValidate(),
@@ -831,7 +833,6 @@ DELETE FROM bulk_test WHERE value = ${i};
         await assert.rejects(
           (): Promise<void> =>
             validate("postgres://localhost:5432/example", {
-              color: false,
               directory: missingDirectory,
             }),
         );
@@ -855,6 +856,73 @@ DELETE FROM bulk_test WHERE value = ${i};
 
       assert.doesNotMatch(captured.stderr, /started rollback/);
       assert.match(captured.stderr, /rollback aborted/);
+    });
+
+    it("applies quiet and verbose filtering to custom loggers", async (): Promise<void> => {
+      const missingDirectory = createMissingDirectory(
+        "migratorosaurus-custom-logger-",
+      );
+      const logs: string[] = [];
+      const logger: Logger = {
+        debug(message: string): void {
+          logs.push(`debug:${message}`);
+        },
+        error(message: string): void {
+          logs.push(`error:${message}`);
+        },
+        info(message: string): void {
+          logs.push(`info:${message}`);
+        },
+        warn(message: string): void {
+          logs.push(`warn:${message}`);
+        },
+      };
+
+      await assert.rejects(
+        (): Promise<void> =>
+          validate("postgres://localhost:5432/example", {
+            directory: missingDirectory,
+            logger,
+            quiet: true,
+            verbose: true,
+          }),
+      );
+
+      assert.deepEqual(logs, [`error:${messages.abortedValidate()}`]);
+    });
+
+    it("suppresses custom logger debug messages unless verbose is enabled", async (): Promise<void> => {
+      const missingDirectory = createMissingDirectory(
+        "migratorosaurus-custom-logger-debug-",
+      );
+      const logs: string[] = [];
+      const logger: Logger = {
+        debug(message: string): void {
+          logs.push(`debug:${message}`);
+        },
+        error(message: string): void {
+          logs.push(`error:${message}`);
+        },
+        info(message: string): void {
+          logs.push(`info:${message}`);
+        },
+        warn(message: string): void {
+          logs.push(`warn:${message}`);
+        },
+      };
+
+      await assert.rejects(
+        (): Promise<void> =>
+          validate("postgres://localhost:5432/example", {
+            directory: missingDirectory,
+            logger,
+          }),
+      );
+
+      assert.deepEqual(logs, [
+        `info:${messages.startedValidate()}`,
+        `error:${messages.abortedValidate()}`,
+      ]);
     });
   });
 });

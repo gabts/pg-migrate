@@ -1,19 +1,22 @@
 import * as fs from "fs";
 import * as path from "path";
 import {
-  assertFlagsAllowedFor,
+  assertValidTokens,
   booleanFlag,
-  extractGlobals,
-  hasHelpFlag,
+  commandName,
   parseTokens,
   valueFlag,
   type CommandName,
   type ParsedTokens,
 } from "./args.js";
-import { createIo, type Io } from "./io.js";
-import type { ColorMode } from "./logger.js";
+import { createLogger, type Logger } from "./logger.js";
 import { down, up, validate } from "./main.js";
 import { assertValidMigrationName } from "./migration-naming.js";
+import {
+  createCliLogWriter,
+  createCliResultWriter,
+  type CliResultWriter,
+} from "./cli-format.js";
 
 const migrationDirectoryEnvVar = "MIGRATION_DIRECTORY";
 
@@ -266,6 +269,21 @@ function formatErrorMessage(error: unknown): string {
   return String(error);
 }
 
+function errorLogFields(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    return {
+      error: {
+        message: error.message,
+        name: error.name,
+      },
+    };
+  }
+
+  return {
+    error: String(error),
+  };
+}
+
 function helpTextFor(command: CommandName | undefined): string {
   switch (command) {
     case "create":
@@ -281,27 +299,51 @@ function helpTextFor(command: CommandName | undefined): string {
   }
 }
 
+function writeHelp(
+  resultWriter: CliResultWriter,
+  command: CommandName | undefined,
+  json: boolean,
+): void {
+  const help = helpTextFor(command);
+
+  if (json) {
+    resultWriter.writeJson({
+      command: command ?? null,
+      help,
+      ok: true,
+    });
+    return;
+  }
+
+  resultWriter.writeText(help);
+}
+
 async function runCommand(
   command: CommandName,
   parsed: ParsedTokens,
   extraPositional: readonly string[],
-  io: Io,
-  color: ColorMode,
+  resultWriter: CliResultWriter,
+  logger: Logger,
+  runtime: {
+    json: boolean;
+    quiet: boolean;
+    verbose: boolean;
+  },
 ): Promise<number> {
   if (command === "create") {
     const options = buildCreateOptions(parsed, extraPositional);
-    io.debug(
+    logger.debug(
       `command=create directory=${JSON.stringify(options.directory)} name=${JSON.stringify(options.name ?? "")}`,
     );
     const filePath = createMigration(options);
 
-    if (io.json) {
-      io.result({
+    if (runtime.json) {
+      resultWriter.writeJson({
         command: "create",
         file: filePath,
       });
     } else {
-      io.result(filePath);
+      resultWriter.writeText(filePath);
     }
     return 0;
   }
@@ -313,14 +355,14 @@ async function runCommand(
       command,
     );
     await validate(runOptions.clientConfig, {
-      color,
       directory: runOptions.directory,
-      quiet: io.quiet,
+      logger,
+      quiet: runtime.quiet,
       table: runOptions.table,
-      verbose: io.verbose,
+      verbose: runtime.verbose,
     });
-    if (io.json) {
-      io.result({
+    if (runtime.json) {
+      resultWriter.writeJson({
         command,
         ok: true,
       });
@@ -331,17 +373,17 @@ async function runCommand(
   const runOptions = buildMigrationRunOptions(parsed, extraPositional, command);
   const runFn = command === "up" ? up : down;
   await runFn(runOptions.clientConfig, {
-    color,
     directory: runOptions.directory,
     dryRun: runOptions.dryRun,
-    quiet: io.quiet,
+    logger,
+    quiet: runtime.quiet,
     table: runOptions.table,
     target: runOptions.target,
-    verbose: io.verbose,
+    verbose: runtime.verbose,
   });
 
-  if (io.json) {
-    io.result({
+  if (runtime.json) {
+    resultWriter.writeJson({
       command,
       dryRun: runOptions.dryRun,
       ok: true,
@@ -356,53 +398,69 @@ async function runCommand(
  */
 export async function cli(args = process.argv): Promise<number> {
   const tokens = args.slice(2);
-  // Sniff --no-color so parse-time errors aren't colorized when the user asked otherwise.
-  // Other global flags (--json/--quiet/--verbose) don't affect error output.
-  const initialColor: ColorMode = tokens.includes("--no-color")
-    ? false
-    : "auto";
-  let io: Io = createIo({ color: initialColor });
+  const parsed = parseTokens(tokens);
+
+  const { globals } = parsed;
+
+  const resultWriter = createCliResultWriter(process.stdout);
+  const logWriter = createCliLogWriter(process.stderr, {
+    color: globals.color,
+  });
+
+  const json = globals.json;
+  let currentCommand: CommandName | null = null;
+  let logger: Logger = createLogger({
+    writer: logWriter,
+  });
 
   try {
-    const parsed = parseTokens(tokens);
-    const globals = extractGlobals(parsed);
-    io = createIo(globals);
+    logger = createLogger({
+      quiet: globals.quiet,
+      writer: logWriter,
+      verbose: globals.verbose,
+    });
 
-    const [commandToken, ...extraPositional] = parsed.positional;
-    let command: CommandName | undefined;
-    if (commandToken !== undefined) {
-      if (
-        commandToken !== "create" &&
-        commandToken !== "up" &&
-        commandToken !== "down" &&
-        commandToken !== "validate"
-      ) {
-        throw new Error(`Unknown command: ${commandToken}`);
-      }
-      command = commandToken;
+    const command = commandName(parsed);
+    if (
+      parsed.validationIssues.length === 0 &&
+      (parsed.command === undefined || command !== undefined)
+    ) {
+      currentCommand = command ?? null;
     }
 
-    if (hasHelpFlag(tokens)) {
-      io.result(helpTextFor(command));
+    assertValidTokens(parsed);
+
+    if (parsed.help) {
+      writeHelp(resultWriter, command, globals.json);
       return 0;
     }
 
-    assertFlagsAllowedFor(parsed, command);
-
     if (command === undefined) {
-      io.result(helpText);
+      writeHelp(resultWriter, command, globals.json);
       return 0;
     }
 
     return await runCommand(
       command,
       parsed,
-      extraPositional,
-      io,
-      globals.color,
+      parsed.extraPositional,
+      resultWriter,
+      logger,
+      {
+        json: globals.json,
+        quiet: globals.quiet,
+        verbose: globals.verbose,
+      },
     );
   } catch (error) {
-    io.error(formatErrorMessage(error));
+    logger.error(formatErrorMessage(error), errorLogFields(error));
+    if (json) {
+      resultWriter.writeJson({
+        command: currentCommand,
+        error: formatErrorMessage(error),
+        ok: false,
+      });
+    }
     return 1;
   }
 }

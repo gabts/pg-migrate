@@ -1,9 +1,8 @@
 import * as assert from "assert";
 import {
-  assertFlagsAllowedFor,
+  assertValidTokens,
   booleanFlag,
-  extractGlobals,
-  hasHelpFlag,
+  commandName,
   parseTokens,
   valueFlag,
 } from "./args.js";
@@ -13,8 +12,18 @@ describe("args", (): void => {
     it("returns empty flags and positional for no tokens", (): void => {
       const parsed = parseTokens([]);
 
+      assert.equal(parsed.command, undefined);
+      assert.deepEqual(parsed.extraPositional, []);
       assert.equal(parsed.flags.size, 0);
+      assert.deepEqual(parsed.globals, {
+        color: "auto",
+        json: false,
+        quiet: false,
+        verbose: false,
+      });
+      assert.equal(parsed.help, false);
       assert.deepEqual(parsed.positional, []);
+      assert.deepEqual(parsed.validationIssues, []);
     });
 
     it("collects positional arguments", (): void => {
@@ -24,6 +33,8 @@ describe("args", (): void => {
         "create",
         "postgres://localhost/db",
       ]);
+      assert.equal(parsed.command, "create");
+      assert.deepEqual(parsed.extraPositional, ["postgres://localhost/db"]);
     });
 
     it("parses boolean flags as true", (): void => {
@@ -79,27 +90,42 @@ describe("args", (): void => {
       assert.equal(parsed.flags.get("--name"), "add_users");
     });
 
-    it("throws on unknown flags", (): void => {
-      assert.throws((): void => {
-        parseTokens(["--bogus"]);
-      }, /Unknown argument: --bogus/);
+    it("records unknown flags for validation", (): void => {
+      const parsed = parseTokens(["--bogus"]);
+
+      assert.deepEqual(parsed.validationIssues, [
+        {
+          kind: "unknown-argument",
+          token: "--bogus",
+        },
+      ]);
     });
 
-    it("throws when value flag has no following token", (): void => {
-      assert.throws((): void => {
-        parseTokens(["--name"]);
-      }, /Name flag \(--name, -n\) requires a value/);
+    it("records missing value flags for validation", (): void => {
+      const parsed = parseTokens(["--name"]);
+
+      assert.deepEqual(parsed.validationIssues, [
+        {
+          kind: "missing-value",
+          label: "Name",
+          tokens: "--name, -n",
+        },
+      ]);
     });
 
     it("includes aliases in missing-value error messages", (): void => {
+      const parsed = parseTokens(["--directory"]);
+
       assert.throws((): void => {
-        parseTokens(["--directory"]);
+        assertValidTokens(parsed);
       }, /Directory flag \(--directory, -d\) requires a value/);
     });
 
     it("omits aliases when the flag has none", (): void => {
+      const parsed = parseTokens(["--table"]);
+
       assert.throws((): void => {
-        parseTokens(["--table"]);
+        assertValidTokens(parsed);
       }, /Table flag \(--table\) requires a value/);
     });
 
@@ -116,21 +142,21 @@ describe("args", (): void => {
     });
   });
 
-  describe("hasHelpFlag", (): void => {
+  describe("help", (): void => {
     it("returns true when --help is present", (): void => {
-      assert.equal(hasHelpFlag(["create", "--help"]), true);
+      assert.equal(parseTokens(["create", "--help"]).help, true);
     });
 
     it("returns true when -h is present", (): void => {
-      assert.equal(hasHelpFlag(["-h"]), true);
+      assert.equal(parseTokens(["-h"]).help, true);
     });
 
     it("returns true even if --help would be consumed as a value", (): void => {
-      assert.equal(hasHelpFlag(["create", "--name", "--help"]), true);
+      assert.equal(parseTokens(["create", "--name", "--help"]).help, true);
     });
 
     it("returns false when neither --help nor -h is present", (): void => {
-      assert.equal(hasHelpFlag(["create", "--name", "add_users"]), false);
+      assert.equal(parseTokens(["create", "--name", "add_users"]).help, false);
     });
   });
 
@@ -174,46 +200,62 @@ describe("args", (): void => {
     });
   });
 
-  describe("assertFlagsAllowedFor", (): void => {
+  describe("commandName", (): void => {
+    it("returns a command name for known commands", (): void => {
+      const parsed = parseTokens(["create"]);
+
+      assert.equal(commandName(parsed), "create");
+    });
+
+    it("returns undefined for unknown commands", (): void => {
+      const parsed = parseTokens(["unknown"]);
+
+      assert.equal(commandName(parsed), undefined);
+    });
+  });
+
+  describe("assertValidTokens", (): void => {
     it("accepts global flags for any command", (): void => {
-      const parsed = parseTokens(["--verbose", "--json"]);
+      const createParsed = parseTokens(["create", "--verbose", "--json"]);
+      const upParsed = parseTokens(["up", "--verbose", "--json"]);
 
       assert.doesNotThrow((): void => {
-        assertFlagsAllowedFor(parsed, "create");
+        assertValidTokens(createParsed);
       });
       assert.doesNotThrow((): void => {
-        assertFlagsAllowedFor(parsed, "up");
+        assertValidTokens(upParsed);
       });
     });
 
     it("accepts command-owned flags on their owning command", (): void => {
-      const parsed = parseTokens(["--name", "x"]);
+      const parsed = parseTokens(["create", "--name", "x"]);
 
       assert.doesNotThrow((): void => {
-        assertFlagsAllowedFor(parsed, "create");
+        assertValidTokens(parsed);
       });
     });
 
     it("rejects flags that are not allowed for the command", (): void => {
-      const parsed = parseTokens(["--name", "x"]);
+      const parsed = parseTokens(["up", "--name", "x"]);
 
       assert.throws((): void => {
-        assertFlagsAllowedFor(parsed, "up");
+        assertValidTokens(parsed);
       }, /Unknown argument: --name/);
     });
 
     it("accepts shared flags across commands", (): void => {
-      const parsed = parseTokens(["--directory", "migrations"]);
-
       for (const command of ["create", "up", "down", "validate"] as const) {
+        const parsed = parseTokens([command, "--directory", "migrations"]);
+
         assert.doesNotThrow((): void => {
-          assertFlagsAllowedFor(parsed, command);
+          assertValidTokens(parsed);
         });
       }
     });
 
     it("accepts --url and --table on validate", (): void => {
       const parsed = parseTokens([
+        "validate",
         "--url",
         "postgres://localhost:5432/example",
         "--table",
@@ -221,23 +263,23 @@ describe("args", (): void => {
       ]);
 
       assert.doesNotThrow((): void => {
-        assertFlagsAllowedFor(parsed, "validate");
+        assertValidTokens(parsed);
       });
     });
 
     it("rejects --dry-run on create", (): void => {
-      const parsed = parseTokens(["--dry-run"]);
+      const parsed = parseTokens(["create", "--dry-run"]);
 
       assert.throws((): void => {
-        assertFlagsAllowedFor(parsed, "create");
+        assertValidTokens(parsed);
       }, /Unknown argument: --dry-run/);
     });
 
     it("rejects --target on validate", (): void => {
-      const parsed = parseTokens(["--target", "x.sql"]);
+      const parsed = parseTokens(["validate", "--target", "x.sql"]);
 
       assert.throws((): void => {
-        assertFlagsAllowedFor(parsed, "validate");
+        assertValidTokens(parsed);
       }, /Unknown argument: --target/);
     });
 
@@ -245,7 +287,7 @@ describe("args", (): void => {
       const parsed = parseTokens(["--verbose", "--json", "--no-color"]);
 
       assert.doesNotThrow((): void => {
-        assertFlagsAllowedFor(parsed, undefined);
+        assertValidTokens(parsed);
       });
     });
 
@@ -253,7 +295,7 @@ describe("args", (): void => {
       const parsed = parseTokens(["--dry-run"]);
 
       assert.throws((): void => {
-        assertFlagsAllowedFor(parsed, undefined);
+        assertValidTokens(parsed);
       }, /Unknown argument: --dry-run/);
     });
 
@@ -261,16 +303,48 @@ describe("args", (): void => {
       const parsed = parseTokens(["--name", "x"]);
 
       assert.throws((): void => {
-        assertFlagsAllowedFor(parsed, undefined);
+        assertValidTokens(parsed);
       }, /Unknown argument: --name/);
+    });
+
+    it("rejects unknown flags", (): void => {
+      const parsed = parseTokens(["--bogus"]);
+
+      assert.throws((): void => {
+        assertValidTokens(parsed);
+      }, /Unknown argument: --bogus/);
+    });
+
+    it("rejects missing flag values", (): void => {
+      const parsed = parseTokens(["--name"]);
+
+      assert.throws((): void => {
+        assertValidTokens(parsed);
+      }, /Name flag \(--name, -n\) requires a value/);
+    });
+
+    it("rejects unknown commands", (): void => {
+      const parsed = parseTokens(["unknown"]);
+
+      assert.throws((): void => {
+        assertValidTokens(parsed);
+      }, /Unknown command: unknown/);
+    });
+
+    it("allows command-scoped flags when help is requested", (): void => {
+      const parsed = parseTokens(["--name", "x", "--help"]);
+
+      assert.doesNotThrow((): void => {
+        assertValidTokens(parsed);
+      });
     });
   });
 
-  describe("extractGlobals", (): void => {
+  describe("globals", (): void => {
     it("returns defaults when no global flags are set", (): void => {
       const parsed = parseTokens([]);
 
-      assert.deepEqual(extractGlobals(parsed), {
+      assert.deepEqual(parsed.globals, {
         color: "auto",
         json: false,
         quiet: false,
@@ -286,7 +360,7 @@ describe("args", (): void => {
         "--no-color",
       ]);
 
-      assert.deepEqual(extractGlobals(parsed), {
+      assert.deepEqual(parsed.globals, {
         color: false,
         json: true,
         quiet: true,
@@ -297,7 +371,31 @@ describe("args", (): void => {
     it("treats -v the same as --verbose", (): void => {
       const parsed = parseTokens(["-v"]);
 
-      assert.equal(extractGlobals(parsed).verbose, true);
+      assert.equal(parsed.globals.verbose, true);
+    });
+
+    it("detects parse-time json and color globals", (): void => {
+      assert.deepEqual(
+        parseTokens(["--json", "--no-color", "--bogus"]).globals,
+        {
+          color: false,
+          json: true,
+          quiet: false,
+          verbose: false,
+        },
+      );
+    });
+
+    it("skips values consumed by known value flags", (): void => {
+      assert.deepEqual(
+        parseTokens(["--name", "--json", "--directory", "--no-color"]).globals,
+        {
+          color: "auto",
+          json: false,
+          quiet: false,
+          verbose: false,
+        },
+      );
     });
   });
 });

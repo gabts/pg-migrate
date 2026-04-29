@@ -24,13 +24,13 @@ export async function migrationHistoryExists(
  */
 export async function ensureMigrationHistory(args: {
   client: pg.Client;
-  log: Logger;
+  logger: Logger;
   qualifiedTableName: string;
 }): Promise<void> {
-  const { client, log, qualifiedTableName } = args;
+  const { client, logger, qualifiedTableName } = args;
 
   if (!(await migrationHistoryExists(client, qualifiedTableName))) {
-    log.info(messages.creatingTable());
+    logger.info(messages.creatingTable());
     await client.query(`
       CREATE TABLE ${qualifiedTableName}
       (

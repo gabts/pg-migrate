@@ -1,4 +1,4 @@
-import type { ColorMode } from "./logger.js";
+import type { ColorMode } from "./cli-color.js";
 
 /**
  * Supported top-level CLI command names.
@@ -96,7 +96,10 @@ const flagSpecs: readonly FlagSpec[] = [
   },
 ];
 
-const tokenToSpec: ReadonlyMap<string, FlagSpec> = (() => {
+const tokenToSpec: ReadonlyMap<string, FlagSpec> = ((): ReadonlyMap<
+  string,
+  FlagSpec
+> => {
   const map = new Map<string, FlagSpec>();
   for (const spec of flagSpecs) {
     map.set(spec.canonical, spec);
@@ -111,24 +114,85 @@ function flagTokens(spec: FlagSpec): string {
   return [spec.canonical, ...spec.aliases].join(", ");
 }
 
+function isHelpToken(token: string): boolean {
+  return token === "--help" || token === "-h";
+}
+
+function toCommandName(token: string | undefined): CommandName | undefined {
+  switch (token) {
+    case "create":
+    case "up":
+    case "down":
+    case "validate":
+      return token;
+    case undefined:
+      return undefined;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Global CLI behavior toggles shared by all commands.
+ */
+export interface GlobalOptions {
+  color: ColorMode;
+  json: boolean;
+  quiet: boolean;
+  verbose: boolean;
+}
+
+interface UnknownArgumentIssue {
+  kind: "unknown-argument";
+  token: string;
+}
+
+interface MissingValueIssue {
+  kind: "missing-value";
+  label: string;
+  tokens: string;
+}
+
+type TokenValidationIssue = MissingValueIssue | UnknownArgumentIssue;
+
 /**
  * Parsed CLI flags and positional arguments.
  */
 export interface ParsedTokens {
+  command: string | undefined;
+  extraPositional: readonly string[];
   flags: Map<string, string | true>;
+  globals: GlobalOptions;
+  help: boolean;
   positional: readonly string[];
+  validationIssues: readonly TokenValidationIssue[];
 }
 
 /**
  * Parses CLI tokens into canonical flag values and positional arguments.
+ *
+ * This only performs syntactic token scanning. User-facing validation errors
+ * are reported by assertValidTokens so callers can still read globals first.
  */
 export function parseTokens(tokens: readonly string[]): ParsedTokens {
   const flags = new Map<string, string | true>();
+  const globals: GlobalOptions = {
+    color: "auto",
+    json: false,
+    quiet: false,
+    verbose: false,
+  };
+  const validationIssues: TokenValidationIssue[] = [];
   const positional: string[] = [];
+  let help = false;
   let i = 0;
 
   while (i < tokens.length) {
     const token = tokens[i]!;
+    if (isHelpToken(token)) {
+      help = true;
+    }
+
     if (!token.startsWith("-")) {
       positional.push(token);
       i += 1;
@@ -137,33 +201,69 @@ export function parseTokens(tokens: readonly string[]): ParsedTokens {
 
     const spec = tokenToSpec.get(token);
     if (!spec) {
-      throw new Error(`Unknown argument: ${token}`);
+      validationIssues.push({
+        kind: "unknown-argument",
+        token,
+      });
+      i += 1;
+      continue;
     }
 
     if (spec.kind === "boolean") {
       flags.set(spec.canonical, true);
+      switch (spec.canonical) {
+        case "--json":
+          globals.json = true;
+          break;
+        case "--quiet":
+          globals.quiet = true;
+          break;
+        case "--verbose":
+          globals.verbose = true;
+          break;
+        case "--no-color":
+          globals.color = false;
+          break;
+      }
       i += 1;
       continue;
     }
 
     const value = tokens[i + 1];
     if (value === undefined) {
-      throw new Error(
-        `${spec.label} flag (${flagTokens(spec)}) requires a value`,
-      );
+      validationIssues.push({
+        kind: "missing-value",
+        label: spec.label,
+        tokens: flagTokens(spec),
+      });
+      i += 1;
+      continue;
+    }
+    if (isHelpToken(value)) {
+      help = true;
     }
     flags.set(spec.canonical, value);
     i += 2;
   }
 
-  return { flags, positional };
+  const [command, ...extraPositional] = positional;
+
+  return {
+    command,
+    extraPositional,
+    flags,
+    globals,
+    help,
+    positional,
+    validationIssues,
+  };
 }
 
 /**
- * Returns whether help was requested in the raw token list.
+ * Returns the parsed command name when it is one of the supported commands.
  */
-export function hasHelpFlag(tokens: readonly string[]): boolean {
-  return tokens.includes("--help") || tokens.includes("-h");
+export function commandName(parsed: ParsedTokens): CommandName | undefined {
+  return toCommandName(parsed.command);
 }
 
 /**
@@ -188,12 +288,26 @@ export function booleanFlag(parsed: ParsedTokens, canonical: string): boolean {
 }
 
 /**
- * Validates that all parsed flags are allowed for the selected command.
+ * Validates parsed CLI tokens after globals have been read.
  */
-export function assertFlagsAllowedFor(
-  parsed: ParsedTokens,
-  command: CommandName | undefined,
-): void {
+export function assertValidTokens(parsed: ParsedTokens): void {
+  const issue = parsed.validationIssues[0];
+  if (issue?.kind === "unknown-argument") {
+    throw new Error(`Unknown argument: ${issue.token}`);
+  }
+  if (issue?.kind === "missing-value") {
+    throw new Error(`${issue.label} flag (${issue.tokens}) requires a value`);
+  }
+
+  const command = commandName(parsed);
+  if (parsed.command !== undefined && command === undefined) {
+    throw new Error(`Unknown command: ${parsed.command}`);
+  }
+
+  if (parsed.help) {
+    return;
+  }
+
   for (const canonical of parsed.flags.keys()) {
     const spec = tokenToSpec.get(canonical)!;
     if (spec.commands === "all") {
@@ -203,26 +317,4 @@ export function assertFlagsAllowedFor(
       throw new Error(`Unknown argument: ${canonical}`);
     }
   }
-}
-
-/**
- * Global CLI behavior toggles shared by all commands.
- */
-export interface GlobalOptions {
-  color: ColorMode;
-  json: boolean;
-  quiet: boolean;
-  verbose: boolean;
-}
-
-/**
- * Extracts global options from parsed CLI flags.
- */
-export function extractGlobals(parsed: ParsedTokens): GlobalOptions {
-  return {
-    color: booleanFlag(parsed, "--no-color") ? false : "auto",
-    json: booleanFlag(parsed, "--json"),
-    quiet: booleanFlag(parsed, "--quiet"),
-    verbose: booleanFlag(parsed, "--verbose"),
-  };
 }

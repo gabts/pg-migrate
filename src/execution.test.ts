@@ -14,21 +14,24 @@ interface QueryCall {
   params?: unknown[];
 }
 
-const noopLog: Logger = {
+const noopLogger: Logger = {
   debug: (): void => undefined,
   error: (): void => undefined,
   info: (): void => undefined,
   warn: (): void => undefined,
 };
 
-function createCapturedLog(logs: string[]): Logger {
+function createCapturedLogger(logs: string[]): Logger {
   const capture = (message: string): void => {
     logs.push(message);
+  };
+  const captureError = (input: unknown): void => {
+    logs.push(String(input));
   };
 
   return {
     debug: capture,
-    error: capture,
+    error: captureError,
     info: capture,
     warn: capture,
   };
@@ -71,7 +74,7 @@ describe("execution", (): void => {
 
       await executeUpPlan({
         client,
-        log: createCapturedLog(logs),
+        logger: createCapturedLogger(logs),
         steps,
         table: "migratorosaurus.migration_history",
       });
@@ -79,10 +82,8 @@ describe("execution", (): void => {
       assert.deepEqual(
         logs.map(normalizeMs),
         [
-          "",
           messages.applying("20260416090000_create.sql"),
           messages.applied("20260416090000_create.sql", 0),
-          "",
           messages.applying("20260416090100_insert.sql"),
           messages.applied("20260416090100_insert.sql", 0),
         ].map(normalizeMs),
@@ -139,7 +140,7 @@ describe("execution", (): void => {
         (): Promise<void> =>
           executeUpPlan({
             client,
-            log: createCapturedLog(logs),
+            logger: createCapturedLogger(logs),
             steps,
             table: "migration_history",
           }),
@@ -167,10 +168,8 @@ describe("execution", (): void => {
       assert.deepEqual(
         logs.map(normalizeMs),
         [
-          "",
           messages.applying("20260416090000_create.sql"),
           messages.applied("20260416090000_create.sql", 0),
-          "",
           messages.applying("20260416090100_break.sql"),
           messages.failed("20260416090100_break.sql", 0),
           messages.errorDetails(
@@ -188,7 +187,7 @@ describe("execution", (): void => {
 
       await executeUpPlan({
         client,
-        log: noopLog,
+        logger: noopLogger,
         steps: [],
         table: "migration_history",
       });
@@ -216,7 +215,7 @@ describe("execution", (): void => {
       await executeUpPlan({
         client,
         dryRun: true,
-        log: createCapturedLog(logs),
+        logger: createCapturedLogger(logs),
         steps,
         table: "migration_history",
       });
@@ -224,10 +223,8 @@ describe("execution", (): void => {
       assert.deepEqual(
         logs.map(normalizeMs),
         [
-          "",
           messages.applying("20260416090000_create.sql"),
           messages.applied("20260416090000_create.sql", 0),
-          "",
           messages.applying("20260416090100_insert.sql"),
           messages.applied("20260416090100_insert.sql", 0),
         ].map(normalizeMs),
@@ -271,7 +268,7 @@ describe("execution", (): void => {
           executeUpPlan({
             client,
             dryRun: true,
-            log: noopLog,
+            logger: noopLogger,
             steps,
             table: "migration_history",
           }),
@@ -304,7 +301,7 @@ describe("execution", (): void => {
       await executeDownPlan({
         client,
         dryRun: true,
-        log: createCapturedLog(logs),
+        logger: createCapturedLogger(logs),
         steps,
         table: "migration_history",
       });
@@ -312,7 +309,6 @@ describe("execution", (): void => {
       assert.deepEqual(
         logs.map(normalizeMs),
         [
-          "",
           messages.reverting("20260416090100_insert.sql", true),
           messages.reverted("20260416090100_insert.sql", 0),
         ].map(normalizeMs),
@@ -336,7 +332,7 @@ describe("execution", (): void => {
       await executeDownPlan({
         client,
         dryRun: true,
-        log: noopLog,
+        logger: noopLogger,
         steps,
         table: "migration_history",
       });
@@ -376,7 +372,7 @@ describe("execution", (): void => {
           executeDownPlan({
             client,
             dryRun: true,
-            log: noopLog,
+            logger: noopLogger,
             steps,
             table: "migration_history",
           }),
@@ -421,7 +417,7 @@ describe("execution", (): void => {
           executeDownPlan({
             client,
             dryRun: true,
-            log: createCapturedLog(logs),
+            logger: createCapturedLogger(logs),
             steps,
             table: "migration_history",
           }),
@@ -449,7 +445,7 @@ describe("execution", (): void => {
 
       await executeDownPlan({
         client,
-        log: createCapturedLog(logs),
+        logger: createCapturedLogger(logs),
         steps,
         table: "migration_history",
       });
@@ -457,7 +453,6 @@ describe("execution", (): void => {
       assert.deepEqual(
         logs.map(normalizeMs),
         [
-          "",
           messages.reverting("20260416090000_create.sql", true),
           messages.reverted("20260416090000_create.sql", 0),
         ].map(normalizeMs),
@@ -486,7 +481,7 @@ describe("execution", (): void => {
 
       await executeDownPlan({
         client,
-        log: createCapturedLog(logs),
+        logger: createCapturedLogger(logs),
         steps,
         table: "migration_history",
       });
@@ -494,7 +489,6 @@ describe("execution", (): void => {
       assert.deepEqual(
         logs.map(normalizeMs),
         [
-          "",
           messages.reverting("20260416090000_backfill.sql", false),
           messages.reverted("20260416090000_backfill.sql", 0),
         ].map(normalizeMs),
@@ -525,7 +519,7 @@ describe("execution", (): void => {
         (): Promise<void> =>
           executeDownPlan({
             client,
-            log: createCapturedLog(logs),
+            logger: createCapturedLogger(logs),
             steps,
             table: "migration_history",
           }),
@@ -535,7 +529,6 @@ describe("execution", (): void => {
       assert.deepEqual(
         logs.map(normalizeMs),
         [
-          "",
           messages.reverting("20260416090000_create.sql", true),
           messages.failed("20260416090000_create.sql", 0),
           messages.errorDetails(new Error("cannot drop")),
@@ -559,7 +552,7 @@ describe("execution", (): void => {
         (): Promise<void> =>
           executeDownPlan({
             client,
-            log: createCapturedLog(logs),
+            logger: createCapturedLogger(logs),
             steps,
             table: "migration_history",
           }),
@@ -569,7 +562,6 @@ describe("execution", (): void => {
       assert.deepEqual(
         logs.map(normalizeMs),
         [
-          "",
           messages.reverting("20260416090000_backfill.sql", false),
           messages.failed("20260416090000_backfill.sql", 0),
           messages.errorDetails(new Error("history write failed")),
@@ -582,7 +574,7 @@ describe("execution", (): void => {
 
       await executeDownPlan({
         client,
-        log: noopLog,
+        logger: noopLogger,
         steps: [],
         table: "migration_history",
       });
