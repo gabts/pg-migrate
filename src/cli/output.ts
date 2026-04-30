@@ -1,8 +1,8 @@
-import { resolveSupportsColor, type ColorMode } from "./color.js";
 import { formatHumanLogRecord } from "../logging/format.js";
 import type { LogRecord } from "../logging/schema.js";
-import { createJsonLogWriter, type LogSink } from "../logging/writers.js";
 import { appendNewline, serializeValue } from "../logging/serialize.js";
+import { createJsonLogWriter, type LogSink } from "../logging/writers.js";
+import { resolveSupportsColor, type ColorMode } from "./color.js";
 
 interface CliWritable {
   isTTY?: boolean;

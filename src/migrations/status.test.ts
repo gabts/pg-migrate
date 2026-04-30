@@ -91,45 +91,39 @@ describe("status", (): void => {
   });
 
   it("rejects unparseable string timestamps", (): void => {
-    assert.throws(
-      (): void => {
-        buildMigrationStatus({
-          appliedRows: [
-            {
-              appliedAt: "not a timestamp",
-              filename: createFile,
-              version: "20260416090000",
-            },
-          ],
-          directory: "migrations",
-          disk,
-          initialized: true,
-          table: "migration_history",
-        });
-      },
-      /Invalid applied migration timestamp for file "20260416090000_create_person\.sql": not a timestamp/,
-    );
+    assert.throws((): void => {
+      buildMigrationStatus({
+        appliedRows: [
+          {
+            appliedAt: "not a timestamp",
+            filename: createFile,
+            version: "20260416090000",
+          },
+        ],
+        directory: "migrations",
+        disk,
+        initialized: true,
+        table: "migration_history",
+      });
+    }, /Invalid applied migration timestamp for file "20260416090000_create_person\.sql": not a timestamp/);
   });
 
   it("rejects invalid Date timestamps", (): void => {
-    assert.throws(
-      (): void => {
-        buildMigrationStatus({
-          appliedRows: [
-            {
-              appliedAt: new Date("not a timestamp"),
-              filename: createFile,
-              version: "20260416090000",
-            },
-          ],
-          directory: "migrations",
-          disk,
-          initialized: true,
-          table: "migration_history",
-        });
-      },
-      /Invalid applied migration timestamp for file "20260416090000_create_person\.sql": Invalid Date/,
-    );
+    assert.throws((): void => {
+      buildMigrationStatus({
+        appliedRows: [
+          {
+            appliedAt: new Date("not a timestamp"),
+            filename: createFile,
+            version: "20260416090000",
+          },
+        ],
+        directory: "migrations",
+        disk,
+        initialized: true,
+        table: "migration_history",
+      });
+    }, /Invalid applied migration timestamp for file "20260416090000_create_person\.sql": Invalid Date/);
   });
 
   it("reports uninitialized history as all pending", (): void => {

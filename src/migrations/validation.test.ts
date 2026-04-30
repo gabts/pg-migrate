@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import { getMigrationVersion } from "./naming.js";
+import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
 import {
   resolveTargetMigration,
   validateAppliedFilesExistOnDisk,
@@ -7,7 +8,6 @@ import {
   validateDownPreconditions,
   validateUpPreconditions,
 } from "./validation.js";
-import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
 
 const createFile = "20260416090000_create.sql";
 const insertFile = "20260416090100_insert.sql";

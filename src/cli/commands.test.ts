@@ -2,9 +2,6 @@ import * as assert from "assert";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { parseTokens } from "./args.js";
-import { runCommand, type CommandHandlers } from "./commands.js";
-import type { CliResultWriter } from "./output.js";
 import type { Logger } from "../logging/logger.js";
 import type { LogRecord } from "../logging/schema.js";
 import type { LogSink } from "../logging/writers.js";
@@ -14,6 +11,9 @@ import type {
   StatusOptions,
   ValidateOptions,
 } from "../main.js";
+import { parseTokens } from "./args.js";
+import { runCommand, type CommandHandlers } from "./commands.js";
+import type { CliResultWriter } from "./output.js";
 
 interface CapturedResultWriter extends CliResultWriter {
   jsonValues: unknown[];

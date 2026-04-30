@@ -1,3 +1,4 @@
+import { events } from "../logging/events.js";
 import type { Logger } from "../logging/logger.js";
 import type { LogSink } from "../logging/writers.js";
 import {
@@ -8,14 +9,13 @@ import {
   type MigrationStatusResult,
 } from "../main.js";
 import { createMigration } from "../migrations/create.js";
-import { events } from "../logging/events.js";
 import type { CommandName, ParsedTokens } from "./args.js";
-import type { CliResultWriter } from "./output.js";
 import {
   buildCreateOptions,
   buildDatabaseRunOptions,
   buildMigrationRunOptions,
 } from "./options.js";
+import type { CliResultWriter } from "./output.js";
 
 interface CliRuntimeOptions {
   correlationId: string;
