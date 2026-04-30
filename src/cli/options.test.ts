@@ -97,7 +97,10 @@ describe("options", (): void => {
       assert.deepEqual(
         buildDatabaseRunOptions(parsed, parsed.extraPositional, "validate"),
         {
-          clientConfig: "postgres://example/db",
+          clientConfig: {
+            connectionString: "postgres://example/db",
+            connectionTimeoutMillis: 10_000,
+          },
           directory: "sql/migrations",
           table: "custom_history",
         },
@@ -117,7 +120,10 @@ describe("options", (): void => {
       );
 
       assert.deepEqual(options, {
-        clientConfig: "postgres://env/db",
+        clientConfig: {
+          connectionString: "postgres://env/db",
+          connectionTimeoutMillis: 10_000,
+        },
         directory: "migrations",
         table: "migration_history",
       });
@@ -133,7 +139,10 @@ describe("options", (): void => {
       );
 
       assert.deepEqual(options, {
-        clientConfig: "postgres://example/db",
+        clientConfig: {
+          connectionString: "postgres://example/db",
+          connectionTimeoutMillis: 10_000,
+        },
         directory: "sql/migrations",
         table: "migration_history",
       });
@@ -185,7 +194,10 @@ describe("options", (): void => {
       );
 
       assert.deepEqual(options, {
-        clientConfig: "postgres://example/db",
+        clientConfig: {
+          connectionString: "postgres://example/db",
+          connectionTimeoutMillis: 10_000,
+        },
         directory: "migrations",
         dryRun: true,
         table: "migration_history",
