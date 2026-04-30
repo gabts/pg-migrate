@@ -79,6 +79,35 @@ function createMissingDirectory(prefix: string): string {
   return missing;
 }
 
+async function withEnvVars<T>(
+  env: Record<string, string | undefined>,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const originals = new Map<string, string | undefined>();
+
+  for (const [key, value] of Object.entries(env)) {
+    originals.set(key, process.env[key]);
+
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+
+  try {
+    return await fn();
+  } finally {
+    for (const [key, value] of originals.entries()) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
 function removeTempMigrationDirectories(): void {
   while (tempMigrationDirectories.length > 0) {
     fs.rmSync(tempMigrationDirectories.pop()!, {
@@ -267,6 +296,19 @@ describe("main", (): void => {
     await runUp({
       directory: createStandardMigrationDirectory(),
     });
+
+    await assertMigration1();
+  });
+
+  it("up uses MIGRATION_DIRECTORY when directory is omitted", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+
+    await withEnvVars(
+      { MIGRATION_DIRECTORY: directory },
+      async (): Promise<void> => {
+        await runUp({});
+      },
+    );
 
     await assertMigration1();
   });

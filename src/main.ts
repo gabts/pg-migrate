@@ -14,6 +14,7 @@ import {
   validateUpPreconditions,
   validateDownPreconditions,
 } from "./migrations/validation.js";
+import { readRuntimeEnv } from "./env.js";
 
 export type { LogRecord } from "./logging/schema.js";
 export type { LogSink } from "./logging/writers.js";
@@ -55,6 +56,7 @@ function normalizeCommonOptions(args: CommonOptions): {
   directory: string;
   table: string;
 } {
+  const runtimeEnv = readRuntimeEnv();
   const logger = createLogger({
     quiet: args.quiet,
     correlationId: args.correlationId,
@@ -64,8 +66,8 @@ function normalizeCommonOptions(args: CommonOptions): {
 
   return {
     logger,
-    directory: args.directory ?? "migrations",
-    table: args.table ?? "migration_history",
+    directory: args.directory ?? runtimeEnv.migrationDirectory,
+    table: args.table ?? runtimeEnv.migrationHistoryTable,
   };
 }
 
@@ -89,6 +91,7 @@ export async function up(
       ...(target === undefined ? {} : { target }),
     }),
   );
+
   logger.emit(
     events.runStarted({
       command: "up",
@@ -98,6 +101,7 @@ export async function up(
       target,
     }),
   );
+
   if (target) {
     logger.emit(events.targetSelected(target));
   }
@@ -165,6 +169,7 @@ export async function down(
       ...(target === undefined ? {} : { target }),
     }),
   );
+
   logger.emit(
     events.runStarted({
       command: "down",
@@ -174,6 +179,7 @@ export async function down(
       target,
     }),
   );
+
   if (target) {
     logger.emit(events.targetSelected(target));
   }
@@ -237,6 +243,7 @@ export async function validate(
       table,
     }),
   );
+
   logger.emit(
     events.runStarted({
       command: "validate",
