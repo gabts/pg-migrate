@@ -1,0 +1,126 @@
+import type { Logger } from "../logging/logger.js";
+import type { LogSink } from "../logging/writers.js";
+import { down, up, validate } from "../main.js";
+import { createMigration } from "../migrations/create.js";
+import { events } from "../logging/events.js";
+import type { CommandName, ParsedTokens } from "./args.js";
+import type { CliResultWriter } from "./output.js";
+import {
+  buildCreateOptions,
+  buildDatabaseRunOptions,
+  buildMigrationRunOptions,
+} from "./options.js";
+
+interface CliRuntimeOptions {
+  correlationId: string;
+  json: boolean;
+  quiet: boolean;
+  verbose: boolean;
+}
+
+/**
+ * Handlers used to execute command side effects.
+ */
+export interface CommandHandlers {
+  createMigration: typeof createMigration;
+  down: typeof down;
+  up: typeof up;
+  validate: typeof validate;
+}
+
+const defaultCommandHandlers: CommandHandlers = {
+  createMigration,
+  down,
+  up,
+  validate,
+};
+
+/**
+ * Runs a parsed CLI command and writes the command result.
+ */
+export async function runCommand(
+  command: CommandName,
+  parsed: ParsedTokens,
+  extraPositional: readonly string[],
+  resultWriter: CliResultWriter,
+  logger: Logger,
+  logSink: LogSink,
+  runtime: CliRuntimeOptions,
+  handlers: CommandHandlers = defaultCommandHandlers,
+): Promise<number> {
+  if (command === "create") {
+    const options = buildCreateOptions(parsed, extraPositional);
+
+    logger.emit(
+      events.commandOptions({
+        command: "create",
+        directory: options.directory,
+        name: options.name ?? null,
+      }),
+    );
+
+    const filePath = handlers.createMigration(options);
+
+    if (runtime.json) {
+      resultWriter.writeJson({
+        command: "create",
+        file: filePath,
+      });
+    } else {
+      resultWriter.writeText(filePath);
+    }
+
+    return 0;
+  }
+
+  if (command === "validate") {
+    const runOptions = buildDatabaseRunOptions(
+      parsed,
+      extraPositional,
+      command,
+    );
+
+    await handlers.validate(runOptions.clientConfig, {
+      directory: runOptions.directory,
+      logSink,
+      quiet: runtime.quiet,
+      correlationId: runtime.correlationId,
+      table: runOptions.table,
+      verbose: runtime.verbose,
+    });
+
+    if (runtime.json) {
+      resultWriter.writeJson({
+        command,
+        ok: true,
+      });
+    }
+
+    return 0;
+  }
+
+  const runOptions = buildMigrationRunOptions(parsed, extraPositional, command);
+  const runFn = command === "up" ? handlers.up : handlers.down;
+
+  await runFn(runOptions.clientConfig, {
+    directory: runOptions.directory,
+    dryRun: runOptions.dryRun,
+    logSink,
+    quiet: runtime.quiet,
+    correlationId: runtime.correlationId,
+    table: runOptions.table,
+    target: runOptions.target,
+    verbose: runtime.verbose,
+  });
+
+  if (runtime.json) {
+    resultWriter.writeJson({
+      command,
+      dryRun: runOptions.dryRun,
+      ok: true,
+      target: runOptions.target ?? null,
+    });
+  }
+
+  return 0;
+}
