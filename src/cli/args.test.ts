@@ -244,7 +244,13 @@ describe("args", (): void => {
     });
 
     it("accepts shared flags across commands", (): void => {
-      for (const command of ["create", "up", "down", "validate"] as const) {
+      for (const command of [
+        "create",
+        "up",
+        "down",
+        "validate",
+        "status",
+      ] as const) {
         const parsed = parseTokens([command, "--directory", "migrations"]);
 
         assert.doesNotThrow((): void => {
@@ -256,6 +262,20 @@ describe("args", (): void => {
     it("accepts --url and --table on validate", (): void => {
       const parsed = parseTokens([
         "validate",
+        "--url",
+        "postgres://localhost:5432/example",
+        "--table",
+        "migration_history",
+      ]);
+
+      assert.doesNotThrow((): void => {
+        assertValidTokens(parsed);
+      });
+    });
+
+    it("accepts --url and --table on status", (): void => {
+      const parsed = parseTokens([
+        "status",
         "--url",
         "postgres://localhost:5432/example",
         "--table",
@@ -281,6 +301,19 @@ describe("args", (): void => {
       assert.throws((): void => {
         assertValidTokens(parsed);
       }, /Unknown argument: --target/);
+    });
+
+    it("rejects migration execution flags on status", (): void => {
+      for (const flag of ["--target", "--dry-run"]) {
+        const parsed = parseTokens(["status", flag, "x.sql"]);
+
+        assert.throws(
+          (): void => {
+            assertValidTokens(parsed);
+          },
+          new RegExp(`Unknown argument: ${flag}`),
+        );
+      }
     });
 
     it("accepts global flags when no command is given", (): void => {

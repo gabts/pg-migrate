@@ -5,7 +5,7 @@ import {
   type LogRecord,
 } from "./schema.js";
 
-type MigrationCommand = "down" | "up" | "validate";
+type MigrationCommand = "down" | "status" | "up" | "validate";
 type MigrationDirection = "down" | "up";
 
 function displayName(file: string): string {
@@ -37,6 +37,8 @@ function commandLabel(command: MigrationCommand): string {
       return "Migration run";
     case "down":
       return "Rollback";
+    case "status":
+      return "Status";
     case "validate":
       return "Validation";
   }
@@ -268,6 +270,25 @@ export const events = {
       domainFields: migrationData(file),
       level: "info",
       message: "Target migration selected",
+    }),
+
+  statusSummary: (args: {
+    appliedCount: number;
+    initialized: boolean;
+    pendingCount: number;
+    totalCount: number;
+  }): LogRecord =>
+    logRecord({
+      action: "status.summary",
+      domainFields: {
+        applied_count: args.appliedCount,
+        initialized: args.initialized,
+        pending_count: args.pendingCount,
+        total_count: args.totalCount,
+      },
+      level: "info",
+      message: "Status summary",
+      outcome: "success",
     }),
 
   validationSummary: (args: {

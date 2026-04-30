@@ -48,6 +48,14 @@ describe("events", (): void => {
       }).message,
       "Validation aborted",
     );
+    assert.equal(
+      events.runStarted({
+        command: "status",
+        directory: "migrations",
+        table: "migration_history",
+      }).message,
+      "Status started",
+    );
     assert.deepEqual(events.migrationStepsPlanned(2), {
       event: {
         action: "migrations.planned",
@@ -195,6 +203,30 @@ describe("events", (): void => {
   });
 
   it("builds summary and command failure events", (): void => {
+    assert.deepEqual(
+      events.statusSummary({
+        appliedCount: 2,
+        initialized: true,
+        pendingCount: 1,
+        totalCount: 3,
+      }),
+      {
+        event: {
+          action: "status.summary",
+          outcome: "success",
+        },
+        fields: {
+          migratorosaurus: {
+            applied_count: 2,
+            initialized: true,
+            pending_count: 1,
+            total_count: 3,
+          },
+        },
+        level: "info",
+        message: "Status summary",
+      },
+    );
     assert.deepEqual(
       events.validationSummary({
         nextDownCount: 1,

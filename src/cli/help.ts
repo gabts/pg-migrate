@@ -6,6 +6,7 @@ const helpText = `Usage: migratorosaurus <command> [options]
 Commands:
   up                Apply pending migrations
   down              Roll back applied migrations
+  status            Show applied and pending migration state
   validate          Validate migration environment and state
   create            Create a new migration file
 
@@ -110,13 +111,39 @@ Behavior:
   - Validates migration files, order, and applied migration history consistency.
   - Checks database connectivity and migration history table state.
   - Does not create missing migration history tables.
-  - Uses the same advisory lock as up/down; fails fast if another migratorosaurus process holds it.
+  - Uses the same advisory lock as up/down/status; fails fast if another migratorosaurus process holds it.
   - Provide exactly one of positional <database-url> or --url; otherwise DATABASE_URL is used.
   - --directory takes precedence over MIGRATION_DIRECTORY.
 
 Examples:
   migratorosaurus validate postgres://localhost:5432/app
   migratorosaurus validate --url postgres://localhost:5432/app --table migration_history
+`;
+
+const statusHelpText = `Usage: migratorosaurus status [options] [<database-url>]
+
+Options:
+  --url <database-url>      Database URL (alternative to positional URL)
+  -d, --directory <dir>     Migrations directory, defaults to MIGRATION_DIRECTORY or migrations
+  --table <table-name>      Migration history table, defaults to migration_history
+  --json                    Emit structured command result and logs
+  --quiet                   Suppress non-error logs
+  --verbose, -v             Show debug logs
+  --no-color                Disable ANSI color in logs
+  -h, --help                Show this help text
+
+Behavior:
+  - Shows current, next, applied, pending, and per-file migration state.
+  - Current means the latest applied migration by file order.
+  - Validates migration files and applied migration history consistency.
+  - Does not create missing migration history tables; reports initialized=false instead.
+  - Uses the same advisory lock as up/down/validate; fails fast if another migratorosaurus process holds it.
+  - Provide exactly one of positional <database-url> or --url; otherwise DATABASE_URL is used.
+  - --directory takes precedence over MIGRATION_DIRECTORY.
+
+Examples:
+  migratorosaurus status postgres://localhost:5432/app
+  migratorosaurus status --url postgres://localhost:5432/app --table migration_history
 `;
 
 function helpTextFor(command: CommandName | undefined): string {
@@ -129,6 +156,8 @@ function helpTextFor(command: CommandName | undefined): string {
       return downHelpText;
     case "validate":
       return validateHelpText;
+    case "status":
+      return statusHelpText;
     case undefined:
       return helpText;
   }

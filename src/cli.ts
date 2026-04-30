@@ -46,6 +46,9 @@ function forceExitIfStillRunning(exitCode: number): void {
   timeout.unref();
 }
 
+/**
+ * Runs the CLI process entrypoint and drains output before exit.
+ */
 export async function runCliProcess(): Promise<void> {
   let exitCode = 1;
 

@@ -3,7 +3,7 @@ import type { ColorMode } from "./color.js";
 /**
  * Supported top-level CLI command names.
  */
-export type CommandName = "create" | "up" | "down" | "validate";
+export type CommandName = "create" | "up" | "down" | "validate" | "status";
 
 type FlagKind = "boolean" | "value";
 type CommandScope = "all" | readonly CommandName[];
@@ -55,7 +55,7 @@ const flagSpecs: readonly FlagSpec[] = [
   {
     aliases: ["-d"],
     canonical: "--directory",
-    commands: ["create", "up", "down", "validate"],
+    commands: ["create", "up", "down", "validate", "status"],
     kind: "value",
     label: "Directory",
   },
@@ -69,7 +69,7 @@ const flagSpecs: readonly FlagSpec[] = [
   {
     aliases: [],
     canonical: "--url",
-    commands: ["up", "down", "validate"],
+    commands: ["up", "down", "validate", "status"],
     kind: "value",
     label: "Database URL",
   },
@@ -83,7 +83,7 @@ const flagSpecs: readonly FlagSpec[] = [
   {
     aliases: [],
     canonical: "--table",
-    commands: ["up", "down", "validate"],
+    commands: ["up", "down", "validate", "status"],
     kind: "value",
     label: "Table",
   },
@@ -124,6 +124,7 @@ function toCommandName(token: string | undefined): CommandName | undefined {
     case "up":
     case "down":
     case "validate":
+    case "status":
       return token;
     case undefined:
       return undefined;

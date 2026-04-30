@@ -49,7 +49,7 @@ export function buildCreateOptions(
 export function buildDatabaseRunOptions(
   parsed: ParsedTokens,
   extraPositional: readonly string[],
-  command: "up" | "down" | "validate",
+  command: "up" | "down" | "validate" | "status",
 ): DatabaseRunOptions {
   if (extraPositional.length > 1) {
     throw new Error(`Unexpected argument: ${extraPositional[1]}`);

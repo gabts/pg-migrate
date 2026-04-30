@@ -125,6 +125,24 @@ function collectDetails(record: LogRecord): string[] {
       details.push(formatField("next_down", data.next_down_count));
     }
   }
+  if (record.event.action === "status.summary") {
+    if (typeof data.initialized === "boolean") {
+      detailKeys.add("initialized");
+      details.push(formatField("initialized", data.initialized));
+    }
+    if (typeof data.applied_count === "number") {
+      detailKeys.add("applied_count");
+      details.push(formatField("applied", data.applied_count));
+    }
+    if (typeof data.pending_count === "number") {
+      detailKeys.add("pending_count");
+      details.push(formatField("pending", data.pending_count));
+    }
+    if (typeof data.total_count === "number") {
+      detailKeys.add("total_count");
+      details.push(formatField("total", data.total_count));
+    }
+  }
   if (record.level === "debug" || record.level === "trace") {
     for (const [key, value] of Object.entries(data)) {
       if (key === "correlation_id" || detailKeys.has(key)) {

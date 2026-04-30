@@ -2,6 +2,7 @@ import * as assert from "assert";
 import {
   assertValidMigrationFilename,
   assertValidMigrationName,
+  getMigrationName,
   getMigrationVersion,
   isMigrationFilename,
   isMigrationVersion,
@@ -56,6 +57,21 @@ describe("naming", (): void => {
     it("rejects invalid migration filenames", (): void => {
       assert.throws((): void => {
         getMigrationVersion("create_users.sql");
+      }, /Invalid migration filename:/);
+    });
+  });
+
+  describe("getMigrationName", (): void => {
+    it("extracts the slug from a migration filename", (): void => {
+      assert.equal(
+        getMigrationName("20260416090000_create_users.sql"),
+        "create_users",
+      );
+    });
+
+    it("rejects invalid migration filenames", (): void => {
+      assert.throws((): void => {
+        getMigrationName("create_users.sql");
       }, /Invalid migration filename:/);
     });
   });

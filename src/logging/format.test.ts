@@ -99,6 +99,28 @@ describe("format", (): void => {
     );
   });
 
+  it("formats status summary counts", (): void => {
+    assert.equal(
+      formatHumanLogRecord(
+        record({
+          event: {
+            action: "status.summary",
+          },
+          fields: {
+            migratorosaurus: {
+              applied_count: 2,
+              initialized: true,
+              pending_count: 1,
+              total_count: 3,
+            },
+          },
+          message: "Status summary",
+        }),
+      ),
+      "Status summary initialized=true applied=2 pending=1 total=3",
+    );
+  });
+
   it("formats safety-relevant runtime fields for info logs", (): void => {
     assert.equal(
       formatHumanLogRecord(

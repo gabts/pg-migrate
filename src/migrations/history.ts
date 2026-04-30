@@ -1,7 +1,7 @@
 import type { Logger } from "../logging/logger.js";
 import type * as pg from "pg";
 import { events } from "../logging/events.js";
-import type { AppliedRow } from "./types.js";
+import type { AppliedRow, AppliedStatusRow } from "./types.js";
 import { validateAppliedHistory } from "./validation.js";
 
 /**
@@ -84,5 +84,42 @@ export async function readAppliedRows(
   );
   const appliedRows = appliedRowsResult.rows;
   validateAppliedHistory(appliedRows);
+  return appliedRows;
+}
+
+function isValidAppliedAt(
+  value: unknown,
+): value is AppliedStatusRow["appliedAt"] {
+  if (value instanceof Date) {
+    return !Number.isNaN(value.getTime());
+  }
+
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    !Number.isNaN(new Date(value).getTime())
+  );
+}
+
+/**
+ * Reads applied migration rows with timestamps for status output.
+ */
+export async function readAppliedStatusRows(
+  client: pg.Client,
+  qualifiedTableName: string,
+): Promise<AppliedStatusRow[]> {
+  // Order is irrelevant: disk.all is the canonical migration order.
+  const appliedRowsResult = await client.query<AppliedStatusRow>(
+    `SELECT filename, version, applied_at AS "appliedAt" FROM ${qualifiedTableName};`,
+  );
+  const appliedRows = appliedRowsResult.rows;
+  validateAppliedHistory(appliedRows);
+  for (const row of appliedRows) {
+    if (!isValidAppliedAt(row.appliedAt)) {
+      throw new Error(
+        `Invalid applied migration timestamp for file "${row.filename}": ${row.appliedAt}`,
+      );
+    }
+  }
   return appliedRows;
 }
