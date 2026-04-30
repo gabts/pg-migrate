@@ -88,6 +88,7 @@ migratorosaurus create --help
 migratorosaurus create --directory sql/migrations --name add_users
 migratorosaurus validate --url postgres://localhost:5432/app
 migratorosaurus up --url postgres://localhost:5432/app
+migratorosaurus up --url postgres://localhost:5432/app --target 20260416090100
 migratorosaurus down --url postgres://localhost:5432/app --target 20260416090100_add_users.sql
 ```
 
@@ -110,6 +111,7 @@ Global CLI flags:
 
 - `--directory` defaults to `MIGRATION_DIRECTORY` or `"migrations"`
 - `--directory` takes precedence over `MIGRATION_DIRECTORY`
+- For `up` and `down`, `--target` accepts either `<YYYYMMDDHHMMSS>` or `<YYYYMMDDHHMMSS>_<slug>.sql`
 
 `validate` command behavior:
 
@@ -137,7 +139,7 @@ The second argument is an optional configuration object:
 - **correlationId** Optional correlation id added to log records.
 - **table** The name of the database table that stores migration history. Defaults to `"migration_history"`.
   Valid values must use conventional PostgreSQL-style names only: `table_name` or `schema_name.table_name`. Table names may only use lowercase letters, numbers, and `_`, and must start with a letter or `_`. If you use a schema-qualified name, the schema must already exist.
-- **target** An exact migration filename.
+- **target** A migration version (`<YYYYMMDDHHMMSS>`) or exact migration filename (`<YYYYMMDDHHMMSS>_<slug>.sql`).
 
 By default, `up()` and `down()` emit newline-delimited structured JSON logs to `stderr`.
 Pass `logSink` to receive structured `LogRecord` objects and forward them to the logger of your choice.

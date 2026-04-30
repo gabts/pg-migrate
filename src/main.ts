@@ -10,7 +10,9 @@ import {
 import { planDownExecution, planUpExecution } from "./migrations/planning.js";
 import { withMigrationSession } from "./migrations/session.js";
 import type { ClientConfig } from "./db/types.js";
+import type { DiskMigration, LoadedMigrations } from "./migrations/types.js";
 import {
+  resolveTargetMigration,
   validateUpPreconditions,
   validateDownPreconditions,
 } from "./migrations/validation.js";
@@ -71,8 +73,15 @@ function normalizeCommonOptions(args: CommonOptions): {
   };
 }
 
+function resolveOptionalTargetMigration(
+  target: string | undefined,
+  disk: LoadedMigrations,
+): DiskMigration | null {
+  return target === undefined ? null : resolveTargetMigration(target, disk);
+}
+
 /**
- * Applies pending migrations up to an optional target file.
+ * Applies pending migrations up to an optional target migration.
  */
 export async function up(
   clientConfig: ClientConfig,
@@ -102,12 +111,13 @@ export async function up(
     }),
   );
 
-  if (target) {
-    logger.emit(events.targetSelected(target));
-  }
-
   try {
     const disk = loadDiskMigrations(directory);
+    const targetMigration = resolveOptionalTargetMigration(target, disk);
+    if (targetMigration) {
+      logger.emit(events.targetSelected(targetMigration.file));
+    }
+
     // Validate and parse the full migration set before opening a DB session
     // or running any SQL.
     const sqlByFile = readMigrationSqlByFile(disk.all);
@@ -118,12 +128,11 @@ export async function up(
       dryRun,
       table,
       run: async ({ appliedRows, client }): Promise<void> => {
-        const { latestAppliedMigration, targetMigration } =
-          validateUpPreconditions({
-            appliedRows,
-            disk,
-            target,
-          });
+        const { latestAppliedMigration } = validateUpPreconditions({
+          appliedRows,
+          disk,
+          targetMigration,
+        });
 
         const migrations = planUpExecution({
           disk,
@@ -180,12 +189,13 @@ export async function down(
     }),
   );
 
-  if (target) {
-    logger.emit(events.targetSelected(target));
-  }
-
   try {
     const disk = loadDiskMigrations(directory);
+    const targetMigration = resolveOptionalTargetMigration(target, disk);
+    if (targetMigration) {
+      logger.emit(events.targetSelected(targetMigration.file));
+    }
+
     // Validate and parse the full migration set before opening a DB session
     // or running any SQL.
     const sqlByFile = readMigrationSqlByFile(disk.all);
@@ -196,10 +206,10 @@ export async function down(
       dryRun,
       table,
       run: async ({ appliedRows, client }): Promise<void> => {
-        const { targetMigration } = validateDownPreconditions({
+        validateDownPreconditions({
           appliedRows,
           disk,
-          target,
+          targetMigration,
         });
 
         const migrations = planDownExecution({

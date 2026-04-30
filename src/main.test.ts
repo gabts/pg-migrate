@@ -28,6 +28,7 @@ const defaultMigrationHistoryTable = "migration_history";
 const tempMigrationDirectories: string[] = [];
 const standardCreateFile = "20260416090000_create.sql";
 const standardInsertFile = "20260416090100_insert.sql";
+const standardCreateVersion = "20260416090000";
 const backfillFile = "20260416090100_backfill.sql";
 const breakOnlyFile = "20260416090000_break.sql";
 const breakAfterStandardFile = "20260416090200_break.sql";
@@ -322,6 +323,15 @@ describe("main", (): void => {
     await assertMigration0();
   });
 
+  it("up migrates through a target migration version", async (): Promise<void> => {
+    await runUp({
+      directory: createStandardMigrationDirectory(),
+      target: standardCreateVersion,
+    });
+
+    await assertMigration0();
+  });
+
   it("down migrates one migration by default", async (): Promise<void> => {
     const directory = createStandardMigrationDirectory();
     await runUp({ directory });
@@ -336,6 +346,17 @@ describe("main", (): void => {
     await runDown({
       directory,
       target: standardCreateFile,
+    });
+
+    await assertMigration0();
+  });
+
+  it("down migrates to a target version while leaving target applied", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+    await runUp({ directory });
+    await runDown({
+      directory,
+      target: standardCreateVersion,
     });
 
     await assertMigration0();

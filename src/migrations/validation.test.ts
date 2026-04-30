@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { getMigrationVersion } from "./naming.js";
 import {
+  resolveTargetMigration,
   validateAppliedFilesExistOnDisk,
   validateAppliedHistory,
   validateDownPreconditions,
@@ -79,6 +80,47 @@ describe("validation", (): void => {
     });
   });
 
+  describe("resolveTargetMigration", (): void => {
+    it("resolves targets by migration version", (): void => {
+      assert.equal(
+        resolveTargetMigration("20260416090100", disk),
+        migrations[1],
+      );
+    });
+
+    it("resolves targets by migration filename", (): void => {
+      assert.equal(resolveTargetMigration(insertFile, disk), migrations[1]);
+    });
+
+    it("rejects invalid target formats", (): void => {
+      for (const target of [
+        "",
+        "insert",
+        "20260416090100-insert.sql",
+        "20260416090100_Insert.sql",
+      ]) {
+        assert.throws(
+          (): void => {
+            resolveTargetMigration(target, disk);
+          },
+          new RegExp(`Invalid target "${target}"`),
+        );
+      }
+    });
+
+    it("rejects missing target versions", (): void => {
+      assert.throws((): void => {
+        resolveTargetMigration("20260416099999", disk);
+      }, /No migration found for target version "20260416099999"/);
+    });
+
+    it("rejects missing target files", (): void => {
+      assert.throws((): void => {
+        resolveTargetMigration(missingFile, disk);
+      }, /No migration found for target file "20260416099999_missing\.sql"/);
+    });
+  });
+
   describe("validateDownPreconditions", (): void => {
     const appliedRows: AppliedRow[] = [
       row(alterFile),
@@ -86,45 +128,48 @@ describe("validation", (): void => {
       row(createFile),
     ];
 
-    it("returns null target when no target is provided", (): void => {
-      assert.deepEqual(
+    it("accepts missing targets", (): void => {
+      assert.doesNotThrow((): void => {
         validateDownPreconditions({
           appliedRows,
           disk,
-        }),
-        { targetMigration: null },
-      );
-    });
-
-    it("returns the resolved target migration", (): void => {
-      assert.deepEqual(
-        validateDownPreconditions({
-          appliedRows,
-          disk,
-          target: createFile,
-        }),
-        { targetMigration: migrations[0] },
-      );
-    });
-
-    it("rejects target files that do not exist on disk", (): void => {
-      assert.throws((): void => {
-        validateDownPreconditions({
-          appliedRows,
-          disk,
-          target: missingFile,
         });
-      }, /No such target file "20260416099999_missing\.sql"/);
+      });
     });
 
-    it("rejects target files that are not applied", (): void => {
+    it("accepts applied target migrations", (): void => {
+      assert.doesNotThrow((): void => {
+        validateDownPreconditions({
+          appliedRows,
+          disk,
+          targetMigration: migrations[0],
+        });
+      });
+    });
+
+    it("rejects target migrations that are not applied", (): void => {
       assert.throws((): void => {
         validateDownPreconditions({
           appliedRows: [row(createFile)],
           disk,
-          target: insertFile,
+          targetMigration: migrations[1],
         });
       }, /Target migration is not applied: 20260416090100_insert\.sql/);
+    });
+
+    it("rejects target migrations that are not loaded from disk", (): void => {
+      const copiedInsertMigration: DiskMigration = {
+        file: insertFile,
+        path: `/migrations/${insertFile}`,
+      };
+
+      assert.throws((): void => {
+        validateDownPreconditions({
+          appliedRows,
+          disk,
+          targetMigration: copiedInsertMigration,
+        });
+      }, /Target migration object does not belong to the loaded disk set: 20260416090100_insert\.sql/);
     });
 
     it("validates rollback files exist on disk", (): void => {
@@ -136,7 +181,7 @@ describe("validation", (): void => {
             row(createFile),
           ],
           disk,
-          target: createFile,
+          targetMigration: migrations[0],
         });
       }, /Applied migration file is missing on disk: 20260416090150_missing\.sql/);
     });
@@ -161,21 +206,33 @@ describe("validation", (): void => {
   });
 
   describe("validateUpPreconditions", (): void => {
-    it("returns latest applied and target migrations for valid input", (): void => {
+    it("returns latest applied migration for valid input", (): void => {
       assert.deepEqual(
         validateUpPreconditions({
           appliedRows: [row(createFile)],
           disk,
-          target: alterFile,
+          targetMigration: migrations[2],
         }),
         {
           latestAppliedMigration: migrations[0],
-          targetMigration: migrations[2],
         },
       );
     });
 
-    it("uses nulls when no migration is applied and no target is provided", (): void => {
+    it("accepts target migrations resolved by version", (): void => {
+      assert.deepEqual(
+        validateUpPreconditions({
+          appliedRows: [row(createFile)],
+          disk,
+          targetMigration: resolveTargetMigration("20260416090200", disk),
+        }),
+        {
+          latestAppliedMigration: migrations[0],
+        },
+      );
+    });
+
+    it("uses null when no migration is applied", (): void => {
       assert.deepEqual(
         validateUpPreconditions({
           appliedRows: [],
@@ -183,19 +240,8 @@ describe("validation", (): void => {
         }),
         {
           latestAppliedMigration: null,
-          targetMigration: null,
         },
       );
-    });
-
-    it("rejects target files that do not exist on disk", (): void => {
-      assert.throws((): void => {
-        validateUpPreconditions({
-          appliedRows: [],
-          disk,
-          target: missingFile,
-        });
-      }, /No such target file "20260416099999_missing\.sql"/);
     });
 
     it("rejects applied files that are missing on disk", (): void => {
@@ -254,9 +300,24 @@ describe("validation", (): void => {
         validateUpPreconditions({
           appliedRows: [row(insertFile), row(createFile)],
           disk: diskWithoutGaps,
-          target: createFile,
+          targetMigration: createMigration,
         });
       }, /Target migration "20260416090000_create\.sql" is behind latest applied migration "20260416090100_insert\.sql"/);
+    });
+
+    it("rejects target migrations that are not loaded from disk", (): void => {
+      const copiedAlterMigration: DiskMigration = {
+        file: alterFile,
+        path: `/migrations/${alterFile}`,
+      };
+
+      assert.throws((): void => {
+        validateUpPreconditions({
+          appliedRows: [row(createFile)],
+          disk,
+          targetMigration: copiedAlterMigration,
+        });
+      }, /Target migration object does not belong to the loaded disk set: 20260416090200_alter\.sql/);
     });
 
     it("allows target to equal the latest applied migration", (): void => {
@@ -264,11 +325,10 @@ describe("validation", (): void => {
         validateUpPreconditions({
           appliedRows: [row(alterFile), row(insertFile), row(createFile)],
           disk,
-          target: alterFile,
+          targetMigration: migrations[2],
         }),
         {
           latestAppliedMigration: migrations[2],
-          targetMigration: migrations[2],
         },
       );
     });
@@ -278,7 +338,7 @@ describe("validation", (): void => {
         validateUpPreconditions({
           appliedRows: [row(alterFile)],
           disk,
-          target: alterFile,
+          targetMigration: migrations[2],
         });
       }, /Gap in applied migration history/);
     });

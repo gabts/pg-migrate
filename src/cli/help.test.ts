@@ -43,6 +43,19 @@ describe("help", (): void => {
     assert.match(writer.textValues[0]!, /Creates <YYYYMMDDHHMMSS>_<name>\.sql/);
   });
 
+  it("documents target version and filename formats", (): void => {
+    const writer = createResultWriter();
+
+    writeHelp(writer, "up", false);
+
+    assert.equal(writer.jsonValues.length, 0);
+    assert.match(
+      writer.textValues[0]!,
+      /--target accepts <YYYYMMDDHHMMSS> or <YYYYMMDDHHMMSS>_<slug>\.sql/,
+    );
+    assert.match(writer.textValues[0]!, /--target <target>/);
+  });
+
   it("writes JSON help payloads", (): void => {
     const writer = createResultWriter();
 

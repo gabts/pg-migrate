@@ -3,6 +3,8 @@ import {
   assertValidMigrationFilename,
   assertValidMigrationName,
   getMigrationVersion,
+  isMigrationFilename,
+  isMigrationVersion,
 } from "./naming.js";
 
 describe("naming", (): void => {
@@ -55,6 +57,26 @@ describe("naming", (): void => {
       assert.throws((): void => {
         getMigrationVersion("create_users.sql");
       }, /Invalid migration filename:/);
+    });
+  });
+
+  describe("target format helpers", (): void => {
+    it("matches bare migration versions", (): void => {
+      assert.equal(isMigrationVersion("20260416090000"), true);
+      assert.equal(isMigrationVersion("2026041609000"), false);
+      assert.equal(isMigrationVersion("20260416090000_create.sql"), false);
+    });
+
+    it("matches canonical migration filenames", (): void => {
+      assert.equal(
+        isMigrationFilename("20260416090000_create_users.sql"),
+        true,
+      );
+      assert.equal(isMigrationFilename("20260416090000"), false);
+      assert.equal(
+        isMigrationFilename("20260416090000_create-users.sql"),
+        false,
+      );
     });
   });
 });

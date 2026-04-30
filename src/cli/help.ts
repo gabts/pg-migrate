@@ -45,7 +45,7 @@ const upHelpText = `Usage: migratorosaurus up [options] [<database-url>]
 Options:
   --url <database-url>      Database URL (alternative to positional URL)
   -d, --directory <dir>     Migrations directory, defaults to MIGRATION_DIRECTORY or migrations
-  -t, --target <filename>   Apply pending migrations up to and including target
+  -t, --target <target>     Apply pending migrations up to and including target
   --table <table-name>      Migration history table, defaults to migration_history
   --dry-run                 Run planned SQL and history writes, then roll back
   --json                    Emit structured command result and logs
@@ -56,11 +56,13 @@ Options:
 
 Behavior:
   - Without --target, applies all pending migrations.
+  - --target accepts <YYYYMMDDHHMMSS> or <YYYYMMDDHHMMSS>_<slug>.sql.
   - Provide exactly one of positional <database-url> or --url; otherwise DATABASE_URL is used.
   - --directory takes precedence over MIGRATION_DIRECTORY.
 
 Examples:
   migratorosaurus up postgres://localhost:5432/app
+  migratorosaurus up --url postgres://localhost:5432/app --target 20260416090000
   migratorosaurus up --url postgres://localhost:5432/app --target 20260416090000_create.sql
   migratorosaurus up --dry-run
 `;
@@ -70,7 +72,7 @@ const downHelpText = `Usage: migratorosaurus down [options] [<database-url>]
 Options:
   --url <database-url>      Database URL (alternative to positional URL)
   -d, --directory <dir>     Migrations directory, defaults to MIGRATION_DIRECTORY or migrations
-  -t, --target <filename>   Roll back newer migrations; target remains applied
+  -t, --target <target>     Roll back newer migrations; target remains applied
   --table <table-name>      Migration history table, defaults to migration_history
   --dry-run                 Run planned SQL and history writes, then roll back
   --json                    Emit structured command result and logs
@@ -82,6 +84,7 @@ Options:
 Behavior:
   - Without --target, rolls back exactly one migration (latest applied).
   - With --target, target migration is excluded from rollback and stays applied.
+  - --target accepts <YYYYMMDDHHMMSS> or <YYYYMMDDHHMMSS>_<slug>.sql.
   - Provide exactly one of positional <database-url> or --url; otherwise DATABASE_URL is used.
   - --directory takes precedence over MIGRATION_DIRECTORY.
 
