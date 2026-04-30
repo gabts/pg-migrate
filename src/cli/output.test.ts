@@ -1,6 +1,6 @@
 import * as assert from "assert";
-import { createCliLogWriter, createCliResultWriter } from "./output.js";
 import type { LogRecord } from "../logging/schema.js";
+import { createCliLogWriter, createCliResultWriter } from "./output.js";
 
 interface CapturedWritable {
   chunks: string[];

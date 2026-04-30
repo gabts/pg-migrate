@@ -1,7 +1,9 @@
+import type { ClientConfig } from "./db/types.js";
+import { readRuntimeEnv } from "./env.js";
+import { events } from "./logging/events.js";
 import { createLogger, type Logger } from "./logging/logger.js";
 import type { LogSink } from "./logging/writers.js";
 import { executeDownPlan, executeUpPlan } from "./migrations/execution.js";
-import { events } from "./logging/events.js";
 import {
   loadDiskMigrations,
   materializeStepsFromSql,
@@ -16,23 +18,21 @@ import {
   buildMigrationStatus,
   type MigrationStatusResult,
 } from "./migrations/status.js";
-import type { ClientConfig } from "./db/types.js";
 import type { DiskMigration, LoadedMigrations } from "./migrations/types.js";
 import {
   resolveTargetMigration,
-  validateUpPreconditions,
   validateDownPreconditions,
+  validateUpPreconditions,
 } from "./migrations/validation.js";
-import { readRuntimeEnv } from "./env.js";
 
+export type { ClientConfig } from "./db/types.js";
 export type { LogRecord } from "./logging/schema.js";
 export type { LogSink } from "./logging/writers.js";
-export type { ClientConfig } from "./db/types.js";
 export type {
   MigrationStatusItem,
   MigrationStatusResult,
-  MigrationStatusSummary,
   MigrationStatusState,
+  MigrationStatusSummary,
 } from "./migrations/status.js";
 
 /**

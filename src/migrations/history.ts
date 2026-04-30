@@ -1,6 +1,6 @@
-import type { Logger } from "../logging/logger.js";
 import type * as pg from "pg";
 import { events } from "../logging/events.js";
+import type { Logger } from "../logging/logger.js";
 import type { AppliedRow, AppliedStatusRow } from "./types.js";
 import { validateAppliedHistory } from "./validation.js";
 

@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import type * as pg from "pg";
-import { executeDownPlan, executeUpPlan } from "./execution.js";
 import type { Logger } from "../logging/logger.js";
+import { executeDownPlan, executeUpPlan } from "./execution.js";
 import type { MigrationStep } from "./types.js";
 
 function normalizeMs(s: string): string {

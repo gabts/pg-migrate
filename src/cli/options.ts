@@ -1,7 +1,7 @@
-import { booleanFlag, valueFlag, type ParsedTokens } from "./args.js";
-import { readRuntimeEnv } from "../env.js";
 import type { ClientConfig } from "../db/types.js";
+import { readRuntimeEnv } from "../env.js";
 import type { CreateMigrationOptions } from "../migrations/create.js";
+import { booleanFlag, valueFlag, type ParsedTokens } from "./args.js";
 
 const defaultConnectionTimeoutMillis = 10_000;
 

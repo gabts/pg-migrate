@@ -1,15 +1,15 @@
 import { randomUUID } from "crypto";
+import { events } from "../logging/events.js";
+import { createLogger, type Logger } from "../logging/logger.js";
 import {
   assertValidTokens,
   commandName,
   parseTokens,
   type CommandName,
 } from "./args.js";
-import { createLogger, type Logger } from "../logging/logger.js";
-import { createCliLogWriter, createCliResultWriter } from "./output.js";
-import { events } from "../logging/events.js";
-import { writeHelp } from "./help.js";
 import { runCommand } from "./commands.js";
+import { writeHelp } from "./help.js";
+import { createCliLogWriter, createCliResultWriter } from "./output.js";
 
 function formatErrorMessage(error: unknown): string {
   if (error instanceof Error) {
