@@ -29,3 +29,10 @@ export interface AppliedRow {
   filename: string;
   version: string;
 }
+
+/**
+ * Row shape read from the migration history table for status output.
+ */
+export interface AppliedStatusRow extends AppliedRow {
+  appliedAt: Date | string;
+}

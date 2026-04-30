@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import * as pg from "pg";
 import type { Logger } from "../logging/logger.js";
-import { withMigrationSession } from "./session.js";
+import { withMigrationSession, withMigrationStatusSession } from "./session.js";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set to run integration tests");
@@ -209,6 +209,63 @@ describe("session", (): void => {
       /Duplicate applied migration file: 20260416090000_create\.sql/,
     );
     assert.equal(didRun, false);
+  });
+
+  it("status session reports a missing history table without creating it", async (): Promise<void> => {
+    const result = await withMigrationStatusSession({
+      clientConfig: databaseConfig,
+      table: defaultMigrationHistoryTable,
+      run: async ({
+        appliedRows,
+        initialized,
+      }): Promise<{
+        initialized: boolean;
+        rowCount: number;
+      }> => {
+        return {
+          initialized,
+          rowCount: appliedRows.length,
+        };
+      },
+    });
+
+    assert.deepEqual(result, {
+      initialized: false,
+      rowCount: 0,
+    });
+    assert.equal(await queryTableExists(defaultMigrationHistoryTable), false);
+  });
+
+  it("status session reads applied timestamps from an existing history table", async (): Promise<void> => {
+    await createMigrationHistoryTable();
+    await client.query(
+      `INSERT INTO ${defaultMigrationHistoryTable} (filename, version) VALUES ($1, $2);`,
+      [createFile, createVersion],
+    );
+
+    const result = await withMigrationStatusSession({
+      clientConfig: databaseConfig,
+      table: defaultMigrationHistoryTable,
+      run: async ({
+        appliedRows,
+        initialized,
+      }): Promise<{
+        appliedAt: Date;
+        initialized: boolean;
+      }> => {
+        const row = appliedRows[0];
+        assert.ok(row);
+        const appliedAt = row.appliedAt;
+        assert.ok(appliedAt instanceof Date);
+        return {
+          appliedAt,
+          initialized,
+        };
+      },
+    });
+
+    assert.equal(result.initialized, true);
+    assert.ok(result.appliedAt instanceof Date);
   });
 
   it("propagates runner errors and keeps setup committed", async (): Promise<void> => {

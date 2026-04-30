@@ -8,8 +8,9 @@ import {
   ensureMigrationHistory,
   migrationHistoryExists,
   readAppliedRows,
+  readAppliedStatusRows,
 } from "./history.js";
-import type { AppliedRow } from "./types.js";
+import type { AppliedRow, AppliedStatusRow } from "./types.js";
 
 async function withMigrationSessionNormal<T>(args: {
   client: pg.Client;
@@ -93,27 +94,39 @@ async function withMigrationSessionDryRun<T>(args: {
   }
 }
 
-// Errors thrown from `run` (or from session setup) propagate unchanged.
-// Callers are responsible for emitting aborted-run logs around the call.
-/**
- * Opens a DB session, acquires the migration lock, and runs migration work.
- */
-export async function withMigrationSession<T>(args: {
+async function withMigrationSessionStatus<T>(args: {
+  client: pg.Client;
+  qualifiedTableName: string;
+  table: string;
+  run: (ctx: {
+    appliedRows: AppliedStatusRow[];
+    client: pg.Client;
+    initialized: boolean;
+  }) => Promise<T>;
+}): Promise<T> {
+  const { client, qualifiedTableName, table, run } = args;
+  const tableExists = await migrationHistoryExists(client, qualifiedTableName);
+
+  if (!tableExists) {
+    return await run({ appliedRows: [], client, initialized: false });
+  }
+
+  await assertMigrationHistoryTableShape({
+    client,
+    qualifiedTableName,
+    table,
+  });
+
+  const appliedRows = await readAppliedStatusRows(client, qualifiedTableName);
+  return await run({ appliedRows, client, initialized: true });
+}
+
+async function withLockedMigrationClient<T>(args: {
   clientConfig: ClientConfig;
-  logger: Logger;
-  dryRun?: boolean;
-  initializeHistory?: boolean;
-  run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
+  run: (ctx: { client: pg.Client; qualifiedTableName: string }) => Promise<T>;
   table: string;
 }): Promise<T> {
-  const {
-    clientConfig,
-    logger,
-    dryRun = false,
-    initializeHistory = true,
-    run,
-    table,
-  } = args;
+  const { clientConfig, run, table } = args;
   const parsedTableName = parseTableName(table);
   const qualifiedTableName = qualifyTableName(parsedTableName);
   const client = new pg.Client(clientConfig);
@@ -142,32 +155,7 @@ export async function withMigrationSession<T>(args: {
     }
     lockKey = computedLockKey;
 
-    if (!initializeHistory) {
-      return await withMigrationSessionValidateOnly({
-        client,
-        qualifiedTableName,
-        run,
-        table,
-      });
-    }
-
-    if (dryRun) {
-      return await withMigrationSessionDryRun({
-        client,
-        logger,
-        qualifiedTableName,
-        run,
-        table,
-      });
-    }
-
-    return await withMigrationSessionNormal({
-      client,
-      logger,
-      qualifiedTableName,
-      run,
-      table,
-    });
+    return await run({ client, qualifiedTableName });
   } finally {
     if (lockKey !== null) {
       try {
@@ -182,8 +170,90 @@ export async function withMigrationSession<T>(args: {
     try {
       await client.end();
     } catch {
-      // Ignore cleanup errors - committed work is durable and any failure
-      // is already propagating.
+      // Ignore cleanup errors; any failure is already propagating.
     }
   }
+}
+
+// Errors thrown from `run` (or from session setup) propagate unchanged.
+// Callers are responsible for emitting aborted-run logs around the call.
+/**
+ * Opens a DB session, acquires the migration lock, and runs migration work.
+ */
+export async function withMigrationSession<T>(args: {
+  clientConfig: ClientConfig;
+  logger: Logger;
+  dryRun?: boolean;
+  initializeHistory?: boolean;
+  run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
+  table: string;
+}): Promise<T> {
+  const {
+    clientConfig,
+    logger,
+    dryRun = false,
+    initializeHistory = true,
+    run,
+    table,
+  } = args;
+
+  return await withLockedMigrationClient({
+    clientConfig,
+    table,
+    run: async ({ client, qualifiedTableName }): Promise<T> => {
+      if (!initializeHistory) {
+        return await withMigrationSessionValidateOnly({
+          client,
+          qualifiedTableName,
+          run,
+          table,
+        });
+      }
+
+      if (dryRun) {
+        return await withMigrationSessionDryRun({
+          client,
+          logger,
+          qualifiedTableName,
+          run,
+          table,
+        });
+      }
+
+      return await withMigrationSessionNormal({
+        client,
+        logger,
+        qualifiedTableName,
+        run,
+        table,
+      });
+    },
+  });
+}
+
+/**
+ * Opens a DB session for read-only status inspection.
+ */
+export async function withMigrationStatusSession<T>(args: {
+  clientConfig: ClientConfig;
+  run: (ctx: {
+    appliedRows: AppliedStatusRow[];
+    client: pg.Client;
+    initialized: boolean;
+  }) => Promise<T>;
+  table: string;
+}): Promise<T> {
+  const { clientConfig, run, table } = args;
+  return await withLockedMigrationClient({
+    clientConfig,
+    table,
+    run: async ({ client, qualifiedTableName }): Promise<T> => {
+      return await withMigrationSessionStatus({
+        client,
+        qualifiedTableName,
+        run,
+        table,
+      });
+    },
+  });
 }

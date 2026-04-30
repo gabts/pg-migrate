@@ -7,6 +7,7 @@ import {
   ensureMigrationHistory,
   migrationHistoryExists,
   readAppliedRows,
+  readAppliedStatusRows,
 } from "./history.js";
 
 interface EnsurePlan {
@@ -235,6 +236,66 @@ describe("history", (): void => {
       await assert.rejects(
         (): Promise<unknown> => readAppliedRows(client, '"migration_history"'),
         /Duplicate applied migration version: 20260416090000/,
+      );
+    });
+  });
+
+  describe("readAppliedStatusRows", (): void => {
+    it("loads rows with applied timestamps", async (): Promise<void> => {
+      const appliedAt = new Date("2026-04-30T10:15:00.000Z");
+      const queries: string[] = [];
+      const client = {
+        query: async (sql: string): Promise<{ rows: unknown[] }> => {
+          queries.push(sql);
+          return {
+            rows: [
+              {
+                appliedAt,
+                filename: "20260416090000_create.sql",
+                version: "20260416090000",
+              },
+            ],
+          };
+        },
+      } as unknown as pg.Client;
+
+      const rows = await readAppliedStatusRows(client, '"migration_history"');
+
+      assert.deepEqual(rows, [
+        {
+          appliedAt,
+          filename: "20260416090000_create.sql",
+          version: "20260416090000",
+        },
+      ]);
+      assert.ok(
+        queries.some((sql): boolean =>
+          sql.includes(
+            `SELECT filename, version, applied_at AS "appliedAt" FROM "migration_history"`,
+          ),
+        ),
+      );
+    });
+
+    it("rejects invalid applied timestamps", async (): Promise<void> => {
+      const client = {
+        query: async (): Promise<{ rows: unknown[] }> => {
+          return {
+            rows: [
+              {
+                appliedAt: "not a timestamp",
+                filename: "20260416090000_create.sql",
+                version: "20260416090000",
+              },
+            ],
+          };
+        },
+      } as unknown as pg.Client;
+
+      await assert.rejects(
+        (): Promise<unknown> =>
+          readAppliedStatusRows(client, '"migration_history"'),
+        /Invalid applied migration timestamp for file "20260416090000_create\.sql": not a timestamp/,
       );
     });
   });

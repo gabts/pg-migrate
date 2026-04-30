@@ -23,9 +23,14 @@ This package is ESM-only and requires Node.js `>=22`.
 Use it from your app or migration runner:
 
 ```javascript
-import { down, up, validate } from "migratorosaurus";
+import { down, status, up, validate } from "migratorosaurus";
 
 await validate("postgres://localhost:5432/database", {
+  directory: `sql/migrations`,
+  table: "my_migration_history",
+});
+
+await status("postgres://localhost:5432/database", {
   directory: `sql/migrations`,
   table: "my_migration_history",
 });
@@ -77,6 +82,7 @@ The built-in CLI supports:
 - `create` creates a new migration file
 - `up` applies pending migrations
 - `down` rolls back applied migrations
+- `status` shows applied and pending migration state
 - `validate` checks migration environment and state without applying SQL
 
 The CLI creates filenames in `<YYYYMMDDHHMMSS>_<slug>.sql` format.
@@ -87,6 +93,7 @@ Useful commands:
 migratorosaurus create --help
 migratorosaurus create --directory sql/migrations --name add_users
 migratorosaurus validate --url postgres://localhost:5432/app
+migratorosaurus status --url postgres://localhost:5432/app
 migratorosaurus up --url postgres://localhost:5432/app
 migratorosaurus up --url postgres://localhost:5432/app --target 20260416090100
 migratorosaurus down --url postgres://localhost:5432/app --target 20260416090100_add_users.sql
@@ -107,7 +114,7 @@ Global CLI flags:
 - `--help` and `-h` are boolean flags
 - Unknown commands and unknown flags cause the CLI to fail
 
-`up` / `down` / `validate` command rules:
+`up` / `down` / `validate` / `status` command rules:
 
 - `--directory` defaults to `MIGRATION_DIRECTORY` or `"migrations"`
 - `--directory` takes precedence over `MIGRATION_DIRECTORY`
@@ -118,7 +125,15 @@ Global CLI flags:
 - validates migration files, order, and applied history consistency
 - validates database connectivity and migration table state
 - does not create missing migration history tables
-- uses the same advisory lock as `up`/`down` and fails fast if another run is active
+- uses the same advisory lock as `up`/`down`/`status` and fails fast if another run is active
+
+`status` command behavior:
+
+- validates migration files and applied history consistency
+- shows current, next, applied, pending, and per-file migration state
+- `current` means the latest applied migration by file order
+- does not create missing migration history tables; reports `initialized: false`
+- uses the same advisory lock as `up`/`down`/`validate` and fails fast if another run is active
 
 CLI stream conventions:
 
@@ -145,6 +160,7 @@ By default, `up()` and `down()` emit newline-delimited structured JSON logs to `
 Pass `logSink` to receive structured `LogRecord` objects and forward them to the logger of your choice.
 `LogRecord` uses a neutral shape with `time`, `level`, `message`, `event`, `service`, `error`, and `fields`.
 `validate()` uses the same default logging behavior and performs checks only (no migration SQL execution).
+`status()` uses the same default logging behavior and returns a read-only status object.
 The CLI renders logs as human-friendly terminal output unless `--json` is set.
 
 Use `up(config, { target })` to migrate forward until that migration has been applied.

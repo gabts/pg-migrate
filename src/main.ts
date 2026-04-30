@@ -8,7 +8,14 @@ import {
   readMigrationSqlByFile,
 } from "./migrations/files.js";
 import { planDownExecution, planUpExecution } from "./migrations/planning.js";
-import { withMigrationSession } from "./migrations/session.js";
+import {
+  withMigrationSession,
+  withMigrationStatusSession,
+} from "./migrations/session.js";
+import {
+  buildMigrationStatus,
+  type MigrationStatusResult,
+} from "./migrations/status.js";
 import type { ClientConfig } from "./db/types.js";
 import type { DiskMigration, LoadedMigrations } from "./migrations/types.js";
 import {
@@ -21,6 +28,12 @@ import { readRuntimeEnv } from "./env.js";
 export type { LogRecord } from "./logging/schema.js";
 export type { LogSink } from "./logging/writers.js";
 export type { ClientConfig } from "./db/types.js";
+export type {
+  MigrationStatusItem,
+  MigrationStatusResult,
+  MigrationStatusSummary,
+  MigrationStatusState,
+} from "./migrations/status.js";
 
 /**
  * Runtime options shared by `up` and `down` migration commands.
@@ -40,6 +53,18 @@ export interface MigrationOptions {
  * Runtime options for migration validation runs.
  */
 export interface ValidateOptions {
+  directory?: string;
+  logSink?: LogSink;
+  quiet?: boolean;
+  correlationId?: string;
+  table?: string;
+  verbose?: boolean;
+}
+
+/**
+ * Runtime options for migration status runs.
+ */
+export interface StatusOptions {
   directory?: string;
   logSink?: LogSink;
   quiet?: boolean;
@@ -303,6 +328,74 @@ export async function validate(
     logger.emit(events.runCompleted("validate"));
   } catch (error) {
     logger.emit(events.runAborted({ command: "validate", error }));
+    throw error;
+  }
+}
+
+/**
+ * Reports read-only migration status.
+ */
+export async function status(
+  clientConfig: ClientConfig,
+  args: StatusOptions = {},
+): Promise<MigrationStatusResult> {
+  const { logger, directory, table } = normalizeCommonOptions(args);
+
+  logger.emit(
+    events.runTelemetry({
+      command: "status",
+      directory,
+      table,
+    }),
+  );
+
+  logger.emit(
+    events.runStarted({
+      command: "status",
+      directory,
+      table,
+    }),
+  );
+
+  try {
+    const disk = loadDiskMigrations(directory);
+    // Parse only; throws on malformed SQL before opening a DB session.
+    readMigrationSqlByFile(disk.all);
+
+    const result = await withMigrationStatusSession({
+      clientConfig,
+      table,
+      run: async ({
+        appliedRows,
+        initialized,
+      }): Promise<MigrationStatusResult> => {
+        validateUpPreconditions({
+          appliedRows,
+          disk,
+        });
+
+        return buildMigrationStatus({
+          appliedRows,
+          directory,
+          disk,
+          initialized,
+          table,
+        });
+      },
+    });
+
+    logger.emit(
+      events.statusSummary({
+        appliedCount: result.summary.applied,
+        initialized: result.initialized,
+        pendingCount: result.summary.pending,
+        totalCount: result.summary.total,
+      }),
+    );
+    logger.emit(events.runCompleted("status"));
+    return result;
+  } catch (error) {
+    logger.emit(events.runAborted({ command: "status", error }));
     throw error;
   }
 }

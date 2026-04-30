@@ -162,7 +162,7 @@ describe("options", (): void => {
     });
 
     it("rejects missing database URLs", (): void => {
-      for (const command of ["up", "down", "validate"] as const) {
+      for (const command of ["up", "down", "validate", "status"] as const) {
         const parsed = parseTokens([command]);
 
         withEnvVars({ DATABASE_URL: undefined }, (): void => {

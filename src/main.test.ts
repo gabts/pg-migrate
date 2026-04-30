@@ -5,12 +5,14 @@ import * as path from "path";
 import * as pg from "pg";
 import {
   down,
+  status,
   up,
   validate,
   type ClientConfig,
   type LogRecord,
   type LogSink,
   type MigrationOptions,
+  type StatusOptions,
   type ValidateOptions,
 } from "./main.js";
 
@@ -193,6 +195,21 @@ async function runValidate(args: ValidateOptions): Promise<void> {
     await validate(databaseConfig, { quiet: true, ...args });
   });
   assert.equal(captured.stderr, "");
+}
+
+async function runStatus(
+  args: StatusOptions,
+): Promise<Awaited<ReturnType<typeof status>>> {
+  const captured = await captureStderr(
+    async (): Promise<Awaited<ReturnType<typeof status>>> => {
+      return await status(databaseConfig, { quiet: true, ...args });
+    },
+  );
+  assert.equal(captured.stderr, "");
+  if (!captured.result) {
+    throw new Error("Expected status result");
+  }
+  return captured.result;
 }
 
 async function assertMigration0(): Promise<void> {
@@ -699,6 +716,72 @@ UPDATE person SET name = lower(name);
     } finally {
       await client.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE;`);
     }
+  });
+
+  it("status reports current and pending migrations without mutating state", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+    await runUp({ directory, target: standardCreateFile });
+
+    const result = await runStatus({ directory });
+
+    assert.equal(result.initialized, true);
+    assert.deepEqual(result.summary, {
+      applied: 1,
+      pending: 1,
+      total: 2,
+    });
+    assert.equal(result.current?.file, standardCreateFile);
+    assert.equal(result.current?.version, standardCreateVersion);
+    assert.match(result.current?.appliedAt ?? "", /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(result.next?.file, standardInsertFile);
+    assert.deepEqual(
+      result.migrations.map(({ file, state }) => ({ file, state })),
+      [
+        { file: standardCreateFile, state: "applied" },
+        { file: standardInsertFile, state: "pending" },
+      ],
+    );
+
+    await assertMigration0();
+  });
+
+  it("status reports missing history table as uninitialized", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+
+    const result = await runStatus({ directory });
+
+    assert.equal(result.initialized, false);
+    assert.deepEqual(result.summary, {
+      applied: 0,
+      pending: 2,
+      total: 2,
+    });
+    assert.equal(result.current, null);
+    assert.equal(result.next?.file, standardCreateFile);
+    assert.equal(await queryTableExists(defaultMigrationHistoryTable), false);
+    assert.equal(await queryTableExists("person"), false);
+  });
+
+  it("status rejects history gaps without mutating state", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+    await createMigrationHistoryTable();
+    await client.query(
+      `INSERT INTO ${defaultMigrationHistoryTable} (filename, version) VALUES ($1, $2);`,
+      [standardInsertFile, "20260416090100"],
+    );
+
+    await assert.rejects(
+      (): Promise<Awaited<ReturnType<typeof status>>> =>
+        runStatus({ directory }),
+      new RegExp(
+        `Gap in applied migration history: "${standardCreateFile}" is not applied`,
+      ),
+    );
+
+    const historyRows = await queryHistory();
+    assert.equal(historyRows.length, 1);
+    assert.equal(historyRows[0].file, standardInsertFile);
+    assert.equal(await queryTableExists("person"), false);
   });
 
   describe("bulk migrations (100+)", function (this: Mocha.Suite): void {

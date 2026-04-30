@@ -51,3 +51,17 @@ export function getMigrationVersion(file: string): string {
   }
   return version;
 }
+
+/**
+ * Extracts the slug/name portion from a canonical migration file.
+ */
+export function getMigrationName(file: string): string {
+  const match = file.match(migrationFilePattern);
+  const name = match?.[2];
+  if (!name) {
+    throw new Error(
+      `Invalid migration filename: ${file}. Expected format: <YYYYMMDDHHMMSS>_<slug>.sql`,
+    );
+  }
+  return name;
+}

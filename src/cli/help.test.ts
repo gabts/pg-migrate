@@ -56,6 +56,20 @@ describe("help", (): void => {
     assert.match(writer.textValues[0]!, /--target <target>/);
   });
 
+  it("writes status help text", (): void => {
+    const writer = createResultWriter();
+
+    writeHelp(writer, "status", false);
+
+    assert.equal(writer.jsonValues.length, 0);
+    assert.match(writer.textValues[0]!, /Usage: migratorosaurus status/);
+    assert.match(writer.textValues[0]!, /initialized=false/);
+    assert.match(
+      writer.textValues[0]!,
+      /Current means the latest applied migration by file order/,
+    );
+  });
+
   it("writes JSON help payloads", (): void => {
     const writer = createResultWriter();
 
