@@ -1,5 +1,6 @@
 const migrationSlugPattern = /^[a-z0-9][a-z0-9_]*$/;
 const migrationFilePattern = /^(\d{14})_([a-z0-9][a-z0-9_]*)\.sql$/;
+const migrationVersionPattern = /^\d{14}$/;
 
 /**
  * Validates a migration slug used for new migration file creation.
@@ -21,6 +22,20 @@ export function assertValidMigrationFilename(file: string): void {
       `Invalid migration filename: ${file}. Expected format: <YYYYMMDDHHMMSS>_<slug>.sql`,
     );
   }
+}
+
+/**
+ * Returns whether a value is a bare migration timestamp/version.
+ */
+export function isMigrationVersion(value: string): boolean {
+  return migrationVersionPattern.test(value);
+}
+
+/**
+ * Returns whether a value is a canonical migration filename.
+ */
+export function isMigrationFilename(value: string): boolean {
+  return migrationFilePattern.test(value);
 }
 
 /**

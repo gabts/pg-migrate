@@ -1,4 +1,8 @@
-import { getMigrationVersion } from "./naming.js";
+import {
+  getMigrationVersion,
+  isMigrationFilename,
+  isMigrationVersion,
+} from "./naming.js";
 import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
 
 /**
@@ -112,62 +116,93 @@ function validateAppliedHistoryConsistency(
 }
 
 /**
- * Validates preconditions for rollback planning and resolves target.
+ * Resolves a target string by version or canonical filename.
+ */
+export function resolveTargetMigration(
+  target: string,
+  disk: LoadedMigrations,
+): DiskMigration {
+  if (isMigrationVersion(target)) {
+    const migration = disk.all.find(
+      ({ file }): boolean => getMigrationVersion(file) === target,
+    );
+    if (!migration) {
+      throw new Error(`No migration found for target version "${target}"`);
+    }
+    return migration;
+  }
+
+  if (isMigrationFilename(target)) {
+    const migration = disk.byFile.get(target);
+    if (!migration) {
+      throw new Error(`No migration found for target file "${target}"`);
+    }
+    return migration;
+  }
+
+  throw new Error(
+    `Invalid target "${target}". Expected <YYYYMMDDHHMMSS> or <YYYYMMDDHHMMSS>_<slug>.sql`,
+  );
+}
+
+function validateTargetMigrationLoaded(
+  targetMigration: DiskMigration,
+  disk: LoadedMigrations,
+): void {
+  if (disk.byFile.get(targetMigration.file) !== targetMigration) {
+    throw new Error(
+      `Target migration object does not belong to the loaded disk set: ${targetMigration.file}`,
+    );
+  }
+}
+
+/**
+ * Validates preconditions for rollback planning.
  */
 export function validateDownPreconditions(args: {
   appliedRows: AppliedRow[];
   disk: LoadedMigrations;
-  target?: string;
-}): {
-  targetMigration: DiskMigration | null;
-} {
-  const { appliedRows, disk, target } = args;
+  targetMigration?: DiskMigration | null;
+}): void {
+  const { appliedRows, disk, targetMigration = null } = args;
   validateAppliedHistoryConsistency(appliedRows, disk);
 
-  if (!target) {
-    return { targetMigration: null };
+  if (!targetMigration) {
+    return;
   }
 
-  const targetMigration = disk.byFile.get(target);
-  if (!targetMigration) {
-    throw new Error(`No such target file "${target}"`);
-  }
+  validateTargetMigrationLoaded(targetMigration, disk);
 
   const appliedFiles = getAppliedFiles(appliedRows);
-  if (!appliedFiles.has(target)) {
-    throw new Error(`Target migration is not applied: ${target}`);
+  if (!appliedFiles.has(targetMigration.file)) {
+    throw new Error(`Target migration is not applied: ${targetMigration.file}`);
   }
-
-  return { targetMigration };
 }
 
 /**
- * Validates preconditions for apply planning and resolves target bounds.
+ * Validates preconditions for apply planning and target bounds.
  */
 export function validateUpPreconditions(args: {
   appliedRows: AppliedRow[];
   disk: LoadedMigrations;
-  target?: string;
+  targetMigration?: DiskMigration | null;
 }): {
   latestAppliedMigration: DiskMigration | null;
-  targetMigration: DiskMigration | null;
 } {
-  const { appliedRows, disk, target } = args;
+  const { appliedRows, disk, targetMigration = null } = args;
   const latestAppliedMigration = validateAppliedHistoryConsistency(
     appliedRows,
     disk,
   );
-  const targetMigration = target ? disk.byFile.get(target) : undefined;
 
-  if (target && !targetMigration) {
-    throw new Error(`No such target file "${target}"`);
+  if (targetMigration) {
+    validateTargetMigrationLoaded(targetMigration, disk);
   }
 
   if (latestAppliedMigration) {
     if (targetMigration === latestAppliedMigration) {
       return {
         latestAppliedMigration,
-        targetMigration,
       };
     }
 
@@ -184,6 +219,5 @@ export function validateUpPreconditions(args: {
 
   return {
     latestAppliedMigration,
-    targetMigration: targetMigration ?? null,
   };
 }
