@@ -1,9 +1,12 @@
 import { booleanFlag, valueFlag, type ParsedTokens } from "./args.js";
 import { readRuntimeEnv } from "../env.js";
+import type { ClientConfig } from "../db/types.js";
 import type { CreateMigrationOptions } from "../migrations/create.js";
 
+const defaultConnectionTimeoutMillis = 10_000;
+
 interface DatabaseRunOptions {
-  clientConfig: string;
+  clientConfig: ClientConfig;
   directory: string;
   table: string;
 }
@@ -11,6 +14,13 @@ interface DatabaseRunOptions {
 interface MigrationRunOptions extends DatabaseRunOptions {
   dryRun: boolean;
   target?: string;
+}
+
+function buildClientConfig(connectionString: string): ClientConfig {
+  return {
+    connectionString,
+    connectionTimeoutMillis: defaultConnectionTimeoutMillis,
+  };
 }
 
 /**
@@ -64,7 +74,7 @@ export function buildDatabaseRunOptions(
   }
 
   return {
-    clientConfig,
+    clientConfig: buildClientConfig(clientConfig),
     directory:
       valueFlag(parsed, "--directory") ?? runtimeEnv.migrationDirectory,
     table: valueFlag(parsed, "--table") ?? runtimeEnv.migrationHistoryTable,

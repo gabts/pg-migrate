@@ -194,7 +194,10 @@ describe("commands", (): void => {
         ok: true,
       },
     ]);
-    assert.equal(capturedClientConfig, "postgres://example/db");
+    assert.deepEqual(capturedClientConfig, {
+      connectionString: "postgres://example/db",
+      connectionTimeoutMillis: 10_000,
+    });
     assert.equal(capturedOptions?.directory, tempDir);
     assert.equal(capturedOptions?.logSink, logSink);
     assert.equal(capturedOptions?.quiet, true);
@@ -248,7 +251,10 @@ describe("commands", (): void => {
         target: "20260429123456_create.sql",
       },
     ]);
-    assert.equal(capturedClientConfig, "postgres://example/db");
+    assert.deepEqual(capturedClientConfig, {
+      connectionString: "postgres://example/db",
+      connectionTimeoutMillis: 10_000,
+    });
     assert.equal(capturedOptions?.directory, tempDir);
     assert.equal(capturedOptions?.dryRun, true);
     assert.equal(capturedOptions?.logSink, logSink);
