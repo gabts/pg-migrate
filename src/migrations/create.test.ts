@@ -69,17 +69,34 @@ describe("create", (): void => {
     }, /Invalid migration name: \.\.\/create_person/);
   });
 
-  it("rejects missing migration directories", (): void => {
-    const missingDirectory = path.join(tempDir, "missing");
+  it("creates missing migration directories", (): void => {
+    const missingDirectory = path.join(tempDir, "missing", "migrations");
+
+    const filePath = createMigration({
+      clock: (): Date => fixedDate,
+      directory: missingDirectory,
+      name: "create_person",
+    });
+
+    assert.equal(
+      filePath,
+      path.join(missingDirectory, "20260429123456_create_person.sql"),
+    );
+    assert.equal(fs.statSync(missingDirectory).isDirectory(), true);
+  });
+
+  it("rejects migration paths that are not directories", (): void => {
+    const filePath = path.join(tempDir, "migrations");
+    fs.writeFileSync(filePath, "not a directory\n");
 
     assert.throws(
       (): void => {
         createMigration({
-          directory: missingDirectory,
+          directory: filePath,
           name: "create_person",
         });
       },
-      new RegExp(`Migration directory does not exist: ${missingDirectory}`),
+      new RegExp(`Migration path is not a directory: ${filePath}`),
     );
   });
 

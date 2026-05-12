@@ -37,12 +37,6 @@ The package installs the `pg-migrate` CLI binary and exports a typed Node API.
 
 ## Quick Start
 
-Create a migration directory:
-
-```sh
-mkdir -p migrations
-```
-
 Create a migration file:
 
 ```sh
@@ -96,7 +90,7 @@ Rules:
 - Non-`.sql` files are ignored.
 - Invalid `.sql` filenames fail validation.
 - Duplicate versions fail validation.
-- The migration directory must exist.
+- Commands that load migrations require the migration directory to exist.
 - Commands that load migrations fail if the directory contains no migration `.sql` files.
 
 Each migration file must contain exactly one `-- migrate:up` marker and at most one `-- migrate:down` marker:
@@ -215,7 +209,7 @@ pg-migrate create --name <name> [options]
 
 - Creates `<YYYYMMDDHHMMSS>_<name>.sql`.
 - The timestamp is generated from the current UTC time.
-- The output directory must already exist.
+- The output directory is created if it does not exist.
 - The file is created with `-- migrate:up` and `-- migrate:down` markers.
 - Existing files are not overwritten.
 - Human-readable mode writes the created file path to `stdout`.

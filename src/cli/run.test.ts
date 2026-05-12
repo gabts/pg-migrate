@@ -148,6 +148,24 @@ describe("cli run", (): void => {
     assert.equal(result.stderr, "");
   });
 
+  it("creates missing output directories for create", async (): Promise<void> => {
+    const directory = path.join(tempDir, "missing", "migrations");
+    const result = await runCliInProcessRaw([
+      "create",
+      "--directory",
+      directory,
+      "--name",
+      "create_person",
+      "--json",
+    ]);
+
+    assert.equal(result.status, 0);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(path.dirname(parsed.file), directory);
+    assert.equal(fs.statSync(directory).isDirectory(), true);
+    assert.equal(result.stderr, "");
+  });
+
   it("emits parseable JSON for successful validate with no incidental stdout text", async function (this: Mocha.Context): Promise<void> {
     const databaseUrl = process.env.DATABASE_URL;
     if (!databaseUrl) {

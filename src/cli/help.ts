@@ -32,6 +32,7 @@ Options:
 
 Notes:
   - Creates <YYYYMMDDHHMMSS>_<name>.sql
+  - Creates the output directory if it does not exist
   - File template includes:
       -- migrate:up
       -- migrate:down
