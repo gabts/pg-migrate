@@ -1,7 +1,7 @@
 {
-  "name": "migratorosaurus",
-  "version": "2.0.0",
-  "description": "An exotically simple database migration tool for Node postgres!",
+  "name": "@gabbe/pg-migrate",
+  "version": "1.0.0",
+  "description": "A lightweight PostgreSQL schema migration tool. Simple to run, strict about history.",
   "author": "gabts",
   "license": "MIT",
   "type": "module",
@@ -15,16 +15,20 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gabts/migratorosaurus.git"
+    "url": "git+https://github.com/gabts/pg-migrate.git"
   },
   "bugs": {
-    "url": "https://github.com/gabts/migratorosaurus/issues"
+    "url": "https://github.com/gabts/pg-migrate/issues"
   },
   "keywords": [
+    "database",
+    "migrate",
+    "migration",
+    "migrations",
     "pg",
     "postgres",
-    "database",
-    "migration"
+    "postgresql",
+    "schema"
   ],
   "files": [
     "bin/cli.js",

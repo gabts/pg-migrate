@@ -1,29 +1,33 @@
-<h1 align="center">🦖 MIGRATOROSAURUS 🦖</h1>
-<br />
+# @gabbe/pg-migrate
 
-An exotically simple database migration tool for node [pg](https://www.npmjs.com/package/pg).
+A lightweight PostgreSQL schema migration tool. Simple to run, strict about history.
 
-## 🌋 Features
+It applies timestamped SQL migrations in order, records exactly what was applied, and fails fast when migration history is inconsistent.
 
-- Dead simple, zero config!
-- Write up and down migrations in the same .sql file!
-- Lightweight and easy to integrate into workflows!
+## Features
 
-## 🌍 Install
+- Simple SQL files with up and (optional) down sections
+- Strict history validation before any migration SQL runs
+- PostgreSQL advisory lock so only one runner is active at a time
+- Per-file transactions with rollback-on-error
+- Typed Node API for app, script, and deployment integration
+- Structured logs and JSON CLI output
+
+## Install
 
 ```sh
-npm install --save migratorosaurus
+npm install --save @gabbe/pg-migrate
 ```
 
 Your environment should have a [PostgreSQL](https://www.postgresql.org/) database setup.
 This package is ESM-only and requires Node.js `>=22`.
 
-## 🧬 Quick Start
+## Quick Start
 
 Use it from your app or migration runner:
 
 ```javascript
-import { down, status, up, validate } from "migratorosaurus";
+import { down, status, up, validate } from "@gabbe/pg-migrate";
 
 await validate("postgres://localhost:5432/database", {
   directory: `sql/migrations`,
@@ -46,7 +50,7 @@ await down("postgres://localhost:5432/database", {
 });
 ```
 
-## 📁 Migration Files
+## Migration Files
 
 Migration filenames are enforced and must match:
 `<YYYYMMDDHHMMSS>_<slug>.sql` (for example `20260414153000_create_person.sql`).
@@ -71,7 +75,7 @@ DROP TABLE person;
 
 The `up` section must contain SQL. The `down` marker is optional. If present, its SQL may be empty for irreversible migrations. During rollback, migrations without down SQL execute no SQL but are still removed from the history table, so their `up()` must be idempotent.
 
-## 🛠️ CLI
+## CLI
 
 ```sh
 migratorosaurus --help
@@ -142,7 +146,7 @@ CLI stream conventions:
 - In `--json` mode, `stdout` contains one structured command result and `stderr` contains newline-delimited structured JSON logs
 - ANSI color in human-friendly CLI logs is enabled only when `stderr` is a TTY
 
-## 👩‍🔬 Configuration
+## Configuration
 
 The first argument is a required PostgreSQL connection string or `pg` client configuration.
 The second argument is an optional configuration object:
@@ -169,22 +173,22 @@ Use `down(config, { target })` to roll back newer migrations while leaving the t
 
 `up()` is append-only by version order. If a migration file is added with a version earlier than the latest applied migration after that later migration has already been applied, `up()` fails instead of silently applying it out of order.
 
-## 🧫 Transactions
+## Transactions
 
 Each migration file runs in its own transaction. If one migration fails, earlier successful migrations stay committed and the failing migration is rolled back. Concurrent runners are serialized with a PostgreSQL advisory lock keyed on the unqualified history table name — `migration_history` and `public.migration_history` share the same lock, so runners against same-named tables in different schemas will also serialize. Use distinct table names if that matters.
 
-## 🚁 Development
+## Development
 
 Clone the repository and install dependencies:
 
 ```sh
-git clone https://github.com/gabts/migratorosaurus
-cd migratorosaurus
+git clone https://github.com/gabts/pg-migrate
+cd pg-migrate
 npm install
 npm run build:watch
 ```
 
-### 🦟 Testing
+### Testing
 
 Ensure a [PostgreSQL](https://www.postgresql.org/) database is running, then run the tests with a `DATABASE_URL`:
 
@@ -192,6 +196,6 @@ Ensure a [PostgreSQL](https://www.postgresql.org/) database is running, then run
 DATABASE_URL="postgres://localhost:5432/database" npm run test
 ```
 
-## ☄️ License
+## License
 
 [MIT](./LICENSE)
