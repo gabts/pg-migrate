@@ -32,11 +32,18 @@ export function createMigration(opts: CreateMigrationOptions): string {
 
   assertValidMigrationName(opts.name);
 
-  if (
-    !fs.existsSync(opts.directory) ||
-    !fs.statSync(opts.directory).isDirectory()
-  ) {
-    throw new Error(`Migration directory does not exist: ${opts.directory}`);
+  try {
+    fs.mkdirSync(opts.directory, { recursive: true });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "EEXIST" || code === "ENOTDIR") {
+      throw new Error(`Migration path is not a directory: ${opts.directory}`);
+    }
+    throw error;
+  }
+
+  if (!fs.statSync(opts.directory).isDirectory()) {
+    throw new Error(`Migration path is not a directory: ${opts.directory}`);
   }
 
   const filePath = path.join(
