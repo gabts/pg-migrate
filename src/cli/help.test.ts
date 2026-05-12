@@ -30,7 +30,7 @@ describe("help", (): void => {
     writeHelp(writer, undefined, false);
 
     assert.equal(writer.jsonValues.length, 0);
-    assert.match(writer.textValues[0]!, /Usage: migratorosaurus <command>/);
+    assert.match(writer.textValues[0]!, /Usage: pg-migrate <command>/);
   });
 
   it("writes command help text", (): void => {
@@ -39,7 +39,7 @@ describe("help", (): void => {
     writeHelp(writer, "create", false);
 
     assert.equal(writer.jsonValues.length, 0);
-    assert.match(writer.textValues[0]!, /Usage: migratorosaurus create/);
+    assert.match(writer.textValues[0]!, /Usage: pg-migrate create/);
     assert.match(writer.textValues[0]!, /Creates <YYYYMMDDHHMMSS>_<name>\.sql/);
   });
 
@@ -62,7 +62,7 @@ describe("help", (): void => {
     writeHelp(writer, "status", false);
 
     assert.equal(writer.jsonValues.length, 0);
-    assert.match(writer.textValues[0]!, /Usage: migratorosaurus status/);
+    assert.match(writer.textValues[0]!, /Usage: pg-migrate status/);
     assert.match(writer.textValues[0]!, /initialized=false/);
     assert.match(
       writer.textValues[0]!,
@@ -84,6 +84,6 @@ describe("help", (): void => {
     };
     assert.equal(payload.command, "create");
     assert.equal(payload.ok, true);
-    assert.match(payload.help, /Usage: migratorosaurus create/);
+    assert.match(payload.help, /Usage: pg-migrate create/);
   });
 });

@@ -64,7 +64,7 @@ describe("execution", (): void => {
         client,
         logger: createCapturedLogger(logs),
         steps,
-        table: "migratorosaurus.migration_history",
+        table: "pgmigrate.migration_history",
       });
 
       assert.deepEqual(
@@ -83,7 +83,7 @@ describe("execution", (): void => {
           params: undefined,
         },
         {
-          sql: 'INSERT INTO "migratorosaurus"."migration_history" ( filename, version, applied_at ) VALUES ( $1, $2, clock_timestamp() );',
+          sql: 'INSERT INTO "pgmigrate"."migration_history" ( filename, version, applied_at ) VALUES ( $1, $2, clock_timestamp() );',
           params: ["20260416090000_create.sql", "20260416090000"],
         },
         { sql: "COMMIT;", params: undefined },
@@ -93,7 +93,7 @@ describe("execution", (): void => {
           params: undefined,
         },
         {
-          sql: 'INSERT INTO "migratorosaurus"."migration_history" ( filename, version, applied_at ) VALUES ( $1, $2, clock_timestamp() );',
+          sql: 'INSERT INTO "pgmigrate"."migration_history" ( filename, version, applied_at ) VALUES ( $1, $2, clock_timestamp() );',
           params: ["20260416090100_insert.sql", "20260416090100"],
         },
         { sql: "COMMIT;", params: undefined },

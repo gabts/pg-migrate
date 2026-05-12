@@ -62,7 +62,7 @@ async function runCliInProcessRaw(args: string[]): Promise<CliRunResult> {
   });
 
   try {
-    const status = await runCli(["node", "migratorosaurus", ...args]);
+    const status = await runCli(["node", "pg-migrate", ...args]);
     return {
       status,
       stderr: stderrChunks.join(""),
@@ -104,9 +104,7 @@ describe("cli run", (): void => {
   let tempDir: string;
 
   beforeEach((): void => {
-    tempDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "migratorosaurus-cli-run-"),
-    );
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pg_migrate-cli-run-"));
   });
 
   afterEach((): void => {
@@ -128,7 +126,7 @@ describe("cli run", (): void => {
     assert.deepEqual(Object.keys(parsed).sort(), ["command", "help", "ok"]);
     assert.equal(parsed.command, null);
     assert.equal(parsed.ok, true);
-    assert.match(parsed.help, /Usage: migratorosaurus/);
+    assert.match(parsed.help, /Usage: pg-migrate/);
     assert.equal(result.stderr, "");
   });
 
@@ -250,7 +248,7 @@ DELETE FROM cli_validate_person;
           line,
         ): {
           error?: { message?: string };
-          fields?: { migratorosaurus?: { correlation_id?: string } };
+          fields?: { pg_migrate?: { correlation_id?: string } };
           message?: string;
         } => JSON.parse(line),
       );
@@ -264,14 +262,13 @@ DELETE FROM cli_validate_person;
     assert.ok(
       logs.every(
         (log): boolean =>
-          typeof log.fields?.migratorosaurus?.correlation_id === "string",
+          typeof log.fields?.pg_migrate?.correlation_id === "string",
       ),
     );
     assert.equal(
       new Set(
         logs.map(
-          (log): string | undefined =>
-            log.fields?.migratorosaurus?.correlation_id,
+          (log): string | undefined => log.fields?.pg_migrate?.correlation_id,
         ),
       ).size,
       1,
@@ -301,7 +298,7 @@ DELETE FROM cli_validate_person;
           line,
         ): {
           event?: { action?: string };
-          fields?: { migratorosaurus?: { command?: string } };
+          fields?: { pg_migrate?: { command?: string } };
           level?: string;
         } => JSON.parse(line),
       );
@@ -310,7 +307,7 @@ DELETE FROM cli_validate_person;
         (log): boolean =>
           log.level === "debug" &&
           log.event?.action === "command.options" &&
-          log.fields?.migratorosaurus?.command === "create",
+          log.fields?.pg_migrate?.command === "create",
       ),
     );
   });

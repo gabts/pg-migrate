@@ -9,7 +9,7 @@ function record(overrides: Partial<LogRecord> = {}): LogRecord {
     },
     level: "info",
     message: "hello",
-    service: { name: "migratorosaurus" },
+    service: { name: "pg-migrate" },
     time: "2026-04-29T12:00:00.000Z",
     ...overrides,
   };
@@ -46,7 +46,7 @@ describe("writers", (): void => {
     writer.write(
       record({
         fields: {
-          migratorosaurus: {
+          pg_migrate: {
             circular,
             count: 1n,
           },
@@ -55,7 +55,7 @@ describe("writers", (): void => {
     );
 
     const parsed = JSON.parse(chunks[0]!);
-    assert.equal(parsed.fields.migratorosaurus.count, "1");
-    assert.equal(parsed.fields.migratorosaurus.circular.self, "[Circular]");
+    assert.equal(parsed.fields.pg_migrate.count, "1");
+    assert.equal(parsed.fields.pg_migrate.circular.self, "[Circular]");
   });
 });

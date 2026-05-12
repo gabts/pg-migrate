@@ -36,7 +36,7 @@
     "!dist/**/*.test.*"
   ],
   "bin": {
-    "migratorosaurus": "./bin/cli.js"
+    "pg-migrate": "./bin/cli.js"
   },
   "scripts": {
     "build": "tsc",

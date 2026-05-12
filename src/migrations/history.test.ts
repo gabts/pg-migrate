@@ -119,7 +119,7 @@ describe("history", (): void => {
 
       assert.deepEqual(logs, ["Creating migration history table"]);
       assert.deepEqual(records[0]?.fields, {
-        migratorosaurus: {
+        pg_migrate: {
           table: "migration_history",
         },
       });

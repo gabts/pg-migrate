@@ -10,7 +10,7 @@ if (!process.env.DATABASE_URL) {
 const databaseConfig: string | pg.ClientConfig = process.env.DATABASE_URL;
 const client = new pg.Client(databaseConfig);
 const defaultMigrationHistoryTable = "migration_history";
-const schemaMigrationHistorySchema = "migratorosaurus_test";
+const schemaMigrationHistorySchema = "pgmigrate_test";
 const qualifiedMigrationHistoryTable = `${schemaMigrationHistorySchema}.migration_history`;
 const createFile = "20260416090000_create.sql";
 const createVersion = "20260416090000";
@@ -163,7 +163,7 @@ describe("session", (): void => {
         withMigrationSession({
           clientConfig: databaseConfig,
           logger: noopLogger,
-          table: "missing_migratorosaurus_schema.migration_history",
+          table: "missing_pg_migrate_schema.migration_history",
           run: async (): Promise<void> => undefined,
         }),
     );
