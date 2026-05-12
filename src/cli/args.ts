@@ -40,6 +40,13 @@ const flagSpecs: readonly FlagSpec[] = [
   },
   {
     aliases: [],
+    canonical: "--env-file",
+    commands: "all",
+    kind: "value",
+    label: "Env file",
+  },
+  {
+    aliases: [],
     canonical: "--no-color",
     commands: "all",
     kind: "boolean",

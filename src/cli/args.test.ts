@@ -57,6 +57,12 @@ describe("args", (): void => {
       assert.equal(parsed.flags.get("--directory"), "migrations");
     });
 
+    it("parses the global env file flag", (): void => {
+      const parsed = parseTokens(["--env-file", ".env.local"]);
+
+      assert.equal(parsed.flags.get("--env-file"), ".env.local");
+    });
+
     it("resolves value flag aliases to the canonical key", (): void => {
       const parsed = parseTokens(["-d", "migrations"]);
 
@@ -216,8 +222,20 @@ describe("args", (): void => {
 
   describe("assertValidTokens", (): void => {
     it("accepts global flags for any command", (): void => {
-      const createParsed = parseTokens(["create", "--verbose", "--json"]);
-      const upParsed = parseTokens(["up", "--verbose", "--json"]);
+      const createParsed = parseTokens([
+        "create",
+        "--verbose",
+        "--json",
+        "--env-file",
+        ".env.local",
+      ]);
+      const upParsed = parseTokens([
+        "up",
+        "--verbose",
+        "--json",
+        "--env-file",
+        ".env.local",
+      ]);
 
       assert.doesNotThrow((): void => {
         assertValidTokens(createParsed);
@@ -317,7 +335,13 @@ describe("args", (): void => {
     });
 
     it("accepts global flags when no command is given", (): void => {
-      const parsed = parseTokens(["--verbose", "--json", "--no-color"]);
+      const parsed = parseTokens([
+        "--verbose",
+        "--json",
+        "--no-color",
+        "--env-file",
+        ".env.local",
+      ]);
 
       assert.doesNotThrow((): void => {
         assertValidTokens(parsed);

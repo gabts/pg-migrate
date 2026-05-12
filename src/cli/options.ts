@@ -23,6 +23,14 @@ function buildClientConfig(connectionString: string): ClientConfig {
   };
 }
 
+function readCliRuntimeEnv(
+  parsed: ParsedTokens,
+): ReturnType<typeof readRuntimeEnv> {
+  return readRuntimeEnv(process.env, {
+    envFilePath: valueFlag(parsed, "--env-file"),
+  });
+}
+
 /**
  * Builds validated options for the create command from parsed CLI tokens.
  */
@@ -34,7 +42,7 @@ export function buildCreateOptions(
     throw new Error(`Unexpected argument: ${extraPositional[0]}`);
   }
 
-  const runtimeEnv = readRuntimeEnv();
+  const runtimeEnv = readCliRuntimeEnv(parsed);
 
   return {
     directory:
@@ -64,12 +72,12 @@ export function buildDatabaseRunOptions(
     );
   }
 
-  const runtimeEnv = readRuntimeEnv();
+  const runtimeEnv = readCliRuntimeEnv(parsed);
 
   const clientConfig = positionalUrl ?? flagUrl ?? runtimeEnv.databaseUrl;
   if (!clientConfig) {
     throw new Error(
-      `Database URL is required for ${command}; pass it as an argument, --url, or set DATABASE_URL`,
+      `Database URL is required for ${command}; pass it as an argument, --url, set DATABASE_URL, or add DATABASE_URL to .env`,
     );
   }
 

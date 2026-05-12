@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { parseTokens } from "./args.js";
 import {
   buildCreateOptions,
@@ -11,8 +14,12 @@ function withEnvVars<T>(
   fn: () => T,
 ): T {
   const originals = new Map<string, string | undefined>();
+  const isolatedEnv = {
+    PG_MIGRATE_ENV_FILE: "",
+    ...env,
+  };
 
-  for (const [key, value] of Object.entries(env)) {
+  for (const [key, value] of Object.entries(isolatedEnv)) {
     originals.set(key, process.env[key]);
 
     if (value === undefined) {
@@ -127,6 +134,43 @@ describe("options", (): void => {
         directory: "migrations",
         table: "migration_history",
       });
+    });
+
+    it("uses --env-file values when environment variables are omitted", (): void => {
+      const tempDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "pg_migrate-options-"),
+      );
+      const envFilePath = path.join(tempDir, ".env");
+      fs.writeFileSync(
+        envFilePath,
+        `
+DATABASE_URL=postgres://file/db
+MIGRATION_DIRECTORY=file/migrations
+`,
+      );
+      const parsed = parseTokens(["status", "--env-file", envFilePath]);
+
+      try {
+        const options = withEnvVars(
+          {
+            DATABASE_URL: undefined,
+            MIGRATION_DIRECTORY: undefined,
+          },
+          (): ReturnType<typeof buildDatabaseRunOptions> =>
+            buildDatabaseRunOptions(parsed, parsed.extraPositional, "status"),
+        );
+
+        assert.deepEqual(options, {
+          clientConfig: {
+            connectionString: "postgres://file/db",
+            connectionTimeoutMillis: 10_000,
+          },
+          directory: "file/migrations",
+          table: "migration_history",
+        });
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
     });
 
     it("uses MIGRATION_DIRECTORY when database command directory is omitted", (): void => {

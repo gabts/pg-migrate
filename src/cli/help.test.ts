@@ -31,6 +31,7 @@ describe("help", (): void => {
 
     assert.equal(writer.jsonValues.length, 0);
     assert.match(writer.textValues[0]!, /Usage: pg-migrate <command>/);
+    assert.match(writer.textValues[0]!, /--env-file <path>/);
   });
 
   it("writes command help text", (): void => {
