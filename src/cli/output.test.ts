@@ -32,7 +32,7 @@ function record(overrides: Partial<LogRecord>): LogRecord {
     },
     level: "error",
     message: "Migration failed",
-    service: { name: "migratorosaurus" },
+    service: { name: "pg-migrate" },
     time: "2026-04-29T12:00:00.000Z",
     ...overrides,
   };
@@ -49,7 +49,7 @@ describe("output", (): void => {
           action: "migration.failed",
         },
         fields: {
-          migratorosaurus: {
+          pg_migrate: {
             migration: {
               name: "20260416090000_create",
             },

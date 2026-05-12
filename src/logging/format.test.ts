@@ -9,7 +9,7 @@ function record(overrides: Partial<LogRecord>): LogRecord {
     },
     level: "info",
     message: "Migration run started",
-    service: { name: "migratorosaurus" },
+    service: { name: "pg-migrate" },
     time: "2026-04-29T12:00:00.000Z",
     ...overrides,
   };
@@ -63,7 +63,7 @@ describe("format", (): void => {
             duration: 41_000_000,
           },
           fields: {
-            migratorosaurus: {
+            pg_migrate: {
               migration: {
                 file: "20260416090000_create.sql",
                 name: "20260416090000_create",
@@ -86,7 +86,7 @@ describe("format", (): void => {
             action: "validation.summary",
           },
           fields: {
-            migratorosaurus: {
+            pg_migrate: {
               next_down_count: 1,
               pending_up_count: 3,
               rollbackable_down_count: 2,
@@ -107,7 +107,7 @@ describe("format", (): void => {
             action: "status.summary",
           },
           fields: {
-            migratorosaurus: {
+            pg_migrate: {
               applied_count: 2,
               initialized: true,
               pending_count: 1,
@@ -126,7 +126,7 @@ describe("format", (): void => {
       formatHumanLogRecord(
         record({
           fields: {
-            migratorosaurus: {
+            pg_migrate: {
               command: "up",
               directory: "migrations",
               dry_run: true,
@@ -142,7 +142,7 @@ describe("format", (): void => {
       formatHumanLogRecord(
         record({
           fields: {
-            migratorosaurus: {
+            pg_migrate: {
               has_sql: false,
               migration: {
                 name: "20260416090000_backfill",
@@ -210,7 +210,7 @@ describe("format", (): void => {
       formatHumanLogRecord(
         record({
           fields: {
-            migratorosaurus: {
+            pg_migrate: {
               dry_run: true,
               nested: { a: 1 },
               correlation_id: "correlation-1",
@@ -226,12 +226,12 @@ describe("format", (): void => {
     );
   });
 
-  it("ignores array-shaped migratorosaurus field groups", (): void => {
+  it("ignores array-shaped pg_migrate field groups", (): void => {
     assert.equal(
       formatHumanLogRecord(
         record({
           fields: {
-            migratorosaurus: ["not", "a", "field", "object"],
+            pg_migrate: ["not", "a", "field", "object"],
           },
           level: "debug",
           message: "Details",

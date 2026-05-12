@@ -78,7 +78,7 @@ The `up` section must contain SQL. The `down` marker is optional. If present, it
 ## CLI
 
 ```sh
-migratorosaurus --help
+pg-migrate --help
 ```
 
 The built-in CLI supports:
@@ -94,13 +94,13 @@ The CLI creates filenames in `<YYYYMMDDHHMMSS>_<slug>.sql` format.
 Useful commands:
 
 ```sh
-migratorosaurus create --help
-migratorosaurus create --directory sql/migrations --name add_users
-migratorosaurus validate --url postgres://localhost:5432/app
-migratorosaurus status --url postgres://localhost:5432/app
-migratorosaurus up --url postgres://localhost:5432/app
-migratorosaurus up --url postgres://localhost:5432/app --target 20260416090100
-migratorosaurus down --url postgres://localhost:5432/app --target 20260416090100_add_users.sql
+pg-migrate create --help
+pg-migrate create --directory sql/migrations --name add_users
+pg-migrate validate --url postgres://localhost:5432/app
+pg-migrate status --url postgres://localhost:5432/app
+pg-migrate up --url postgres://localhost:5432/app
+pg-migrate up --url postgres://localhost:5432/app --target 20260416090100
+pg-migrate down --url postgres://localhost:5432/app --target 20260416090100_add_users.sql
 ```
 
 Global CLI flags:

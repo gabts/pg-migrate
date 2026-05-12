@@ -22,7 +22,7 @@ function withMigrationDirectory(
   test: (directory: string) => void,
 ): void {
   const directory = fs.mkdtempSync(
-    path.join(os.tmpdir(), "migratorosaurus-migration-files-"),
+    path.join(os.tmpdir(), "pg_migrate-migration-files-"),
   );
 
   try {
@@ -328,7 +328,7 @@ CREATE TABLE person (id integer);
     it("throws when the migration directory does not exist", (): void => {
       const missingDirectory = path.join(
         os.tmpdir(),
-        "migratorosaurus-missing-directory",
+        "pg_migrate-missing-directory",
       );
 
       assert.throws((): void => {

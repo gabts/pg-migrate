@@ -26,7 +26,7 @@ function event(level: LogRecord["level"], message: string): LogRecord {
       action: `test.${level}`,
     },
     fields: {
-      migratorosaurus: {
+      pg_migrate: {
         value: level,
       },
     },
@@ -55,14 +55,14 @@ describe("logger", (): void => {
           action: "test.info",
         },
         fields: {
-          migratorosaurus: {
+          pg_migrate: {
             correlation_id: "correlation-1",
             value: "info",
           },
         },
         level: "info",
         message: "hello",
-        service: { name: "migratorosaurus" },
+        service: { name: "pg-migrate" },
         time: "2026-04-29T12:00:00.000Z",
       },
       {
@@ -70,14 +70,14 @@ describe("logger", (): void => {
           action: "test.warn",
         },
         fields: {
-          migratorosaurus: {
+          pg_migrate: {
             correlation_id: "correlation-1",
             value: "warn",
           },
         },
         level: "warn",
         message: "careful",
-        service: { name: "migratorosaurus" },
+        service: { name: "pg-migrate" },
         time: "2026-04-29T12:00:00.000Z",
       },
       {
@@ -85,14 +85,14 @@ describe("logger", (): void => {
           action: "test.error",
         },
         fields: {
-          migratorosaurus: {
+          pg_migrate: {
             correlation_id: "correlation-1",
             value: "error",
           },
         },
         level: "error",
         message: "boom",
-        service: { name: "migratorosaurus" },
+        service: { name: "pg-migrate" },
         time: "2026-04-29T12:00:00.000Z",
       },
     ]);
@@ -177,7 +177,7 @@ describe("logger", (): void => {
         outcome: "success",
       },
       fields: {
-        migratorosaurus: {
+        pg_migrate: {
           migration: {
             file: "20260416090000_create.sql",
           },
@@ -194,7 +194,7 @@ describe("logger", (): void => {
         outcome: "success",
       },
       fields: {
-        migratorosaurus: {
+        pg_migrate: {
           correlation_id: "correlation-1",
           migration: {
             file: "20260416090000_create.sql",
@@ -204,7 +204,7 @@ describe("logger", (): void => {
       level: "info",
       message: "Migration applied",
       service: {
-        name: "migratorosaurus",
+        name: "pg-migrate",
         version: "2.0.0",
       },
       time: "2026-04-29T12:00:00.000Z",
@@ -227,13 +227,13 @@ describe("logger", (): void => {
       level: "info",
       message: "hello",
       service: {
-        name: "other" as "migratorosaurus",
+        name: "other" as "pg-migrate",
         version: "1.0.0",
       },
     });
 
     assert.deepEqual(capture.chunks[0]?.service, {
-      name: "migratorosaurus",
+      name: "pg-migrate",
       version: "2.0.0",
     });
   });
@@ -251,7 +251,7 @@ describe("logger", (): void => {
         action: "test.info",
       },
       fields: {
-        migratorosaurus: {
+        pg_migrate: {
           correlation_id: "other",
         },
       },
@@ -259,7 +259,7 @@ describe("logger", (): void => {
       message: "hello",
     });
 
-    assert.deepEqual(capture.chunks[0]?.fields?.migratorosaurus, {
+    assert.deepEqual(capture.chunks[0]?.fields?.pg_migrate, {
       correlation_id: "correlation-1",
     });
   });

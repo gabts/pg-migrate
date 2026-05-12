@@ -16,7 +16,7 @@ describe("events", (): void => {
           action: "up.started",
         },
         fields: {
-          migratorosaurus: {
+          pg_migrate: {
             command: "up",
             directory: "migrations",
             dry_run: true,
@@ -34,7 +34,7 @@ describe("events", (): void => {
         command: "validate",
         directory: "migrations",
         table: "migration_history",
-      }).fields?.migratorosaurus,
+      }).fields?.pg_migrate,
       {
         command: "validate",
         directory: "migrations",
@@ -61,7 +61,7 @@ describe("events", (): void => {
         action: "migrations.planned",
       },
       fields: {
-        migratorosaurus: {
+        pg_migrate: {
           step_count: 2,
         },
       },
@@ -78,7 +78,7 @@ describe("events", (): void => {
         action: "migration.applying",
       },
       fields: {
-        migratorosaurus: {
+        pg_migrate: {
           migration: {
             direction: "up",
             file: "20260416090000_create.sql",
@@ -108,7 +108,7 @@ describe("events", (): void => {
           outcome: "failure",
         },
         fields: {
-          migratorosaurus: {
+          pg_migrate: {
             migration: {
               direction: "down",
               file: "20260416090000_create.sql",
@@ -134,7 +134,7 @@ describe("events", (): void => {
           outcome: "success",
         },
         fields: {
-          migratorosaurus: {
+          pg_migrate: {
             migration: {
               direction: "up",
               file: "20260416090000_create.sql",
@@ -158,7 +158,7 @@ describe("events", (): void => {
           action: "migration.reverting",
         },
         fields: {
-          migratorosaurus: {
+          pg_migrate: {
             has_sql: false,
             migration: {
               direction: "down",
@@ -186,7 +186,7 @@ describe("events", (): void => {
           outcome: "success",
         },
         fields: {
-          migratorosaurus: {
+          pg_migrate: {
             has_sql: true,
             migration: {
               direction: "down",
@@ -216,7 +216,7 @@ describe("events", (): void => {
           outcome: "success",
         },
         fields: {
-          migratorosaurus: {
+          pg_migrate: {
             applied_count: 2,
             initialized: true,
             pending_count: 1,
@@ -239,7 +239,7 @@ describe("events", (): void => {
           outcome: "success",
         },
         fields: {
-          migratorosaurus: {
+          pg_migrate: {
             next_down_count: 1,
             pending_up_count: 3,
             rollbackable_down_count: 2,
@@ -258,7 +258,7 @@ describe("events", (): void => {
         outcome: "failure",
       },
       fields: {
-        migratorosaurus: {
+        pg_migrate: {
           command: null,
         },
       },
@@ -273,7 +273,7 @@ describe("events", (): void => {
         action: "command.options",
       },
       fields: {
-        migratorosaurus: {
+        pg_migrate: {
           json: true,
         },
       },
@@ -286,7 +286,7 @@ describe("events", (): void => {
         action: "run.options",
       },
       fields: {
-        migratorosaurus: {
+        pg_migrate: {
           dry_run: false,
         },
       },
@@ -299,7 +299,7 @@ describe("events", (): void => {
         action: "migration_history_table.creating",
       },
       fields: {
-        migratorosaurus: {
+        pg_migrate: {
           table: "migration_history",
         },
       },
@@ -312,7 +312,7 @@ describe("events", (): void => {
         action: "migration.target_selected",
       },
       fields: {
-        migratorosaurus: {
+        pg_migrate: {
           migration: {
             file: "20260416090000_create.sql",
             name: "20260416090000_create",
@@ -335,7 +335,7 @@ describe("events", (): void => {
           outcome: "success",
         },
         fields: {
-          migratorosaurus: {
+          pg_migrate: {
             migration: {
               direction: "up",
               file: "20260416090000_create.sql",

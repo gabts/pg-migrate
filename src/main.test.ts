@@ -56,9 +56,7 @@ WHERE name IN ('gabriel', 'david', 'frasse');
 `;
 
 function createMigrationDirectory(files: Record<string, string> = {}): string {
-  const directory = fs.mkdtempSync(
-    path.join(os.tmpdir(), "migratorosaurus-main-"),
-  );
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "pg_migrate-main-"));
   tempMigrationDirectories.push(directory);
 
   for (const [file, content] of Object.entries(files)) {
@@ -609,7 +607,7 @@ UPDATE person SET name = lower(name);
   });
 
   it("up and down with a schema-qualified migration history table", async (): Promise<void> => {
-    const schema = "migratorosaurus_main_test";
+    const schema = "pgmigrate_main_test";
     const table = `${schema}.migration_history`;
     const directory = createStandardMigrationDirectory();
 
@@ -702,7 +700,7 @@ UPDATE person SET name = lower(name);
   });
 
   it("validate supports schema-qualified migration history tables", async (): Promise<void> => {
-    const schema = "migratorosaurus_validate_test";
+    const schema = "pgmigrate_validate_test";
     const table = `${schema}.migration_history`;
     const directory = createStandardMigrationDirectory();
 
@@ -949,7 +947,7 @@ DELETE FROM bulk_test WHERE value = ${i};
     });
 
     it("writes logs to stderr by default for up failures", async (): Promise<void> => {
-      const missingDirectory = createMissingDirectory("migratorosaurus-up-");
+      const missingDirectory = createMissingDirectory("pg_migrate-up-");
       const captured = await captureStderr(async (): Promise<void> => {
         await assert.rejects(
           (): Promise<void> =>
@@ -981,9 +979,7 @@ DELETE FROM bulk_test WHERE value = ${i};
     });
 
     it("logs abort message for validate failures", async (): Promise<void> => {
-      const missingDirectory = createMissingDirectory(
-        "migratorosaurus-validate-",
-      );
+      const missingDirectory = createMissingDirectory("pg_migrate-validate-");
       const captured = await captureStderr(async (): Promise<void> => {
         await assert.rejects(
           (): Promise<void> =>
@@ -998,7 +994,7 @@ DELETE FROM bulk_test WHERE value = ${i};
     });
 
     it("keeps abort logs in quiet mode while suppressing non-errors", async (): Promise<void> => {
-      const missingDirectory = createMissingDirectory("migratorosaurus-down-");
+      const missingDirectory = createMissingDirectory("pg_migrate-down-");
       const captured = await captureStderr(async (): Promise<void> => {
         await assert.rejects(
           (): Promise<void> =>
@@ -1015,7 +1011,7 @@ DELETE FROM bulk_test WHERE value = ${i};
 
     it("applies quiet and verbose filtering to custom log sinks", async (): Promise<void> => {
       const missingDirectory = createMissingDirectory(
-        "migratorosaurus-custom-log-sink-",
+        "pg_migrate-custom-log-sink-",
       );
       const records: LogRecord[] = [];
 
@@ -1037,7 +1033,7 @@ DELETE FROM bulk_test WHERE value = ${i};
 
     it("suppresses debug log sink records unless verbose is enabled", async (): Promise<void> => {
       const missingDirectory = createMissingDirectory(
-        "migratorosaurus-custom-log-sink-debug-",
+        "pg_migrate-custom-log-sink-debug-",
       );
       const records: LogRecord[] = [];
 

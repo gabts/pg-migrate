@@ -79,9 +79,7 @@ describe("commands", (): void => {
   let tempDir: string;
 
   beforeEach((): void => {
-    tempDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "migratorosaurus-command-"),
-    );
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pg_migrate-command-"));
   });
 
   afterEach((): void => {

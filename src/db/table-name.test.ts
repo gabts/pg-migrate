@@ -10,8 +10,8 @@ describe("table-name", (): void => {
     });
 
     it("parses schema-qualified table names", (): void => {
-      assert.deepEqual(parseTableName("migratorosaurus.migration_history"), {
-        schema: "migratorosaurus",
+      assert.deepEqual(parseTableName("pgmigrate.migration_history"), {
+        schema: "pgmigrate",
         table: "migration_history",
       });
     });
@@ -45,10 +45,10 @@ describe("table-name", (): void => {
     it("quotes and joins schema and table names", (): void => {
       assert.equal(
         qualifyTableName({
-          schema: "migratorosaurus",
+          schema: "pgmigrate",
           table: "migration_history",
         }),
-        '"migratorosaurus"."migration_history"',
+        '"pgmigrate"."migration_history"',
       );
     });
   });

@@ -53,13 +53,13 @@ function durationMs(record: LogRecord): number | undefined {
   return Math.round(record.event.duration / 1_000_000);
 }
 
-function migratorosaurusFields(record: LogRecord): LogFields {
-  const fields = record.fields?.migratorosaurus;
+function pgMigrateFields(record: LogRecord): LogFields {
+  const fields = record.fields?.pg_migrate;
   return isObject(fields) ? fields : {};
 }
 
 function migrationName(record: LogRecord): string | undefined {
-  const migration = migratorosaurusFields(record).migration;
+  const migration = pgMigrateFields(record).migration;
   if (!isObject(migration)) {
     return undefined;
   }
@@ -67,7 +67,7 @@ function migrationName(record: LogRecord): string | undefined {
 }
 
 function collectDetails(record: LogRecord): string[] {
-  const data = migratorosaurusFields(record);
+  const data = pgMigrateFields(record);
   const details: string[] = [];
   const detailKeys = new Set<string>();
   const migration = migrationName(record);

@@ -7,7 +7,7 @@ import { createMigration } from "./create.js";
 const fixedDate = new Date("2026-04-29T12:34:56.000Z");
 
 function createTempDirectory(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "migratorosaurus-create-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "pg_migrate-create-"));
 }
 
 describe("create", (): void => {

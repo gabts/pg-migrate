@@ -27,7 +27,7 @@ export interface LogRecord {
   level: LogLevel;
   message: string;
   service?: {
-    name: "migratorosaurus";
+    name: "pg-migrate";
     version?: string;
   };
   time?: string;

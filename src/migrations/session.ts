@@ -150,7 +150,7 @@ async function withLockedMigrationClient<T>(args: {
     );
     if (!lockResult.rows[0]?.acquired) {
       throw new Error(
-        `Could not acquire advisory lock for migration table "${table}". Another migratorosaurus process may already be running.`,
+        `Could not acquire advisory lock for migration table "${table}". Another pg-migrate process may already be running.`,
       );
     }
     lockKey = computedLockKey;

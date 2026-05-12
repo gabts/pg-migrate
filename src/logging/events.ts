@@ -73,7 +73,7 @@ function logRecord(args: {
       ? {}
       : {
           fields: {
-            migratorosaurus: args.domainFields,
+            pg_migrate: args.domainFields,
           },
         }),
     level: args.level,

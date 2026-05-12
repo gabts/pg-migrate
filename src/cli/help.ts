@@ -1,7 +1,7 @@
 import type { CommandName } from "./args.js";
 import type { CliResultWriter } from "./output.js";
 
-const helpText = `Usage: migratorosaurus <command> [options]
+const helpText = `Usage: pg-migrate <command> [options]
 
 Commands:
   up                Apply pending migrations
@@ -16,10 +16,10 @@ Global options:
   --verbose, -v             Show debug logs
   --no-color                Disable ANSI color in logs
 
-Run "migratorosaurus <command> --help" for command-specific usage.
+Run "pg-migrate <command> --help" for command-specific usage.
 `;
 
-const createHelpText = `Usage: migratorosaurus create --name <name> [options]
+const createHelpText = `Usage: pg-migrate create --name <name> [options]
 
 Options:
   -n, --name <name>         Migration name slug
@@ -37,11 +37,11 @@ Notes:
       -- migrate:down
 
 Examples:
-  migratorosaurus create --name create_users
-  migratorosaurus create --directory sql/migrations --name add_user_index
+  pg-migrate create --name create_users
+  pg-migrate create --directory sql/migrations --name add_user_index
 `;
 
-const upHelpText = `Usage: migratorosaurus up [options] [<database-url>]
+const upHelpText = `Usage: pg-migrate up [options] [<database-url>]
 
 Options:
   --url <database-url>      Database URL (alternative to positional URL)
@@ -62,13 +62,13 @@ Behavior:
   - --directory takes precedence over MIGRATION_DIRECTORY.
 
 Examples:
-  migratorosaurus up postgres://localhost:5432/app
-  migratorosaurus up --url postgres://localhost:5432/app --target 20260416090000
-  migratorosaurus up --url postgres://localhost:5432/app --target 20260416090000_create.sql
-  migratorosaurus up --dry-run
+  pg-migrate up postgres://localhost:5432/app
+  pg-migrate up --url postgres://localhost:5432/app --target 20260416090000
+  pg-migrate up --url postgres://localhost:5432/app --target 20260416090000_create.sql
+  pg-migrate up --dry-run
 `;
 
-const downHelpText = `Usage: migratorosaurus down [options] [<database-url>]
+const downHelpText = `Usage: pg-migrate down [options] [<database-url>]
 
 Options:
   --url <database-url>      Database URL (alternative to positional URL)
@@ -90,12 +90,12 @@ Behavior:
   - --directory takes precedence over MIGRATION_DIRECTORY.
 
 Examples:
-  migratorosaurus down postgres://localhost:5432/app
-  migratorosaurus down --target 20260416090000_create.sql
-  migratorosaurus down --dry-run
+  pg-migrate down postgres://localhost:5432/app
+  pg-migrate down --target 20260416090000_create.sql
+  pg-migrate down --dry-run
 `;
 
-const validateHelpText = `Usage: migratorosaurus validate [options] [<database-url>]
+const validateHelpText = `Usage: pg-migrate validate [options] [<database-url>]
 
 Options:
   --url <database-url>      Database URL (alternative to positional URL)
@@ -111,16 +111,16 @@ Behavior:
   - Validates migration files, order, and applied migration history consistency.
   - Checks database connectivity and migration history table state.
   - Does not create missing migration history tables.
-  - Uses the same advisory lock as up/down/status; fails fast if another migratorosaurus process holds it.
+  - Uses the same advisory lock as up/down/status; fails fast if another pg-migrate process holds it.
   - Provide exactly one of positional <database-url> or --url; otherwise DATABASE_URL is used.
   - --directory takes precedence over MIGRATION_DIRECTORY.
 
 Examples:
-  migratorosaurus validate postgres://localhost:5432/app
-  migratorosaurus validate --url postgres://localhost:5432/app --table migration_history
+  pg-migrate validate postgres://localhost:5432/app
+  pg-migrate validate --url postgres://localhost:5432/app --table migration_history
 `;
 
-const statusHelpText = `Usage: migratorosaurus status [options] [<database-url>]
+const statusHelpText = `Usage: pg-migrate status [options] [<database-url>]
 
 Options:
   --url <database-url>      Database URL (alternative to positional URL)
@@ -137,13 +137,13 @@ Behavior:
   - Current means the latest applied migration by file order.
   - Validates migration files and applied migration history consistency.
   - Does not create missing migration history tables; reports initialized=false instead.
-  - Uses the same advisory lock as up/down/validate; fails fast if another migratorosaurus process holds it.
+  - Uses the same advisory lock as up/down/validate; fails fast if another pg-migrate process holds it.
   - Provide exactly one of positional <database-url> or --url; otherwise DATABASE_URL is used.
   - --directory takes precedence over MIGRATION_DIRECTORY.
 
 Examples:
-  migratorosaurus status postgres://localhost:5432/app
-  migratorosaurus status --url postgres://localhost:5432/app --table migration_history
+  pg-migrate status postgres://localhost:5432/app
+  pg-migrate status --url postgres://localhost:5432/app --table migration_history
 `;
 
 function helpTextFor(command: CommandName | undefined): string {

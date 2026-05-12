@@ -39,14 +39,12 @@ function enrichFields(
   fields: LogFields | undefined,
   correlationId: string,
 ): LogFields {
-  const migratorosaurus = isLogFields(fields?.migratorosaurus)
-    ? fields.migratorosaurus
-    : {};
+  const pgMigrate = isLogFields(fields?.pg_migrate) ? fields.pg_migrate : {};
 
   return {
     ...(fields ?? {}),
-    migratorosaurus: {
-      ...migratorosaurus,
+    pg_migrate: {
+      ...pgMigrate,
       correlation_id: correlationId,
     },
   };
@@ -59,7 +57,7 @@ function enrichService(
   return {
     ...(service ?? {}),
     ...(serviceVersion === undefined ? {} : { version: serviceVersion }),
-    name: "migratorosaurus",
+    name: "pg-migrate",
   };
 }
 

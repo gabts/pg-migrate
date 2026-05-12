@@ -37,7 +37,7 @@ describe("cli process", (): void => {
   let tempDir: string;
 
   beforeEach((): void => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "migratorosaurus-cli-"));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pg_migrate-cli-"));
   });
 
   afterEach((): void => {
@@ -69,7 +69,7 @@ describe("cli process", (): void => {
     const errorResult = runCliRaw(["unknown"]);
 
     assert.equal(helpResult.status, 0);
-    assert.match(helpResult.stdout, /Usage: migratorosaurus/);
+    assert.match(helpResult.stdout, /Usage: pg-migrate/);
     assert.equal(errorResult.status, 1);
   });
 
