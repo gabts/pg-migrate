@@ -1,6 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
-import { assertValidMigrationName } from "./naming.js";
+import {
+  assertValidMigrationName,
+  getMigrationVersion,
+  isMigrationFilename,
+} from "./naming.js";
 
 /**
  * Options for creating a timestamped migration file.
@@ -20,6 +24,18 @@ function formatTimestamp(date = new Date()): string {
   const second = String(date.getUTCSeconds()).padStart(2, "0");
 
   return `${year}${month}${day}${hour}${minute}${second}`;
+}
+
+function readExistingMigrationVersions(directory: string): Set<string> {
+  const versions = new Set<string>();
+
+  for (const file of fs.readdirSync(directory)) {
+    if (isMigrationFilename(file)) {
+      versions.add(getMigrationVersion(file));
+    }
+  }
+
+  return versions;
 }
 
 /**
@@ -46,10 +62,14 @@ export function createMigration(opts: CreateMigrationOptions): string {
     throw new Error(`Migration path is not a directory: ${opts.directory}`);
   }
 
-  const filePath = path.join(
-    opts.directory,
-    `${formatTimestamp(opts.clock?.())}_${opts.name}.sql`,
-  );
+  const existingVersions = readExistingMigrationVersions(opts.directory);
+  const version = formatTimestamp(opts.clock?.());
+
+  if (existingVersions.has(version)) {
+    throw new Error(`Migration version already exists: ${version}`);
+  }
+
+  const filePath = path.join(opts.directory, `${version}_${opts.name}.sql`);
   const fileContent = "-- migrate:up\n\n-- migrate:down\n";
 
   try {
