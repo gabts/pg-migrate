@@ -14,10 +14,16 @@ interface ParsedMigrationSql {
   up: string;
 }
 
-const migrationMarkers = {
-  up: "-- migrate:up",
-  down: "-- migrate:down",
-};
+interface MigrationMarker {
+  direction: MigrationDirection;
+  end: number;
+  start: number;
+}
+
+const ignoredSqlPattern =
+  /(?<![A-Za-z0-9_$])[eE]'(?:''|\\[\s\S]|[^'\\])*'|\$([A-Za-z_][A-Za-z0-9_]*)\$[\s\S]*?\$\1\$|\$\$[\s\S]*?\$\$|'(?:''|[^'])*'|\/\*[\s\S]*?\*\//g;
+const migrationMarkerLinePattern =
+  /^[^\S\r\n]*--[^\S\r\n]*migrate:(up|down)[^\S\r\n]*(?:\r\n|\r|\n|$)/gm;
 
 async function readFileUtf8Strict(
   filePath: string,
@@ -33,51 +39,83 @@ async function readFileUtf8Strict(
 
 function hasOnlyCommentsAndWhitespace(sql: string): boolean {
   const commentOrWhitespacePattern =
-    /^(?:\s|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)*$/;
+    /^(?:\s|--[^\r\n]*(?:\r\n|\r|\n|$)|\/\*[\s\S]*?\*\/)*$/;
   return commentOrWhitespacePattern.test(sql);
 }
 
+function maskIgnoredSql(sql: string): string {
+  return sql.replace(ignoredSqlPattern, (match): string => {
+    return match.replace(/[^\r\n]/g, " ");
+  });
+}
+
+function findMigrationMarkers(sql: string): MigrationMarker[] {
+  const maskedSql = maskIgnoredSql(sql);
+  const markers: MigrationMarker[] = [];
+  const matches = maskedSql.matchAll(migrationMarkerLinePattern);
+
+  for (const markerMatch of matches) {
+    const direction = markerMatch[1] as MigrationDirection;
+    const start = markerMatch.index;
+    const text = markerMatch[0];
+
+    if (start === undefined) {
+      continue;
+    }
+
+    markers.push({
+      direction,
+      end: start + text.length,
+      start,
+    });
+  }
+
+  return markers;
+}
+
 function parseMigrationSections(sql: string, file: string): ParsedMigrationSql {
-  const upMarker = migrationMarkers.up;
-  const downMarker = migrationMarkers.down;
-  const upMarkerIndex = sql.indexOf(upMarker);
-  const downMarkerIndex = sql.indexOf(downMarker);
+  const markers = findMigrationMarkers(sql);
+  const upMarkers = markers.filter(
+    (marker): boolean => marker.direction === "up",
+  );
+  const downMarkers = markers.filter(
+    (marker): boolean => marker.direction === "down",
+  );
 
-  if (upMarkerIndex === -1) {
+  if (upMarkers.length > 1) {
+    throw new Error(`Duplicate migrate:up marker in migration file: ${file}`);
+  }
+
+  if (downMarkers.length > 1) {
+    throw new Error(`Duplicate migrate:down marker in migration file: ${file}`);
+  }
+
+  const upMarker = upMarkers[0];
+  if (!upMarker) {
     throw new Error(`Invalid migration file contents: ${file}`);
   }
 
-  if (
-    sql.indexOf(upMarker, upMarkerIndex + upMarker.length) !== -1 ||
-    (downMarkerIndex !== -1 &&
-      sql.indexOf(downMarker, downMarkerIndex + downMarker.length) !== -1)
-  ) {
-    throw new Error(`Invalid migration file contents: ${file}`);
-  }
+  const downMarker = downMarkers[0];
+  const firstMarker =
+    downMarker && downMarker.start < upMarker.start ? downMarker : upMarker;
 
-  const firstMarkerIndex =
-    downMarkerIndex === -1
-      ? upMarkerIndex
-      : Math.min(upMarkerIndex, downMarkerIndex);
-
-  if (!hasOnlyCommentsAndWhitespace(sql.slice(0, firstMarkerIndex))) {
+  if (!hasOnlyCommentsAndWhitespace(sql.slice(0, firstMarker.start))) {
     throw new Error(`Unexpected content before up marker in: ${file}`);
   }
 
   const upSectionEnd =
-    downMarkerIndex !== -1 && downMarkerIndex > upMarkerIndex
-      ? downMarkerIndex
+    downMarker && downMarker.start > upMarker.start
+      ? downMarker.start
       : sql.length;
-  const upSql = sql.slice(upMarkerIndex + upMarker.length, upSectionEnd).trim();
-  const downSql =
-    downMarkerIndex === -1
-      ? ""
-      : sql
-          .slice(
-            downMarkerIndex + downMarker.length,
-            upMarkerIndex > downMarkerIndex ? upMarkerIndex : sql.length,
-          )
-          .trim();
+  const upSql = sql.slice(upMarker.end, upSectionEnd).trim();
+  const downSql = !downMarker
+    ? ""
+    : sql
+        .slice(
+          downMarker.end,
+          upMarker.start > downMarker.start ? upMarker.start : sql.length,
+        )
+        .trim();
 
   if (!upSql) {
     throw new Error(`Invalid migration file contents: ${file}`);
