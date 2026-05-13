@@ -294,7 +294,7 @@ describe("events", (): void => {
       message: "Run options parsed",
     });
 
-    assert.deepEqual(events.historyTableCreating("migration_history"), {
+    assert.deepEqual(events.migrationsTableCreating("migration_history"), {
       event: {
         action: "migration_history_table.creating",
       },

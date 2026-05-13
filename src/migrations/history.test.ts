@@ -3,9 +3,9 @@ import type * as pg from "pg";
 import type { Logger } from "../logging/logger.js";
 import type { LogRecord } from "../logging/schema.js";
 import {
-  assertMigrationHistoryTableShape,
-  ensureMigrationHistory,
-  migrationHistoryExists,
+  assertMigrationsTableShape,
+  ensureMigrationsTable,
+  migrationsTableExists,
   readAppliedRows,
   readAppliedStatusRows,
 } from "./history.js";
@@ -48,7 +48,7 @@ function createEnsureFakeClient(plan: EnsurePlan): {
 }
 
 describe("history", (): void => {
-  describe("migrationHistoryExists", (): void => {
+  describe("migrationsTableExists", (): void => {
     it("checks whether the qualified history table exists", async (): Promise<void> => {
       const queries: Array<{ sql: string; params?: unknown[] }> = [];
       const client = {
@@ -61,10 +61,7 @@ describe("history", (): void => {
         },
       } as unknown as pg.Client;
 
-      const exists = await migrationHistoryExists(
-        client,
-        '"migration_history"',
-      );
+      const exists = await migrationsTableExists(client, '"migration_history"');
 
       assert.equal(exists, true);
       assert.deepEqual(queries, [
@@ -83,7 +80,7 @@ describe("history", (): void => {
       } as unknown as pg.Client;
 
       assert.equal(
-        await migrationHistoryExists(client, '"migration_history"'),
+        await migrationsTableExists(client, '"migration_history"'),
         false,
       );
     });
@@ -96,13 +93,13 @@ describe("history", (): void => {
       } as unknown as pg.Client;
 
       assert.equal(
-        await migrationHistoryExists(client, '"migration_history"'),
+        await migrationsTableExists(client, '"migration_history"'),
         false,
       );
     });
   });
 
-  describe("ensureMigrationHistory", (): void => {
+  describe("ensureMigrationsTable", (): void => {
     it("creates the history table with version columns and logs creation", async (): Promise<void> => {
       const { client, queries } = createEnsureFakeClient({
         tableExists: false,
@@ -110,7 +107,7 @@ describe("history", (): void => {
       const logs: string[] = [];
       const records: LogRecord[] = [];
 
-      await ensureMigrationHistory({
+      await ensureMigrationsTable({
         client,
         logger: createCapturedLogger(logs, records),
         qualifiedTableName: '"migration_history"',
@@ -142,7 +139,7 @@ describe("history", (): void => {
       });
       const logs: string[] = [];
 
-      await ensureMigrationHistory({
+      await ensureMigrationsTable({
         client,
         logger: createCapturedLogger(logs),
         qualifiedTableName: '"migration_history"',
@@ -267,7 +264,7 @@ describe("history", (): void => {
     });
   });
 
-  describe("assertMigrationHistoryTableShape", (): void => {
+  describe("assertMigrationsTableShape", (): void => {
     it("accepts tables with the expected columns", async (): Promise<void> => {
       const queries: string[] = [];
       const client = {
@@ -277,7 +274,7 @@ describe("history", (): void => {
         },
       } as unknown as pg.Client;
 
-      await assertMigrationHistoryTableShape({
+      await assertMigrationsTableShape({
         client,
         qualifiedTableName: '"migration_history"',
         table: "migration_history",
@@ -303,7 +300,7 @@ describe("history", (): void => {
 
       await assert.rejects(
         (): Promise<void> =>
-          assertMigrationHistoryTableShape({
+          assertMigrationsTableShape({
             client,
             qualifiedTableName: '"migration_history"',
             table: "migration_history",
@@ -324,7 +321,7 @@ describe("history", (): void => {
 
       await assert.rejects(
         (): Promise<void> =>
-          assertMigrationHistoryTableShape({
+          assertMigrationsTableShape({
             client,
             qualifiedTableName: '"migration_history"',
             table: "migration_history",

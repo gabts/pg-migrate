@@ -150,7 +150,7 @@ export function materializeSteps(
  */
 export function loadDiskMigrations(directory: string): LoadedMigrations {
   if (!fs.existsSync(directory) || !fs.statSync(directory).isDirectory()) {
-    throw new Error(`Migration directory does not exist: ${directory}`);
+    throw new Error(`Migrations directory does not exist: ${directory}`);
   }
 
   const files = fs.readdirSync(directory);

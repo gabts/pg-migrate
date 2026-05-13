@@ -11,9 +11,9 @@ if (!testDatabaseUrl) {
 
 const databaseConfig: string | pg.ClientConfig = testDatabaseUrl;
 const client = new pg.Client(databaseConfig);
-const defaultMigrationHistoryTable = "migration_history";
-const schemaMigrationHistorySchema = "pgmigrate_test";
-const qualifiedMigrationHistoryTable = `${schemaMigrationHistorySchema}.migration_history`;
+const defaultMigrationsTable = "schema_migrations";
+const migrationsTableSchema = "pgmigrate_test";
+const qualifiedMigrationsTable = `${migrationsTableSchema}.schema_migrations`;
 const createVersion = "20260416090000";
 
 const noopLogger: Logger = {
@@ -48,7 +48,7 @@ async function queryTableExists(tableName: string): Promise<boolean> {
 }
 
 async function queryHistory(
-  tableName = defaultMigrationHistoryTable,
+  tableName = defaultMigrationsTable,
 ): Promise<any[]> {
   const res = await client.query(
     `SELECT version, applied_at FROM ${tableName} ORDER BY version;`,
@@ -57,18 +57,16 @@ async function queryHistory(
 }
 
 async function dropTables(): Promise<void> {
-  await client.query(
-    `DROP SCHEMA IF EXISTS ${schemaMigrationHistorySchema} CASCADE;`,
-  );
+  await client.query(`DROP SCHEMA IF EXISTS ${migrationsTableSchema} CASCADE;`);
   await client.query(`
     DROP TABLE IF EXISTS
-      ${defaultMigrationHistoryTable},
+      ${defaultMigrationsTable},
       person;
   `);
 }
 
-async function createMigrationHistoryTable(
-  tableName = defaultMigrationHistoryTable,
+async function createMigrationsTable(
+  tableName = defaultMigrationsTable,
 ): Promise<void> {
   const [schema] = tableName.includes(".") ? tableName.split(".") : [undefined];
   if (schema) {
@@ -83,9 +81,9 @@ async function createMigrationHistoryTable(
   `);
 }
 
-async function createUnconstrainedMigrationHistoryTable(): Promise<void> {
+async function createUnconstrainedMigrationsTable(): Promise<void> {
   await client.query(`
-    CREATE TABLE ${defaultMigrationHistoryTable}
+    CREATE TABLE ${defaultMigrationsTable}
     (
       version text NOT NULL,
       applied_at timestamptz NOT NULL DEFAULT now()
@@ -93,9 +91,9 @@ async function createUnconstrainedMigrationHistoryTable(): Promise<void> {
   `);
 }
 
-async function createMissingVersionMigrationHistoryTable(): Promise<void> {
+async function createMissingVersionMigrationsTable(): Promise<void> {
   await client.query(`
-    CREATE TABLE ${defaultMigrationHistoryTable}
+    CREATE TABLE ${defaultMigrationsTable}
     (
       applied_at timestamptz NOT NULL DEFAULT now()
     );
@@ -122,7 +120,7 @@ describe("session", (): void => {
     const result = await withMigrationSession({
       clientConfig: databaseConfig,
       logger: createCapturedLogger(logs),
-      table: defaultMigrationHistoryTable,
+      table: defaultMigrationsTable,
       run: async ({ appliedRows }): Promise<string> => {
         assert.deepEqual(appliedRows, []);
         return "done";
@@ -131,26 +129,26 @@ describe("session", (): void => {
 
     assert.equal(result, "done");
     assert.deepEqual(logs, ["Creating migration history table"]);
-    assert.ok(await queryTableExists(defaultMigrationHistoryTable));
+    assert.ok(await queryTableExists(defaultMigrationsTable));
     assert.deepEqual(await queryHistory(), []);
   });
 
   it("uses existing schema-qualified migration history tables", async (): Promise<void> => {
-    await createMigrationHistoryTable(qualifiedMigrationHistoryTable);
+    await createMigrationsTable(qualifiedMigrationsTable);
 
     await withMigrationSession({
       clientConfig: databaseConfig,
       logger: noopLogger,
-      table: qualifiedMigrationHistoryTable,
+      table: qualifiedMigrationsTable,
       run: async ({ client: sessionClient }): Promise<void> => {
         await sessionClient.query(
-          `INSERT INTO ${qualifiedMigrationHistoryTable} (version) VALUES ($1);`,
+          `INSERT INTO ${qualifiedMigrationsTable} (version) VALUES ($1);`,
           [createVersion],
         );
       },
     });
 
-    const rows = await queryHistory(qualifiedMigrationHistoryTable);
+    const rows = await queryHistory(qualifiedMigrationsTable);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].version, createVersion);
   });
@@ -161,32 +159,32 @@ describe("session", (): void => {
         withMigrationSession({
           clientConfig: databaseConfig,
           logger: noopLogger,
-          table: "missing_pg_migrate_schema.migration_history",
+          table: "missing_pg_migrate_schema.schema_migrations",
           run: async (): Promise<void> => undefined,
         }),
     );
   });
 
   it("throws a clear schema error when version column is missing", async (): Promise<void> => {
-    await createMissingVersionMigrationHistoryTable();
+    await createMissingVersionMigrationsTable();
 
     await assert.rejects(
       (): Promise<void> =>
         withMigrationSession({
           clientConfig: databaseConfig,
           logger: noopLogger,
-          table: defaultMigrationHistoryTable,
+          table: defaultMigrationsTable,
           run: async (): Promise<void> => undefined,
         }),
-      /Invalid migration history table schema: migration_history\. Expected columns version, applied_at: column "version" does not exist/,
+      /Invalid migration history table schema: schema_migrations\. Expected columns version, applied_at: column "version" does not exist/,
     );
   });
 
   it("validates applied migration history before running", async (): Promise<void> => {
-    await createUnconstrainedMigrationHistoryTable();
+    await createUnconstrainedMigrationsTable();
     await client.query(
       `
-      INSERT INTO ${defaultMigrationHistoryTable} (version)
+      INSERT INTO ${defaultMigrationsTable} (version)
       VALUES
         ('${createVersion}'),
         ('${createVersion}');
@@ -199,7 +197,7 @@ describe("session", (): void => {
         withMigrationSession({
           clientConfig: databaseConfig,
           logger: noopLogger,
-          table: defaultMigrationHistoryTable,
+          table: defaultMigrationsTable,
           run: async (): Promise<void> => {
             didRun = true;
           },
@@ -212,7 +210,7 @@ describe("session", (): void => {
   it("status session reports a missing history table without creating it", async (): Promise<void> => {
     const result = await withMigrationStatusSession({
       clientConfig: databaseConfig,
-      table: defaultMigrationHistoryTable,
+      table: defaultMigrationsTable,
       run: async ({
         appliedRows,
         initialized,
@@ -231,19 +229,19 @@ describe("session", (): void => {
       initialized: false,
       rowCount: 0,
     });
-    assert.equal(await queryTableExists(defaultMigrationHistoryTable), false);
+    assert.equal(await queryTableExists(defaultMigrationsTable), false);
   });
 
   it("status session reads applied timestamps from an existing history table", async (): Promise<void> => {
-    await createMigrationHistoryTable();
+    await createMigrationsTable();
     await client.query(
-      `INSERT INTO ${defaultMigrationHistoryTable} (version) VALUES ($1);`,
+      `INSERT INTO ${defaultMigrationsTable} (version) VALUES ($1);`,
       [createVersion],
     );
 
     const result = await withMigrationStatusSession({
       clientConfig: databaseConfig,
-      table: defaultMigrationHistoryTable,
+      table: defaultMigrationsTable,
       run: async ({
         appliedRows,
         initialized,
@@ -274,7 +272,7 @@ describe("session", (): void => {
         withMigrationSession({
           clientConfig: databaseConfig,
           logger: createCapturedLogger(logs),
-          table: defaultMigrationHistoryTable,
+          table: defaultMigrationsTable,
           run: async (): Promise<void> => {
             throw new Error("runner failed");
           },
@@ -286,12 +284,12 @@ describe("session", (): void => {
     // The history table is created in its own transaction and survives
     // runner failures — only the failing migration's transaction is rolled
     // back, not the session setup.
-    assert.equal(await queryTableExists(defaultMigrationHistoryTable), true);
+    assert.equal(await queryTableExists(defaultMigrationsTable), true);
     assert.deepEqual(await queryHistory(), []);
   });
 
   it("fails fast when the advisory lock is already held", async (): Promise<void> => {
-    await createMigrationHistoryTable();
+    await createMigrationsTable();
     const lockClient = new pg.Client(databaseConfig);
 
     await lockClient.connect();
@@ -302,7 +300,7 @@ describe("session", (): void => {
       await lockClient.query("BEGIN;");
       lockTransactionOpen = true;
       await lockClient.query("SELECT pg_advisory_xact_lock(hashtext($1));", [
-        defaultMigrationHistoryTable,
+        defaultMigrationsTable,
       ]);
 
       await assert.rejects(
@@ -310,10 +308,10 @@ describe("session", (): void => {
           withMigrationSession({
             clientConfig: databaseConfig,
             logger: noopLogger,
-            table: defaultMigrationHistoryTable,
+            table: defaultMigrationsTable,
             run: async (): Promise<void> => undefined,
           }),
-        /Could not acquire advisory lock for migration table "migration_history"/,
+        /Could not acquire advisory lock for migration table "schema_migrations"/,
       );
     } finally {
       if (lockTransactionOpen) {
@@ -325,14 +323,14 @@ describe("session", (): void => {
 
   it("fails fast for schema-qualified aliases when the same lock key is held", async (): Promise<void> => {
     // The bare unqualified table name is used as the lock key, so
-    // "migration_history" and "public.migration_history" (or any
-    // <schema>.migration_history) all hash to the same advisory lock.
-    await createMigrationHistoryTable();
+    // "schema_migrations" and "public.schema_migrations" (or any
+    // <schema>.schema_migrations) all hash to the same advisory lock.
+    await createMigrationsTable();
 
     const currentSchemaResult = await client.query<{ schema: string }>(
       "SELECT current_schema() AS schema;",
     );
-    const qualifiedAlias = `${currentSchemaResult.rows[0]!.schema}.${defaultMigrationHistoryTable}`;
+    const qualifiedAlias = `${currentSchemaResult.rows[0]!.schema}.${defaultMigrationsTable}`;
 
     const lockClient = new pg.Client(databaseConfig);
     await lockClient.connect();
@@ -343,7 +341,7 @@ describe("session", (): void => {
       await lockClient.query("BEGIN;");
       lockTransactionOpen = true;
       await lockClient.query("SELECT pg_advisory_xact_lock(hashtext($1));", [
-        defaultMigrationHistoryTable,
+        defaultMigrationsTable,
       ]);
 
       await assert.rejects(

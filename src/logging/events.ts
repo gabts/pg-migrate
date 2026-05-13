@@ -108,7 +108,7 @@ export const events = {
       message: "Command options parsed",
     }),
 
-  historyTableCreating: (table: string): LogRecord =>
+  migrationsTableCreating: (table: string): LogRecord =>
     logRecord({
       action: "migration_history_table.creating",
       domainFields: {

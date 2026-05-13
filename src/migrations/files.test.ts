@@ -17,7 +17,7 @@ CREATE TABLE person (id integer);
 DROP TABLE person;
 `;
 
-function withMigrationDirectory(
+function withMigrationsDirectory(
   files: Record<string, string | Buffer>,
   test: (directory: string) => void,
 ): void {
@@ -146,7 +146,7 @@ CREATE TABLE person (id integer);
 
   describe("materializeSteps", (): void => {
     it("reads migration files and extracts SQL for the given direction", (): void => {
-      withMigrationDirectory(
+      withMigrationsDirectory(
         {
           "20260416090000_create_person.sql": validMigration,
           "20260416090100_add_column.sql": validMigration,
@@ -184,7 +184,7 @@ CREATE TABLE person (id integer);
     });
 
     it("throws when a migration file is not valid UTF-8", (): void => {
-      withMigrationDirectory(
+      withMigrationsDirectory(
         {
           "20260416090000_invalid_utf8.sql": Buffer.from([0xc3, 0x28]),
         },
@@ -204,7 +204,7 @@ DROP TABLE person;
 CREATE TABLE person (id integer);
 `;
 
-      withMigrationDirectory(
+      withMigrationsDirectory(
         {
           "20260416090000_create_person.sql": downBeforeUp,
         },
@@ -230,7 +230,7 @@ CREATE TABLE person (id integer);
     it("materializes empty down SQL for irreversible migrations", (): void => {
       const irreversibleMigration = `-- migrate:up\nINSERT INTO data SELECT generate_series(1, 1000);\n-- migrate:down\n`;
 
-      withMigrationDirectory(
+      withMigrationsDirectory(
         {
           "20260416090000_backfill.sql": irreversibleMigration,
         },
@@ -247,7 +247,7 @@ CREATE TABLE person (id integer);
     it("materializes empty down SQL when down marker is omitted", (): void => {
       const upOnlyMigration = `-- migrate:up\nINSERT INTO data SELECT generate_series(1, 1000);\n`;
 
-      withMigrationDirectory(
+      withMigrationsDirectory(
         {
           "20260416090000_backfill.sql": upOnlyMigration,
         },
@@ -264,7 +264,7 @@ CREATE TABLE person (id integer);
 
   describe("cached materialization", (): void => {
     it("reuses parsed SQL across directions", (): void => {
-      withMigrationDirectory(
+      withMigrationsDirectory(
         {
           "20260416090000_create_person.sql": validMigration,
           "20260416090100_add_column.sql": validMigration,
@@ -302,7 +302,7 @@ CREATE TABLE person (id integer);
     });
 
     it("throws when cached SQL is missing for a planned file", (): void => {
-      withMigrationDirectory(
+      withMigrationsDirectory(
         {
           "20260416090000_create_person.sql": validMigration,
         },
@@ -317,15 +317,15 @@ CREATE TABLE person (id integer);
   });
 
   describe("loadDiskMigrations", (): void => {
-    it("throws when the migration directory has no SQL files", (): void => {
-      withMigrationDirectory({}, (directory): void => {
+    it("throws when the migrations directory has no SQL files", (): void => {
+      withMigrationsDirectory({}, (directory): void => {
         assert.throws((): void => {
           loadDiskMigrations(directory);
         }, /No migration files found in directory/);
       });
     });
 
-    it("throws when the migration directory does not exist", (): void => {
+    it("throws when the migrations directory does not exist", (): void => {
       const missingDirectory = path.join(
         os.tmpdir(),
         "pg_migrate-missing-directory",
@@ -333,11 +333,11 @@ CREATE TABLE person (id integer);
 
       assert.throws((): void => {
         loadDiskMigrations(missingDirectory);
-      }, /Migration directory does not exist/);
+      }, /Migrations directory does not exist/);
     });
 
     it("loads SQL migration files in version order", (): void => {
-      withMigrationDirectory(
+      withMigrationsDirectory(
         {
           "20260416090002_second.sql": validMigration,
           "20260416090001_first.sql": validMigration,
@@ -381,7 +381,7 @@ CREATE TABLE person (id integer);
     });
 
     it("rejects invalid migration filenames", (): void => {
-      withMigrationDirectory(
+      withMigrationsDirectory(
         {
           "20260416090000_valid.sql": validMigration,
           "bad name.sql": validMigration,
@@ -395,7 +395,7 @@ CREATE TABLE person (id integer);
     });
 
     it("rejects duplicate migration versions across different files", (): void => {
-      withMigrationDirectory(
+      withMigrationsDirectory(
         {
           "20260416090000_add_users.sql": validMigration,
           "20260416090000_add_roles.sql": validMigration,
