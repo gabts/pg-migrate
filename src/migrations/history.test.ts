@@ -16,7 +16,7 @@ interface EnsurePlan {
 
 function createCapturedLogger(logs: string[], records?: LogRecord[]): Logger {
   return {
-    emit(event: LogRecord): void {
+    emit: (event: LogRecord): void => {
       logs.push(event.message);
       records?.push(event);
     },

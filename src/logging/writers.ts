@@ -80,7 +80,7 @@ function toJsonSafeValue(
  */
 export function createJsonLogWriter(stream: LogStream): LogSink {
   return {
-    write(record: LogRecord): void {
+    write: (record: LogRecord): void => {
       stream.write(appendNewline(serializeLogRecord(record)));
     },
   };

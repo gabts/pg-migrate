@@ -19,7 +19,7 @@ const noopLogger: Logger = {
 
 function createCapturedLogger(logs: string[]): Logger {
   return {
-    emit(event): void {
+    emit: (event): void => {
       logs.push(event.message);
     },
   };

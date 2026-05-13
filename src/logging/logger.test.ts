@@ -13,7 +13,7 @@ function createCapturedLogSink(): CapturedLogSink {
   return {
     chunks,
     sink: {
-      write(record: LogRecord): void {
+      write: (record: LogRecord): void => {
         chunks.push(record);
       },
     },
@@ -270,7 +270,7 @@ describe("logger", (): void => {
       clock: (): Date => new Date("2026-04-29T12:00:00.000Z"),
       correlationId: "correlation-1",
       sink: {
-        write(record: LogRecord): void {
+        write: (record: LogRecord): void => {
           records.push(record);
         },
       },

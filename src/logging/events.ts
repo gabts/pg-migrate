@@ -88,7 +88,7 @@ export const events = {
   commandFailed: (args: {
     command: MigrationCommand | "create" | null;
     error: unknown;
-  }): LogRecord =>
+  }) =>
     logRecord({
       action: "command.failed",
       domainFields: {
@@ -100,7 +100,7 @@ export const events = {
       outcome: "failure",
     }),
 
-  commandOptions: (data: Record<string, unknown>): LogRecord =>
+  commandOptions: (data: Record<string, unknown>) =>
     logRecord({
       action: "command.options",
       domainFields: data,
@@ -108,7 +108,7 @@ export const events = {
       message: "Command options parsed",
     }),
 
-  migrationsTableCreating: (table: string): LogRecord =>
+  migrationsTableCreating: (table: string) =>
     logRecord({
       action: "migration_history_table.creating",
       domainFields: {
@@ -118,7 +118,7 @@ export const events = {
       message: "Creating migration history table",
     }),
 
-  migrationApplied: (args: { durationMs: number; file: string }): LogRecord =>
+  migrationApplied: (args: { durationMs: number; file: string }) =>
     logRecord({
       action: "migration.applied",
       domainFields: migrationData(args.file, "up"),
@@ -128,7 +128,7 @@ export const events = {
       outcome: "success",
     }),
 
-  migrationApplying: (file: string): LogRecord =>
+  migrationApplying: (file: string) =>
     logRecord({
       action: "migration.applying",
       domainFields: migrationData(file, "up"),
@@ -141,7 +141,7 @@ export const events = {
     durationMs: number;
     error: unknown;
     file: string;
-  }): LogRecord =>
+  }) =>
     logRecord({
       action: "migration.failed",
       domainFields: migrationData(args.file, args.direction),
@@ -156,7 +156,7 @@ export const events = {
     durationMs: number;
     file: string;
     hasSql: boolean;
-  }): LogRecord =>
+  }) =>
     logRecord({
       action: "migration.reverted",
       domainFields: {
@@ -169,7 +169,7 @@ export const events = {
       outcome: "success",
     }),
 
-  migrationReverting: (args: { file: string; hasSql: boolean }): LogRecord =>
+  migrationReverting: (args: { file: string; hasSql: boolean }) =>
     logRecord({
       action: "migration.reverting",
       domainFields: {
@@ -183,7 +183,7 @@ export const events = {
   migrationTransactionRolledBack: (args: {
     direction: MigrationDirection;
     file: string;
-  }): LogRecord =>
+  }) =>
     logRecord({
       action: "migration_transaction.rolled_back",
       domainFields: migrationData(args.file, args.direction),
@@ -192,7 +192,7 @@ export const events = {
       outcome: "success",
     }),
 
-  noMigrationsToRollback: (): LogRecord =>
+  noMigrationsToRollback: () =>
     logRecord({
       action: "rollback.noop",
       level: "info",
@@ -200,7 +200,7 @@ export const events = {
       outcome: "success",
     }),
 
-  migrationStepsPlanned: (count: number): LogRecord =>
+  migrationStepsPlanned: (count: number) =>
     logRecord({
       action: "migrations.planned",
       domainFields: {
@@ -210,10 +210,7 @@ export const events = {
       message: "Migration steps planned",
     }),
 
-  runAborted: (args: {
-    command: MigrationCommand;
-    error: unknown;
-  }): LogRecord =>
+  runAborted: (args: { command: MigrationCommand; error: unknown }) =>
     logRecord({
       action: `${args.command}.aborted`,
       domainFields: {
@@ -225,7 +222,7 @@ export const events = {
       outcome: "failure",
     }),
 
-  runCompleted: (command: MigrationCommand): LogRecord =>
+  runCompleted: (command: MigrationCommand) =>
     logRecord({
       action: `${command}.completed`,
       domainFields: {
@@ -242,7 +239,7 @@ export const events = {
     dryRun?: boolean;
     table: string;
     target?: string;
-  }): LogRecord =>
+  }) =>
     logRecord({
       action: `${args.command}.started`,
       domainFields: {
@@ -256,7 +253,7 @@ export const events = {
       message: `${commandLabel(args.command)} started`,
     }),
 
-  runTelemetry: (data: Record<string, unknown>): LogRecord =>
+  runTelemetry: (data: Record<string, unknown>) =>
     logRecord({
       action: "run.options",
       domainFields: data,
@@ -264,7 +261,7 @@ export const events = {
       message: "Run options parsed",
     }),
 
-  targetSelected: (file: string): LogRecord =>
+  targetSelected: (file: string) =>
     logRecord({
       action: "migration.target_selected",
       domainFields: migrationData(file),
@@ -277,7 +274,7 @@ export const events = {
     initialized: boolean;
     pendingCount: number;
     totalCount: number;
-  }): LogRecord =>
+  }) =>
     logRecord({
       action: "status.summary",
       domainFields: {
@@ -295,7 +292,7 @@ export const events = {
     nextDownCount: number;
     pendingUpCount: number;
     rollbackableDownCount: number;
-  }): LogRecord =>
+  }) =>
     logRecord({
       action: "validation.summary",
       domainFields: {

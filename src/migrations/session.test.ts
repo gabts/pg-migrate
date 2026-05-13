@@ -17,12 +17,12 @@ const qualifiedMigrationsTable = `${migrationsTableSchema}.schema_migrations`;
 const createVersion = "20260416090000";
 
 const noopLogger: Logger = {
-  emit: (): void => undefined,
+  emit: () => undefined,
 };
 
 function createCapturedLogger(logs: string[]): Logger {
   return {
-    emit(event): void {
+    emit: (event): void => {
       logs.push(event.message);
     },
   };

@@ -209,18 +209,21 @@ PGM_MIGRATIONS_DIRECTORY=file/migrations
       for (const command of ["up", "down", "validate", "status"] as const) {
         const parsed = parseTokens([command]);
 
-        await withEnvVars({ PGM_DATABASE_URL: undefined }, async () => {
-          await assert.rejects(
-            async (): Promise<void> => {
-              await buildDatabaseRunOptions(
-                parsed,
-                parsed.extraPositional,
-                command,
-              );
-            },
-            new RegExp(`Database URL is required for ${command}`),
-          );
-        });
+        await withEnvVars(
+          { PGM_DATABASE_URL: undefined },
+          async (): Promise<void> => {
+            await assert.rejects(
+              async (): Promise<void> => {
+                await buildDatabaseRunOptions(
+                  parsed,
+                  parsed.extraPositional,
+                  command,
+                );
+              },
+              new RegExp(`Database URL is required for ${command}`),
+            );
+          },
+        );
       }
     });
   });

@@ -28,12 +28,7 @@ import {
 export type { ClientConfig } from "./db/types.js";
 export type { LogRecord } from "./logging/schema.js";
 export type { LogSink } from "./logging/writers.js";
-export type {
-  MigrationStatusItem,
-  MigrationStatusResult,
-  MigrationStatusState,
-  MigrationStatusSummary,
-} from "./migrations/status.js";
+export type { MigrationStatusResult } from "./migrations/status.js";
 
 /**
  * Runtime options shared by `up` and `down` migration commands.

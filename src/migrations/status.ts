@@ -5,29 +5,28 @@ import type {
   LoadedMigrations,
 } from "./types.js";
 
-export type MigrationStatusState = "applied" | "pending";
-
-export interface MigrationStatusItem {
+interface MigrationStatusItem {
   appliedAt: string | null;
   file: string;
   name: string;
-  state: MigrationStatusState;
+  state: "applied" | "pending";
   version: string;
 }
 
-export interface MigrationStatusSummary {
-  applied: number;
-  pending: number;
-  total: number;
-}
-
+/**
+ * Read-only migration status report for the configured database and directory.
+ */
 export interface MigrationStatusResult {
   current: MigrationStatusItem | null;
   directory: string;
   initialized: boolean;
   migrations: MigrationStatusItem[];
   next: MigrationStatusItem | null;
-  summary: MigrationStatusSummary;
+  summary: {
+    applied: number;
+    pending: number;
+    total: number;
+  };
   table: string;
 }
 

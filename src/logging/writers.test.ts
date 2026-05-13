@@ -19,7 +19,7 @@ describe("writers", (): void => {
   it("writes JSON lines", (): void => {
     const chunks: string[] = [];
     const writer = createJsonLogWriter({
-      write(chunk: string): boolean {
+      write: (chunk: string): boolean => {
         chunks.push(chunk);
         return true;
       },
@@ -35,7 +35,7 @@ describe("writers", (): void => {
   it("serializes non-JSON field values safely", (): void => {
     const chunks: string[] = [];
     const writer = createJsonLogWriter({
-      write(chunk: string): boolean {
+      write: (chunk: string): boolean => {
         chunks.push(chunk);
         return true;
       },
