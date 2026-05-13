@@ -119,14 +119,14 @@ Database commands accept a database URL in one of these ways:
 ```sh
 pg-migrate up postgres://localhost:5432/app
 pg-migrate up --url postgres://localhost:5432/app
-DATABASE_URL=postgres://localhost:5432/app pg-migrate up
+PGM_DATABASE_URL=postgres://localhost:5432/app pg-migrate up
 ```
 
 Or put it in a `.env` file in the current working directory:
 
 ```sh
-DATABASE_URL=postgres://localhost:5432/app
-MIGRATION_DIRECTORY=migrations
+PGM_DATABASE_URL=postgres://localhost:5432/app
+PGM_MIGRATION_DIRECTORY=migrations
 ```
 
 Then run:
@@ -144,13 +144,13 @@ Precedence:
 
 ### Environment Variables
 
-| Variable              | Used by                            | Default      |
-| --------------------- | ---------------------------------- | ------------ |
-| `DATABASE_URL`        | `up`, `down`, `status`, `validate` | none         |
-| `MIGRATION_DIRECTORY` | all commands                       | `migrations` |
-| `PG_MIGRATE_ENV_FILE` | all commands                       | `.env`       |
+| Variable                  | Used by                            | Default      |
+| ------------------------- | ---------------------------------- | ------------ |
+| `PGM_DATABASE_URL`        | `up`, `down`, `status`, `validate` | none         |
+| `PGM_MIGRATION_DIRECTORY` | all commands                       | `migrations` |
+| `PGM_ENV_FILE`            | all commands                       | `.env`       |
 
-`.env` files support simple `KEY=value` lines only. Line continuations, variable interpolation, and multi-line values are not supported. Set `PG_MIGRATE_ENV_FILE` to a custom path or an empty value to disable automatic `.env` loading.
+`.env` files support simple `KEY=value` lines only. Line continuations, variable interpolation, and multi-line values are not supported. Set `PGM_ENV_FILE` to a custom path or an empty value to disable automatic `.env` loading.
 
 ### History Table
 
@@ -216,16 +216,16 @@ pg-migrate create --name <name> [options]
 
 #### Flags
 
-| Flag                            | Required | Description                                                                          |
-| ------------------------------- | -------- | ------------------------------------------------------------------------------------ |
-| `--name <name>`, `-n <name>`    | yes      | Migration slug. Must match `[a-z0-9][a-z0-9_]*`.                                     |
-| `--directory <dir>`, `-d <dir>` | no       | Output directory. Defaults to `MIGRATION_DIRECTORY` (env or `.env`) or `migrations`. |
-| `--json`                        | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.              |
-| `--quiet`                       | no       | Suppress non-error logs.                                                             |
-| `--verbose`, `-v`               | no       | Enable debug logs.                                                                   |
-| `--env-file <path>`             | no       | Load environment variables from a custom env file.                                   |
-| `--no-color`                    | no       | Disable ANSI color in human-readable logs.                                           |
-| `--help`, `-h`                  | no       | Show command help.                                                                   |
+| Flag                            | Required | Description                                                                              |
+| ------------------------------- | -------- | ---------------------------------------------------------------------------------------- |
+| `--name <name>`, `-n <name>`    | yes      | Migration slug. Must match `[a-z0-9][a-z0-9_]*`.                                         |
+| `--directory <dir>`, `-d <dir>` | no       | Output directory. Defaults to `PGM_MIGRATION_DIRECTORY` (env or `.env`) or `migrations`. |
+| `--json`                        | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.                  |
+| `--quiet`                       | no       | Suppress non-error logs.                                                                 |
+| `--verbose`, `-v`               | no       | Enable debug logs.                                                                       |
+| `--env-file <path>`             | no       | Load environment variables from a custom env file.                                       |
+| `--no-color`                    | no       | Disable ANSI color in human-readable logs.                                               |
+| `--help`, `-h`                  | no       | Show command help.                                                                       |
 
 #### Behavior
 
@@ -262,19 +262,19 @@ pg-migrate up [options] [<database-url>]
 
 #### Flags
 
-| Flag                               | Required | Description                                                                             |
-| ---------------------------------- | -------- | --------------------------------------------------------------------------------------- |
-| `--url <database-url>`             | no       | Database URL. Alternative to positional `<database-url>`.                               |
-| `--directory <dir>`, `-d <dir>`    | no       | Migration directory. Defaults to `MIGRATION_DIRECTORY` (env or `.env`) or `migrations`. |
-| `--target <target>`, `-t <target>` | no       | Apply pending migrations up to and including this target.                               |
-| `--table <table-name>`             | no       | Migration history table. Defaults to `migration_history`.                               |
-| `--dry-run`                        | no       | Run planned SQL and history writes, then roll back.                                     |
-| `--json`                           | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.                 |
-| `--quiet`                          | no       | Suppress non-error logs.                                                                |
-| `--verbose`, `-v`                  | no       | Enable debug logs.                                                                      |
-| `--env-file <path>`                | no       | Load environment variables from a custom env file.                                      |
-| `--no-color`                       | no       | Disable ANSI color in human-readable logs.                                              |
-| `--help`, `-h`                     | no       | Show command help.                                                                      |
+| Flag                               | Required | Description                                                                                 |
+| ---------------------------------- | -------- | ------------------------------------------------------------------------------------------- |
+| `--url <database-url>`             | no       | Database URL. Alternative to positional `<database-url>`.                                   |
+| `--directory <dir>`, `-d <dir>`    | no       | Migration directory. Defaults to `PGM_MIGRATION_DIRECTORY` (env or `.env`) or `migrations`. |
+| `--target <target>`, `-t <target>` | no       | Apply pending migrations up to and including this target.                                   |
+| `--table <table-name>`             | no       | Migration history table. Defaults to `migration_history`.                                   |
+| `--dry-run`                        | no       | Run planned SQL and history writes, then roll back.                                         |
+| `--json`                           | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.                     |
+| `--quiet`                          | no       | Suppress non-error logs.                                                                    |
+| `--verbose`, `-v`                  | no       | Enable debug logs.                                                                          |
+| `--env-file <path>`                | no       | Load environment variables from a custom env file.                                          |
+| `--no-color`                       | no       | Disable ANSI color in human-readable logs.                                                  |
+| `--help`, `-h`                     | no       | Show command help.                                                                          |
 
 #### Target Format
 
@@ -355,19 +355,19 @@ pg-migrate down [options] [<database-url>]
 
 #### Flags
 
-| Flag                               | Required | Description                                                                             |
-| ---------------------------------- | -------- | --------------------------------------------------------------------------------------- |
-| `--url <database-url>`             | no       | Database URL. Alternative to positional `<database-url>`.                               |
-| `--directory <dir>`, `-d <dir>`    | no       | Migration directory. Defaults to `MIGRATION_DIRECTORY` (env or `.env`) or `migrations`. |
-| `--target <target>`, `-t <target>` | no       | Roll back newer migrations while leaving this target applied.                           |
-| `--table <table-name>`             | no       | Migration history table. Defaults to `migration_history`.                               |
-| `--dry-run`                        | no       | Run planned SQL and history writes, then roll back.                                     |
-| `--json`                           | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.                 |
-| `--quiet`                          | no       | Suppress non-error logs.                                                                |
-| `--verbose`, `-v`                  | no       | Enable debug logs.                                                                      |
-| `--env-file <path>`                | no       | Load environment variables from a custom env file.                                      |
-| `--no-color`                       | no       | Disable ANSI color in human-readable logs.                                              |
-| `--help`, `-h`                     | no       | Show command help.                                                                      |
+| Flag                               | Required | Description                                                                                 |
+| ---------------------------------- | -------- | ------------------------------------------------------------------------------------------- |
+| `--url <database-url>`             | no       | Database URL. Alternative to positional `<database-url>`.                                   |
+| `--directory <dir>`, `-d <dir>`    | no       | Migration directory. Defaults to `PGM_MIGRATION_DIRECTORY` (env or `.env`) or `migrations`. |
+| `--target <target>`, `-t <target>` | no       | Roll back newer migrations while leaving this target applied.                               |
+| `--table <table-name>`             | no       | Migration history table. Defaults to `migration_history`.                                   |
+| `--dry-run`                        | no       | Run planned SQL and history writes, then roll back.                                         |
+| `--json`                           | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.                     |
+| `--quiet`                          | no       | Suppress non-error logs.                                                                    |
+| `--verbose`, `-v`                  | no       | Enable debug logs.                                                                          |
+| `--env-file <path>`                | no       | Load environment variables from a custom env file.                                          |
+| `--no-color`                       | no       | Disable ANSI color in human-readable logs.                                                  |
+| `--help`, `-h`                     | no       | Show command help.                                                                          |
 
 #### Target Format
 
@@ -447,17 +447,17 @@ pg-migrate status [options] [<database-url>]
 
 #### Flags
 
-| Flag                            | Required | Description                                                                             |
-| ------------------------------- | -------- | --------------------------------------------------------------------------------------- |
-| `--url <database-url>`          | no       | Database URL. Alternative to positional `<database-url>`.                               |
-| `--directory <dir>`, `-d <dir>` | no       | Migration directory. Defaults to `MIGRATION_DIRECTORY` (env or `.env`) or `migrations`. |
-| `--table <table-name>`          | no       | Migration history table. Defaults to `migration_history`.                               |
-| `--json`                        | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.                 |
-| `--quiet`                       | no       | Suppress non-error logs.                                                                |
-| `--verbose`, `-v`               | no       | Enable debug logs.                                                                      |
-| `--env-file <path>`             | no       | Load environment variables from a custom env file.                                      |
-| `--no-color`                    | no       | Disable ANSI color in human-readable logs.                                              |
-| `--help`, `-h`                  | no       | Show command help.                                                                      |
+| Flag                            | Required | Description                                                                                 |
+| ------------------------------- | -------- | ------------------------------------------------------------------------------------------- |
+| `--url <database-url>`          | no       | Database URL. Alternative to positional `<database-url>`.                                   |
+| `--directory <dir>`, `-d <dir>` | no       | Migration directory. Defaults to `PGM_MIGRATION_DIRECTORY` (env or `.env`) or `migrations`. |
+| `--table <table-name>`          | no       | Migration history table. Defaults to `migration_history`.                                   |
+| `--json`                        | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.                     |
+| `--quiet`                       | no       | Suppress non-error logs.                                                                    |
+| `--verbose`, `-v`               | no       | Enable debug logs.                                                                          |
+| `--env-file <path>`             | no       | Load environment variables from a custom env file.                                          |
+| `--no-color`                    | no       | Disable ANSI color in human-readable logs.                                                  |
+| `--help`, `-h`                  | no       | Show command help.                                                                          |
 
 #### Behavior
 
@@ -521,17 +521,17 @@ pg-migrate validate [options] [<database-url>]
 
 #### Flags
 
-| Flag                            | Required | Description                                                                             |
-| ------------------------------- | -------- | --------------------------------------------------------------------------------------- |
-| `--url <database-url>`          | no       | Database URL. Alternative to positional `<database-url>`.                               |
-| `--directory <dir>`, `-d <dir>` | no       | Migration directory. Defaults to `MIGRATION_DIRECTORY` (env or `.env`) or `migrations`. |
-| `--table <table-name>`          | no       | Migration history table. Defaults to `migration_history`.                               |
-| `--json`                        | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.                 |
-| `--quiet`                       | no       | Suppress non-error logs.                                                                |
-| `--verbose`, `-v`               | no       | Enable debug logs.                                                                      |
-| `--env-file <path>`             | no       | Load environment variables from a custom env file.                                      |
-| `--no-color`                    | no       | Disable ANSI color in human-readable logs.                                              |
-| `--help`, `-h`                  | no       | Show command help.                                                                      |
+| Flag                            | Required | Description                                                                                 |
+| ------------------------------- | -------- | ------------------------------------------------------------------------------------------- |
+| `--url <database-url>`          | no       | Database URL. Alternative to positional `<database-url>`.                                   |
+| `--directory <dir>`, `-d <dir>` | no       | Migration directory. Defaults to `PGM_MIGRATION_DIRECTORY` (env or `.env`) or `migrations`. |
+| `--table <table-name>`          | no       | Migration history table. Defaults to `migration_history`.                                   |
+| `--json`                        | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.                     |
+| `--quiet`                       | no       | Suppress non-error logs.                                                                    |
+| `--verbose`, `-v`               | no       | Enable debug logs.                                                                          |
+| `--env-file <path>`             | no       | Load environment variables from a custom env file.                                          |
+| `--no-color`                    | no       | Disable ANSI color in human-readable logs.                                                  |
+| `--help`, `-h`                  | no       | Show command help.                                                                          |
 
 #### Behavior
 
@@ -619,7 +619,7 @@ npm run build:watch
 Run tests with a PostgreSQL database:
 
 ```sh
-DATABASE_URL="postgres://localhost:5432/database" npm run test
+PGM_DATABASE_URL="postgres://localhost:5432/database" npm run test
 ```
 
 ## License

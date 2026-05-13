@@ -3,11 +3,11 @@ import * as pg from "pg";
 import type { Logger } from "../logging/logger.js";
 import { withMigrationSession, withMigrationStatusSession } from "./session.js";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL must be set to run integration tests");
+if (!process.env.PGM_DATABASE_URL) {
+  throw new Error("PGM_DATABASE_URL must be set to run integration tests");
 }
 
-const databaseConfig: string | pg.ClientConfig = process.env.DATABASE_URL;
+const databaseConfig: string | pg.ClientConfig = process.env.PGM_DATABASE_URL;
 const client = new pg.Client(databaseConfig);
 const defaultMigrationHistoryTable = "migration_history";
 const schemaMigrationHistorySchema = "pgmigrate_test";

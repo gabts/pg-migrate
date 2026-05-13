@@ -9,8 +9,8 @@ describe("env", (): void => {
     assert.deepEqual(
       readRuntimeEnv(
         {
-          DATABASE_URL: "postgres://example/db",
-          MIGRATION_DIRECTORY: "sql/migrations",
+          PGM_DATABASE_URL: "postgres://example/db",
+          PGM_MIGRATION_DIRECTORY: "sql/migrations",
         },
         { envFilePath: false },
       ),
@@ -30,6 +30,23 @@ describe("env", (): void => {
     });
   });
 
+  it("ignores unprefixed runtime environment variables", (): void => {
+    assert.deepEqual(
+      readRuntimeEnv(
+        {
+          DATABASE_URL: "postgres://example/db",
+          MIGRATION_DIRECTORY: "sql/migrations",
+        },
+        { envFilePath: false },
+      ),
+      {
+        databaseUrl: undefined,
+        migrationDirectory: "migrations",
+        migrationHistoryTable: "migration_history",
+      },
+    );
+  });
+
   it("reads runtime values from an env file", (): void => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pg_migrate-env-"));
     const envFilePath = path.join(tempDir, ".env");
@@ -38,8 +55,8 @@ describe("env", (): void => {
       fs.writeFileSync(
         envFilePath,
         `
-DATABASE_URL=postgres://file/db
-MIGRATION_DIRECTORY=sql/migrations
+PGM_DATABASE_URL=postgres://file/db
+PGM_MIGRATION_DIRECTORY=sql/migrations
 `,
       );
 
@@ -60,7 +77,7 @@ MIGRATION_DIRECTORY=sql/migrations
     try {
       fs.writeFileSync(
         envFilePath,
-        "DATABASE_URL=postgres://file/db?sslmode=require&foo=bar\n",
+        "PGM_DATABASE_URL=postgres://file/db?sslmode=require&foo=bar\n",
       );
 
       assert.equal(
@@ -80,15 +97,15 @@ MIGRATION_DIRECTORY=sql/migrations
       fs.writeFileSync(
         envFilePath,
         `
-DATABASE_URL=postgres://file/db
-MIGRATION_DIRECTORY=file/migrations
+PGM_DATABASE_URL=postgres://file/db
+PGM_MIGRATION_DIRECTORY=file/migrations
 `,
       );
 
       assert.deepEqual(
         readRuntimeEnv(
           {
-            DATABASE_URL: "postgres://env/db",
+            PGM_DATABASE_URL: "postgres://env/db",
           },
           { envFilePath },
         ),
@@ -103,16 +120,16 @@ MIGRATION_DIRECTORY=file/migrations
     }
   });
 
-  it("uses PG_MIGRATE_ENV_FILE when provided", (): void => {
+  it("uses PGM_ENV_FILE when provided", (): void => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pg_migrate-env-"));
     const envFilePath = path.join(tempDir, "custom.env");
 
     try {
-      fs.writeFileSync(envFilePath, "DATABASE_URL=postgres://custom/db\n");
+      fs.writeFileSync(envFilePath, "PGM_DATABASE_URL=postgres://custom/db\n");
 
       assert.deepEqual(
         readRuntimeEnv({
-          PG_MIGRATE_ENV_FILE: envFilePath,
+          PGM_ENV_FILE: envFilePath,
         }),
         {
           databaseUrl: "postgres://custom/db",

@@ -16,15 +16,15 @@ import {
   type ValidateOptions,
 } from "./main.js";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL must be set to run integration tests");
+if (!process.env.PGM_DATABASE_URL) {
+  throw new Error("PGM_DATABASE_URL must be set to run integration tests");
 }
 
 function normalizeMs(s: string): string {
   return s.replace(/\d+ms/, "<ms>");
 }
 
-const databaseConfig: ClientConfig = process.env.DATABASE_URL;
+const databaseConfig: ClientConfig = process.env.PGM_DATABASE_URL;
 const client = new pg.Client(databaseConfig);
 const defaultMigrationHistoryTable = "migration_history";
 const tempMigrationDirectories: string[] = [];
@@ -318,11 +318,11 @@ describe("main", (): void => {
     await assertMigration1();
   });
 
-  it("up uses MIGRATION_DIRECTORY when directory is omitted", async (): Promise<void> => {
+  it("up uses PGM_MIGRATION_DIRECTORY when directory is omitted", async (): Promise<void> => {
     const directory = createStandardMigrationDirectory();
 
     await withEnvVars(
-      { MIGRATION_DIRECTORY: directory },
+      { PGM_MIGRATION_DIRECTORY: directory },
       async (): Promise<void> => {
         await runUp({});
       },
