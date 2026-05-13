@@ -38,7 +38,7 @@ describe("create", (): void => {
     );
   });
 
-  it("does not inspect existing SQL filenames before creating", (): void => {
+  it("ignores non-canonical SQL filenames while checking versions", (): void => {
     fs.writeFileSync(path.join(tempDir, "000_initial.sql"), "existing\n");
     fs.writeFileSync(path.join(tempDir, "bad name.sql"), "existing\n");
 
@@ -52,6 +52,22 @@ describe("create", (): void => {
       filePath,
       path.join(tempDir, "20260429123456_create_person.sql"),
     );
+  });
+
+  it("rejects two creates in the same second with different names", (): void => {
+    createMigration({
+      clock: (): Date => fixedDate,
+      directory: tempDir,
+      name: "create_person",
+    });
+
+    assert.throws((): void => {
+      createMigration({
+        clock: (): Date => fixedDate,
+        directory: tempDir,
+        name: "add_email",
+      });
+    }, /Migration version already exists: 20260429123456/);
   });
 
   it("requires a migration name", (): void => {
@@ -111,6 +127,6 @@ describe("create", (): void => {
 
     assert.throws((): void => {
       createMigration(options);
-    }, /Migration file already exists:/);
+    }, /Migration version already exists: 20260429123456/);
   });
 });
