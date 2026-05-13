@@ -103,7 +103,7 @@ describe("history", (): void => {
   });
 
   describe("ensureMigrationHistory", (): void => {
-    it("creates the history table with filename/version columns and logs creation", async (): Promise<void> => {
+    it("creates the history table with version columns and logs creation", async (): Promise<void> => {
       const { client, queries } = createEnsureFakeClient({
         tableExists: false,
       });
@@ -127,8 +127,7 @@ describe("history", (): void => {
         queries.some(
           ({ sql }): boolean =>
             sql.includes('CREATE TABLE "migration_history"') &&
-            sql.includes("filename text PRIMARY KEY") &&
-            sql.includes("version text NOT NULL"),
+            sql.includes("version text PRIMARY KEY"),
         ),
       );
       assert.equal(
@@ -163,7 +162,7 @@ describe("history", (): void => {
   });
 
   describe("readAppliedRows", (): void => {
-    it("loads rows from filename/version columns", async (): Promise<void> => {
+    it("loads rows from the version column", async (): Promise<void> => {
       const queries: string[] = [];
       const client = {
         query: async (sql: string): Promise<{ rows: unknown[] }> => {
@@ -171,7 +170,6 @@ describe("history", (): void => {
           return {
             rows: [
               {
-                filename: "20260416090000_create.sql",
                 version: "20260416090000",
               },
             ],
@@ -181,37 +179,11 @@ describe("history", (): void => {
 
       const rows = await readAppliedRows(client, '"migration_history"');
 
-      assert.deepEqual(rows, [
-        { filename: "20260416090000_create.sql", version: "20260416090000" },
-      ]);
+      assert.deepEqual(rows, [{ version: "20260416090000" }]);
       assert.ok(
         queries.some((sql): boolean =>
-          sql.includes(`SELECT filename, version FROM "migration_history"`),
+          sql.includes(`SELECT version FROM "migration_history"`),
         ),
-      );
-    });
-
-    it("validates and rejects duplicate applied rows", async (): Promise<void> => {
-      const client = {
-        query: async (): Promise<{ rows: unknown[] }> => {
-          return {
-            rows: [
-              {
-                filename: "20260416090000_create.sql",
-                version: "20260416090000",
-              },
-              {
-                filename: "20260416090000_create.sql",
-                version: "20260416090000",
-              },
-            ],
-          };
-        },
-      } as unknown as pg.Client;
-
-      await assert.rejects(
-        (): Promise<unknown> => readAppliedRows(client, '"migration_history"'),
-        /Duplicate applied migration file: 20260416090000_create\.sql/,
       );
     });
 
@@ -221,11 +193,9 @@ describe("history", (): void => {
           return {
             rows: [
               {
-                filename: "20260416090000_create.sql",
                 version: "20260416090000",
               },
               {
-                filename: "20260416090001_insert.sql",
                 version: "20260416090000",
               },
             ],
@@ -251,7 +221,6 @@ describe("history", (): void => {
             rows: [
               {
                 appliedAt,
-                filename: "20260416090000_create.sql",
                 version: "20260416090000",
               },
             ],
@@ -264,14 +233,13 @@ describe("history", (): void => {
       assert.deepEqual(rows, [
         {
           appliedAt,
-          filename: "20260416090000_create.sql",
           version: "20260416090000",
         },
       ]);
       assert.ok(
         queries.some((sql): boolean =>
           sql.includes(
-            `SELECT filename, version, applied_at AS "appliedAt" FROM "migration_history"`,
+            `SELECT version, applied_at AS "appliedAt" FROM "migration_history"`,
           ),
         ),
       );
@@ -284,7 +252,6 @@ describe("history", (): void => {
             rows: [
               {
                 appliedAt: "not a timestamp",
-                filename: "20260416090000_create.sql",
                 version: "20260416090000",
               },
             ],
@@ -295,7 +262,7 @@ describe("history", (): void => {
       await assert.rejects(
         (): Promise<unknown> =>
           readAppliedStatusRows(client, '"migration_history"'),
-        /Invalid applied migration timestamp for file "20260416090000_create\.sql": not a timestamp/,
+        /Invalid applied migration timestamp for version "20260416090000": not a timestamp/,
       );
     });
   });
@@ -319,7 +286,7 @@ describe("history", (): void => {
       assert.ok(
         queries.some((sql): boolean =>
           sql.includes(
-            'SELECT filename, version, applied_at FROM "migration_history" LIMIT 0;',
+            'SELECT version, applied_at FROM "migration_history" LIMIT 0;',
           ),
         ),
       );
@@ -341,7 +308,7 @@ describe("history", (): void => {
             qualifiedTableName: '"migration_history"',
             table: "migration_history",
           }),
-        /Invalid migration history table schema: migration_history\. Expected columns filename, version, applied_at: column "version" does not exist/,
+        /Invalid migration history table schema: migration_history\. Expected columns version, applied_at: column "version" does not exist/,
       );
     });
 

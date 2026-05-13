@@ -45,8 +45,8 @@ async function executeUpPlanSteps(args: ExecutePlanArgs): Promise<void> {
         work: async (): Promise<void> => {
           await client.query(sql);
           await client.query(
-            `INSERT INTO ${qualifiedTableName} ( filename, version, applied_at ) VALUES ( $1, $2, clock_timestamp() );`,
-            [file, version],
+            `INSERT INTO ${qualifiedTableName} ( version, applied_at ) VALUES ( $1, clock_timestamp() );`,
+            [version],
           );
         },
       });
@@ -84,6 +84,7 @@ async function executeDownPlanSteps(args: ExecutePlanArgs): Promise<void> {
 
   for (const { file, sql } of steps) {
     const hasSql = sql !== "";
+    const version = getMigrationVersion(file);
     const usesTransaction = !dryRun && hasSql;
     logger.emit(events.migrationReverting({ file, hasSql }));
     const started = Date.now();
@@ -97,8 +98,8 @@ async function executeDownPlanSteps(args: ExecutePlanArgs): Promise<void> {
             await client.query(sql);
           }
           await client.query(
-            `DELETE FROM ${qualifiedTableName} WHERE filename = $1;`,
-            [file],
+            `DELETE FROM ${qualifiedTableName} WHERE version = $1;`,
+            [version],
           );
         },
       });

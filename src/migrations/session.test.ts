@@ -12,7 +12,6 @@ const client = new pg.Client(databaseConfig);
 const defaultMigrationHistoryTable = "migration_history";
 const schemaMigrationHistorySchema = "pgmigrate_test";
 const qualifiedMigrationHistoryTable = `${schemaMigrationHistorySchema}.migration_history`;
-const createFile = "20260416090000_create.sql";
 const createVersion = "20260416090000";
 
 const noopLogger: Logger = {
@@ -50,7 +49,7 @@ async function queryHistory(
   tableName = defaultMigrationHistoryTable,
 ): Promise<any[]> {
   const res = await client.query(
-    `SELECT filename AS file, version, applied_at FROM ${tableName} ORDER BY filename;`,
+    `SELECT version, applied_at FROM ${tableName} ORDER BY version;`,
   );
   return res.rows;
 }
@@ -76,18 +75,16 @@ async function createMigrationHistoryTable(
   await client.query(`
     CREATE TABLE ${tableName}
     (
-      filename text PRIMARY KEY,
-      version text NOT NULL,
+      version text PRIMARY KEY,
       applied_at timestamptz NOT NULL DEFAULT now()
     );
   `);
 }
 
-async function createMalformedMigrationHistoryTable(): Promise<void> {
+async function createUnconstrainedMigrationHistoryTable(): Promise<void> {
   await client.query(`
     CREATE TABLE ${defaultMigrationHistoryTable}
     (
-      filename text NOT NULL,
       version text NOT NULL,
       applied_at timestamptz NOT NULL DEFAULT now()
     );
@@ -98,7 +95,6 @@ async function createMissingVersionMigrationHistoryTable(): Promise<void> {
   await client.query(`
     CREATE TABLE ${defaultMigrationHistoryTable}
     (
-      filename text PRIMARY KEY,
       applied_at timestamptz NOT NULL DEFAULT now()
     );
   `);
@@ -146,15 +142,15 @@ describe("session", (): void => {
       table: qualifiedMigrationHistoryTable,
       run: async ({ client: sessionClient }): Promise<void> => {
         await sessionClient.query(
-          `INSERT INTO ${qualifiedMigrationHistoryTable} (filename, version) VALUES ($1, $2);`,
-          [createFile, createVersion],
+          `INSERT INTO ${qualifiedMigrationHistoryTable} (version) VALUES ($1);`,
+          [createVersion],
         );
       },
     });
 
     const rows = await queryHistory(qualifiedMigrationHistoryTable);
     assert.equal(rows.length, 1);
-    assert.equal(rows[0].file, createFile);
+    assert.equal(rows[0].version, createVersion);
   });
 
   it("requires missing schema-qualified migration history schemas to exist", async (): Promise<void> => {
@@ -180,18 +176,18 @@ describe("session", (): void => {
           table: defaultMigrationHistoryTable,
           run: async (): Promise<void> => undefined,
         }),
-      /Invalid migration history table schema: migration_history\. Expected columns filename, version, applied_at: column "version" does not exist/,
+      /Invalid migration history table schema: migration_history\. Expected columns version, applied_at: column "version" does not exist/,
     );
   });
 
   it("validates applied migration history before running", async (): Promise<void> => {
-    await createMalformedMigrationHistoryTable();
+    await createUnconstrainedMigrationHistoryTable();
     await client.query(
       `
-      INSERT INTO ${defaultMigrationHistoryTable} (filename, version)
+      INSERT INTO ${defaultMigrationHistoryTable} (version)
       VALUES
-        ('${createFile}', '${createVersion}'),
-        ('${createFile}', '20260416090001');
+        ('${createVersion}'),
+        ('${createVersion}');
     `,
     );
 
@@ -206,7 +202,7 @@ describe("session", (): void => {
             didRun = true;
           },
         }),
-      /Duplicate applied migration file: 20260416090000_create\.sql/,
+      /Duplicate applied migration version: 20260416090000/,
     );
     assert.equal(didRun, false);
   });
@@ -239,8 +235,8 @@ describe("session", (): void => {
   it("status session reads applied timestamps from an existing history table", async (): Promise<void> => {
     await createMigrationHistoryTable();
     await client.query(
-      `INSERT INTO ${defaultMigrationHistoryTable} (filename, version) VALUES ($1, $2);`,
-      [createFile, createVersion],
+      `INSERT INTO ${defaultMigrationHistoryTable} (version) VALUES ($1);`,
+      [createVersion],
     );
 
     const result = await withMigrationStatusSession({

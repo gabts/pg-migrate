@@ -30,7 +30,6 @@ describe("status", (): void => {
     const appliedRows: AppliedStatusRow[] = [
       {
         appliedAt,
-        filename: createFile,
         version: "20260416090000",
       },
     ];
@@ -77,7 +76,6 @@ describe("status", (): void => {
       appliedRows: [
         {
           appliedAt: "2026-04-30 10:15:00+00",
-          filename: createFile,
           version: "20260416090000",
         },
       ],
@@ -96,7 +94,6 @@ describe("status", (): void => {
         appliedRows: [
           {
             appliedAt: "not a timestamp",
-            filename: createFile,
             version: "20260416090000",
           },
         ],
@@ -114,7 +111,6 @@ describe("status", (): void => {
         appliedRows: [
           {
             appliedAt: new Date("not a timestamp"),
-            filename: createFile,
             version: "20260416090000",
           },
         ],

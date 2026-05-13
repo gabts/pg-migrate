@@ -1,3 +1,4 @@
+import { getMigrationVersion } from "./naming.js";
 import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
 
 /**
@@ -27,11 +28,13 @@ export function planDownExecution(args: {
   targetMigration: DiskMigration | null;
 }): DiskMigration[] {
   const { appliedRows, disk, targetMigration } = args;
-  const appliedFiles = new Set(
-    appliedRows.map(({ filename }): string => filename),
+  const appliedVersions = new Set(
+    appliedRows.map(({ version }): string => version),
   );
   const appliedMigrations = disk.all
-    .filter(({ file }): boolean => appliedFiles.has(file))
+    .filter(({ file }): boolean =>
+      appliedVersions.has(getMigrationVersion(file)),
+    )
     .reverse();
 
   if (!targetMigration) {

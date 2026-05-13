@@ -20,7 +20,7 @@ export async function migrationHistoryExists(
 }
 
 /**
- * Creates the migration history table when it is missing.
+ * Ensures migration history is stored by version only.
  */
 export async function ensureMigrationHistory(args: {
   client: pg.Client;
@@ -35,8 +35,7 @@ export async function ensureMigrationHistory(args: {
     await client.query(`
       CREATE TABLE ${qualifiedTableName}
       (
-        filename text PRIMARY KEY,
-        version text NOT NULL UNIQUE,
+        version text PRIMARY KEY,
         applied_at timestamptz NOT NULL DEFAULT now()
       );
     `);
@@ -53,17 +52,17 @@ export async function assertMigrationHistoryTableShape(args: {
 }): Promise<void> {
   const { client, qualifiedTableName, table } = args;
   try {
-    // This only verifies that the expected column identifiers resolve.
-    // It does not validate the underlying column data types.
+    // This verifies the expected column identifiers and resolves. It does not
+    // validate the underlying column data types.
     await client.query(
-      `SELECT filename, version, applied_at FROM ${qualifiedTableName} LIMIT 0;`,
+      `SELECT version, applied_at FROM ${qualifiedTableName} LIMIT 0;`,
     );
   } catch (error) {
     const code = (error as { code?: unknown })?.code;
     if (code === "42703") {
       const detail = error instanceof Error ? `: ${error.message}` : "";
       throw new Error(
-        `Invalid migration history table schema: ${table}. Expected columns filename, version, applied_at${detail}`,
+        `Invalid migration history table schema: ${table}. Expected columns version, applied_at${detail}`,
         { cause: error },
       );
     }
@@ -80,7 +79,7 @@ export async function readAppliedRows(
 ): Promise<AppliedRow[]> {
   // Order is irrelevant: disk.all is the canonical migration order.
   const appliedRowsResult = await client.query<AppliedRow>(
-    `SELECT filename, version FROM ${qualifiedTableName};`,
+    `SELECT version FROM ${qualifiedTableName};`,
   );
   const appliedRows = appliedRowsResult.rows;
   validateAppliedHistory(appliedRows);
@@ -110,14 +109,14 @@ export async function readAppliedStatusRows(
 ): Promise<AppliedStatusRow[]> {
   // Order is irrelevant: disk.all is the canonical migration order.
   const appliedRowsResult = await client.query<AppliedStatusRow>(
-    `SELECT filename, version, applied_at AS "appliedAt" FROM ${qualifiedTableName};`,
+    `SELECT version, applied_at AS "appliedAt" FROM ${qualifiedTableName};`,
   );
   const appliedRows = appliedRowsResult.rows;
   validateAppliedHistory(appliedRows);
   for (const row of appliedRows) {
     if (!isValidAppliedAt(row.appliedAt)) {
       throw new Error(
-        `Invalid applied migration timestamp for file "${row.filename}": ${row.appliedAt}`,
+        `Invalid applied migration timestamp for version "${row.version}": ${row.appliedAt}`,
       );
     }
   }

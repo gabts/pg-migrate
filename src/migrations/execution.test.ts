@@ -83,8 +83,8 @@ describe("execution", (): void => {
           params: undefined,
         },
         {
-          sql: 'INSERT INTO "pgmigrate"."migration_history" ( filename, version, applied_at ) VALUES ( $1, $2, clock_timestamp() );',
-          params: ["20260416090000_create.sql", "20260416090000"],
+          sql: 'INSERT INTO "pgmigrate"."migration_history" ( version, applied_at ) VALUES ( $1, clock_timestamp() );',
+          params: ["20260416090000"],
         },
         { sql: "COMMIT;", params: undefined },
         { sql: "BEGIN;", params: undefined },
@@ -93,8 +93,8 @@ describe("execution", (): void => {
           params: undefined,
         },
         {
-          sql: 'INSERT INTO "pgmigrate"."migration_history" ( filename, version, applied_at ) VALUES ( $1, $2, clock_timestamp() );',
-          params: ["20260416090100_insert.sql", "20260416090100"],
+          sql: 'INSERT INTO "pgmigrate"."migration_history" ( version, applied_at ) VALUES ( $1, clock_timestamp() );',
+          params: ["20260416090100"],
         },
         { sql: "COMMIT;", params: undefined },
       ]);
@@ -215,13 +215,13 @@ describe("execution", (): void => {
       assert.deepEqual(queries, [
         { sql: "CREATE TABLE person (id integer);", params: undefined },
         {
-          sql: 'INSERT INTO "migration_history" ( filename, version, applied_at ) VALUES ( $1, $2, clock_timestamp() );',
-          params: ["20260416090000_create.sql", "20260416090000"],
+          sql: 'INSERT INTO "migration_history" ( version, applied_at ) VALUES ( $1, clock_timestamp() );',
+          params: ["20260416090000"],
         },
         { sql: "INSERT INTO person VALUES (1);", params: undefined },
         {
-          sql: 'INSERT INTO "migration_history" ( filename, version, applied_at ) VALUES ( $1, $2, clock_timestamp() );',
-          params: ["20260416090100_insert.sql", "20260416090100"],
+          sql: 'INSERT INTO "migration_history" ( version, applied_at ) VALUES ( $1, clock_timestamp() );',
+          params: ["20260416090100"],
         },
       ]);
     });
@@ -296,8 +296,8 @@ describe("execution", (): void => {
       assert.deepEqual(queries, [
         { sql: "DELETE FROM person;", params: undefined },
         {
-          sql: 'DELETE FROM "migration_history" WHERE filename = $1;',
-          params: ["20260416090100_insert.sql"],
+          sql: 'DELETE FROM "migration_history" WHERE version = $1;',
+          params: ["20260416090100"],
         },
       ]);
     });
@@ -319,8 +319,8 @@ describe("execution", (): void => {
 
       assert.deepEqual(queries, [
         {
-          sql: 'DELETE FROM "migration_history" WHERE filename = $1;',
-          params: ["20260416090000_backfill.sql"],
+          sql: 'DELETE FROM "migration_history" WHERE version = $1;',
+          params: ["20260416090000"],
         },
       ]);
     });
@@ -441,8 +441,8 @@ describe("execution", (): void => {
           params: undefined,
         },
         {
-          sql: 'DELETE FROM "migration_history" WHERE filename = $1;',
-          params: ["20260416090000_create.sql"],
+          sql: 'DELETE FROM "migration_history" WHERE version = $1;',
+          params: ["20260416090000"],
         },
         { sql: "COMMIT;", params: undefined },
       ]);
@@ -469,8 +469,8 @@ describe("execution", (): void => {
       );
       assert.deepEqual(queries, [
         {
-          sql: 'DELETE FROM "migration_history" WHERE filename = $1;',
-          params: ["20260416090000_backfill.sql"],
+          sql: 'DELETE FROM "migration_history" WHERE version = $1;',
+          params: ["20260416090000"],
         },
       ]);
     });

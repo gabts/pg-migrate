@@ -204,8 +204,7 @@ DELETE FROM cli_validate_person;
       await client.query(`
         CREATE TABLE ${table}
         (
-          filename text PRIMARY KEY,
-          version text NOT NULL UNIQUE,
+          version text PRIMARY KEY,
           applied_at timestamptz NOT NULL DEFAULT now()
         );
       `);
