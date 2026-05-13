@@ -79,11 +79,14 @@ export function buildMigrationStatus(args: {
   table: string;
 }): MigrationStatusResult {
   const { appliedRows, directory, disk, initialized, table } = args;
-  const appliedByFile = new Map(
-    appliedRows.map((row): [string, AppliedStatusRow] => [row.filename, row]),
+  const appliedByVersion = new Map(
+    appliedRows.map((row): [string, AppliedStatusRow] => [row.version, row]),
   );
   const migrations = disk.all.map((migration): MigrationStatusItem => {
-    return buildStatusItem(migration, appliedByFile.get(migration.file));
+    return buildStatusItem(
+      migration,
+      appliedByVersion.get(getMigrationVersion(migration.file)),
+    );
   });
   const applied = migrations.filter(
     ({ state }): boolean => state === "applied",

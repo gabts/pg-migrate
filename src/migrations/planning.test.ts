@@ -10,7 +10,6 @@ const dropFile = "20260416090300_drop.sql";
 
 function row(file: string): AppliedRow {
   return {
-    filename: file,
     version: getMigrationVersion(file),
   };
 }

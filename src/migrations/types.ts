@@ -26,7 +26,6 @@ export interface MigrationStep {
  * Row shape read from the migration history table.
  */
 export interface AppliedRow {
-  filename: string;
   version: string;
 }
 

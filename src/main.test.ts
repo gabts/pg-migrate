@@ -31,6 +31,9 @@ const tempMigrationDirectories: string[] = [];
 const standardCreateFile = "20260416090000_create.sql";
 const standardInsertFile = "20260416090100_insert.sql";
 const standardCreateVersion = "20260416090000";
+const standardInsertVersion = "20260416090100";
+const renamedCreateFile = "20260416090000_renamed_create.sql";
+const renamedInsertFile = "20260416090100_renamed_insert.sql";
 const backfillFile = "20260416090100_backfill.sql";
 const breakOnlyFile = "20260416090000_break.sql";
 const breakAfterStandardFile = "20260416090200_break.sql";
@@ -139,7 +142,7 @@ async function queryTableExists(tableName: string): Promise<boolean> {
 
 async function queryHistory(tableName = "migration_history"): Promise<any[]> {
   const res = await client.query(
-    `SELECT filename AS file, version, applied_at FROM ${tableName} ORDER BY filename;`,
+    `SELECT version, applied_at FROM ${tableName} ORDER BY version;`,
   );
   return res.rows;
 }
@@ -167,8 +170,7 @@ async function createMigrationHistoryTable(
   await client.query(`
     CREATE TABLE ${tableName}
     (
-      filename text PRIMARY KEY,
-      version text NOT NULL UNIQUE,
+      version text PRIMARY KEY,
       applied_at timestamptz NOT NULL DEFAULT now()
     );
   `);
@@ -216,7 +218,7 @@ async function assertMigration0(): Promise<void> {
   const personRows = await queryPersons();
 
   assert.equal(historyRows.length, 1);
-  assert.equal(historyRows[0].file, standardCreateFile);
+  assert.equal(historyRows[0].version, standardCreateVersion);
   assert.equal(personRows.length, 0);
 }
 
@@ -226,8 +228,8 @@ async function assertMigration1(): Promise<void> {
   const personRows = await queryPersons();
 
   assert.equal(historyRows.length, 2);
-  assert.equal(historyRows[0].file, standardCreateFile);
-  assert.equal(historyRows[1].file, standardInsertFile);
+  assert.equal(historyRows[0].version, standardCreateVersion);
+  assert.equal(historyRows[1].version, standardInsertVersion);
   assert.equal(personRows.length, 3);
 }
 
@@ -426,7 +428,7 @@ VALUES ('gabriel'), ('david'), ('frasse');
 
     const historyRows = await queryHistory(defaultMigrationHistoryTable);
     assert.equal(historyRows.length, 1);
-    assert.equal(historyRows[0].file, standardCreateFile);
+    assert.equal(historyRows[0].version, standardCreateVersion);
 
     const personRows = await queryPersons();
     assert.equal(personRows.length, 3);
@@ -516,8 +518,8 @@ DROP TABLE broken;
 
     const historyRows = await queryHistory(defaultMigrationHistoryTable);
     assert.equal(historyRows.length, 2);
-    assert.equal(historyRows[0].file, standardCreateFile);
-    assert.equal(historyRows[1].file, standardInsertFile);
+    assert.equal(historyRows[0].version, standardCreateVersion);
+    assert.equal(historyRows[1].version, standardInsertVersion);
 
     const personRows = await queryPersons();
     assert.equal(personRows.length, 3);
@@ -554,7 +556,7 @@ DROP TABLE broken;
     assert.ok(await queryTableExists(defaultMigrationHistoryTable));
     const historyRows = await queryHistory(defaultMigrationHistoryTable);
     assert.equal(historyRows.length, 1);
-    assert.equal(historyRows[0].file, standardCreateFile);
+    assert.equal(historyRows[0].version, standardCreateVersion);
     const personRows = await queryPersons();
     assert.equal(personRows.length, 0);
   });
@@ -606,6 +608,47 @@ UPDATE person SET name = lower(name);
     await assertMigration1();
   });
 
+  it("allows an applied migration slug to change while the version stays the same", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+
+    await runUp({ directory, target: standardCreateFile });
+    fs.renameSync(
+      path.join(directory, standardCreateFile),
+      path.join(directory, renamedCreateFile),
+    );
+
+    await runValidate({ directory });
+    const result = await runStatus({ directory });
+
+    assert.equal(result.current?.file, renamedCreateFile);
+    assert.equal(result.current?.version, standardCreateVersion);
+    assert.equal(result.next?.file, standardInsertFile);
+
+    await runUp({ directory });
+    await assertMigration1();
+  });
+
+  it("down rolls back an applied migration after its slug changes", async (): Promise<void> => {
+    const directory = createStandardMigrationDirectory();
+
+    await runUp({ directory });
+    fs.renameSync(
+      path.join(directory, standardInsertFile),
+      path.join(directory, renamedInsertFile),
+    );
+
+    const beforeDown = await runStatus({ directory });
+    assert.equal(beforeDown.current?.file, renamedInsertFile);
+    assert.equal(beforeDown.current?.version, standardInsertVersion);
+
+    await runDown({ directory });
+
+    await assertMigration0();
+    const afterDown = await runStatus({ directory });
+    assert.equal(afterDown.current?.file, standardCreateFile);
+    assert.equal(afterDown.next?.file, renamedInsertFile);
+  });
+
   it("up and down with a schema-qualified migration history table", async (): Promise<void> => {
     const schema = "pgmigrate_main_test";
     const table = `${schema}.migration_history`;
@@ -628,7 +671,7 @@ UPDATE person SET name = lower(name);
         `${schema}.migration_history`,
       );
       assert.equal(historyAfterDown.length, 1);
-      assert.equal(historyAfterDown[0].file, standardCreateFile);
+      assert.equal(historyAfterDown[0].version, standardCreateVersion);
     } finally {
       await client.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE;`);
     }
@@ -659,8 +702,8 @@ UPDATE person SET name = lower(name);
     const directory = createStandardMigrationDirectory();
     await createMigrationHistoryTable();
     await client.query(
-      `INSERT INTO ${defaultMigrationHistoryTable} (filename, version) VALUES ($1, $2);`,
-      [standardInsertFile, "20260416090100"],
+      `INSERT INTO ${defaultMigrationHistoryTable} (version) VALUES ($1);`,
+      [standardInsertVersion],
     );
 
     await assert.rejects(
@@ -672,30 +715,26 @@ UPDATE person SET name = lower(name);
 
     const historyRows = await queryHistory();
     assert.equal(historyRows.length, 1);
-    assert.equal(historyRows[0].file, standardInsertFile);
-    assert.equal(historyRows[0].version, "20260416090100");
+    assert.equal(historyRows[0].version, standardInsertVersion);
     assert.equal(await queryTableExists("person"), false);
   });
 
-  it("validate rejects version mismatches without mutating state", async (): Promise<void> => {
+  it("validate rejects invalid applied versions without mutating state", async (): Promise<void> => {
     const directory = createStandardMigrationDirectory();
     await createMigrationHistoryTable();
     await client.query(
-      `INSERT INTO ${defaultMigrationHistoryTable} (filename, version) VALUES ($1, $2);`,
-      [standardCreateFile, "20260416090001"],
+      `INSERT INTO ${defaultMigrationHistoryTable} (version) VALUES ($1);`,
+      ["not-a-version"],
     );
 
     await assert.rejects(
       (): Promise<void> => runValidate({ directory }),
-      new RegExp(
-        `Applied migration version mismatch for file "${standardCreateFile}": expected "20260416090000", got "20260416090001"`,
-      ),
+      /Invalid applied migration version: not-a-version/,
     );
 
     const historyRows = await queryHistory();
     assert.equal(historyRows.length, 1);
-    assert.equal(historyRows[0].file, standardCreateFile);
-    assert.equal(historyRows[0].version, "20260416090001");
+    assert.equal(historyRows[0].version, "not-a-version");
     assert.equal(await queryTableExists("person"), false);
   });
 
@@ -764,8 +803,8 @@ UPDATE person SET name = lower(name);
     const directory = createStandardMigrationDirectory();
     await createMigrationHistoryTable();
     await client.query(
-      `INSERT INTO ${defaultMigrationHistoryTable} (filename, version) VALUES ($1, $2);`,
-      [standardInsertFile, "20260416090100"],
+      `INSERT INTO ${defaultMigrationHistoryTable} (version) VALUES ($1);`,
+      [standardInsertVersion],
     );
 
     await assert.rejects(
@@ -778,7 +817,7 @@ UPDATE person SET name = lower(name);
 
     const historyRows = await queryHistory();
     assert.equal(historyRows.length, 1);
-    assert.equal(historyRows[0].file, standardInsertFile);
+    assert.equal(historyRows[0].version, standardInsertVersion);
     assert.equal(await queryTableExists("person"), false);
   });
 
@@ -836,10 +875,10 @@ DELETE FROM bulk_test WHERE value = ${i};
 
       const historyRows = await queryHistory();
       assert.equal(historyRows.length, MIGRATION_COUNT + 1);
-      assert.equal(historyRows[0].file, bulkFileForIndex(0));
+      assert.equal(historyRows[0].version, String(bulkBaseVersion));
       assert.equal(
-        historyRows[MIGRATION_COUNT].file,
-        bulkFileForIndex(MIGRATION_COUNT),
+        historyRows[MIGRATION_COUNT].version,
+        String(bulkBaseVersion + MIGRATION_COUNT),
       );
 
       const { rows } = await client.query(
@@ -860,7 +899,10 @@ DELETE FROM bulk_test WHERE value = ${i};
       // Migration 0 through 50 committed successfully (failAt entries)
       const historyRows = await queryHistory();
       assert.equal(historyRows.length, failAt);
-      assert.equal(historyRows[failAt - 1].file, bulkFileForIndex(failAt - 1));
+      assert.equal(
+        historyRows[failAt - 1].version,
+        String(bulkBaseVersion + failAt - 1),
+      );
 
       const { rows } = await client.query(
         "SELECT COUNT(*) AS n FROM bulk_test;",
@@ -897,7 +939,7 @@ DELETE FROM bulk_test WHERE value = ${i};
 
       const historyRows = await queryHistory();
       assert.equal(historyRows.length, 1);
-      assert.equal(historyRows[0].file, bulkFileForIndex(0));
+      assert.equal(historyRows[0].version, String(bulkBaseVersion));
 
       const { rows } = await client.query(
         "SELECT COUNT(*) AS n FROM bulk_test;",

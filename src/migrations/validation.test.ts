@@ -3,8 +3,8 @@ import { getMigrationVersion } from "./naming.js";
 import type { AppliedRow, DiskMigration, LoadedMigrations } from "./types.js";
 import {
   resolveTargetMigration,
-  validateAppliedFilesExistOnDisk,
   validateAppliedHistory,
+  validateAppliedVersionsExistOnDisk,
   validateDownPreconditions,
   validateUpPreconditions,
 } from "./validation.js";
@@ -15,9 +15,10 @@ const alterFile = "20260416090200_alter.sql";
 const dropFile = "20260416090300_drop.sql";
 const missingFile = "20260416099999_missing.sql";
 const missingBetweenFile = "20260416090150_missing.sql";
+const renamedCreateFile = "20260416090000_renamed.sql";
 
 function row(file: string, version = getMigrationVersion(file)): AppliedRow {
-  return { filename: file, version };
+  return { version };
 }
 
 const migrations: DiskMigration[] = [
@@ -38,22 +39,16 @@ const disk: LoadedMigrations = {
 
 describe("validation", (): void => {
   describe("validateAppliedHistory", (): void => {
-    it("accepts applied migration files", (): void => {
+    it("accepts applied migration versions", (): void => {
       assert.doesNotThrow((): void => {
         validateAppliedHistory([row(insertFile), row(createFile)]);
       });
     });
 
-    it("rejects invalid applied migration files", (): void => {
+    it("rejects invalid applied migration versions", (): void => {
       assert.throws((): void => {
-        validateAppliedHistory([{ filename: "", version: "20260416090000" }]);
-      }, /Invalid applied migration file:/);
-    });
-
-    it("rejects duplicate applied migration files", (): void => {
-      assert.throws((): void => {
-        validateAppliedHistory([row(insertFile), row(insertFile)]);
-      }, /Duplicate applied migration file: 20260416090100_insert\.sql/);
+        validateAppliedHistory([{ version: "bad" }]);
+      }, /Invalid applied migration version: bad/);
     });
 
     it("rejects duplicate applied migration versions", (): void => {
@@ -66,17 +61,17 @@ describe("validation", (): void => {
     });
   });
 
-  describe("validateAppliedFilesExistOnDisk", (): void => {
-    it("accepts applied files that exist on disk", (): void => {
+  describe("validateAppliedVersionsExistOnDisk", (): void => {
+    it("accepts applied versions that exist on disk", (): void => {
       assert.doesNotThrow((): void => {
-        validateAppliedFilesExistOnDisk([row(createFile)], disk);
+        validateAppliedVersionsExistOnDisk([row(createFile)], disk);
       });
     });
 
-    it("rejects applied files that are missing on disk", (): void => {
+    it("rejects applied versions that are missing on disk", (): void => {
       assert.throws((): void => {
-        validateAppliedFilesExistOnDisk([row(missingFile)], disk);
-      }, /Applied migration file is missing on disk: 20260416099999_missing\.sql/);
+        validateAppliedVersionsExistOnDisk([row(missingFile)], disk);
+      }, /Applied migration version is missing on disk: 20260416099999/);
     });
   });
 
@@ -172,7 +167,7 @@ describe("validation", (): void => {
       }, /Target migration object does not belong to the loaded disk set: 20260416090100_insert\.sql/);
     });
 
-    it("validates rollback files exist on disk", (): void => {
+    it("validates rollback versions exist on disk", (): void => {
       assert.throws((): void => {
         validateDownPreconditions({
           appliedRows: [
@@ -183,16 +178,16 @@ describe("validation", (): void => {
           disk,
           targetMigration: migrations[0],
         });
-      }, /Applied migration file is missing on disk: 20260416090150_missing\.sql/);
+      }, /Applied migration version is missing on disk: 20260416090150/);
     });
 
-    it("validates the latest applied file exists on disk when no target is provided", (): void => {
+    it("validates the latest applied version exists on disk when no target is provided", (): void => {
       assert.throws((): void => {
         validateDownPreconditions({
           appliedRows: [row(missingFile)],
           disk,
         });
-      }, /Applied migration file is missing on disk: 20260416099999_missing\.sql/);
+      }, /Applied migration version is missing on disk: 20260416099999/);
     });
 
     it("rejects non-contiguous applied migration history", (): void => {
@@ -244,13 +239,36 @@ describe("validation", (): void => {
       );
     });
 
-    it("rejects applied files that are missing on disk", (): void => {
+    it("rejects applied versions that are missing on disk", (): void => {
       assert.throws((): void => {
         validateUpPreconditions({
           appliedRows: [row(missingFile)],
           disk,
         });
-      }, /Applied migration file is missing on disk: 20260416099999_missing\.sql/);
+      }, /Applied migration version is missing on disk: 20260416099999/);
+    });
+
+    it("matches applied migrations by version when the disk slug changes", (): void => {
+      const renamedMigrations: DiskMigration[] = [
+        { file: renamedCreateFile, path: `/migrations/${renamedCreateFile}` },
+        { file: insertFile, path: `/migrations/${insertFile}` },
+      ];
+      const renamedDisk: LoadedMigrations = {
+        all: renamedMigrations,
+        byFile: new Map(
+          renamedMigrations.map((m): [string, DiskMigration] => [m.file, m]),
+        ),
+      };
+
+      assert.deepEqual(
+        validateUpPreconditions({
+          appliedRows: [row(createFile)],
+          disk: renamedDisk,
+        }),
+        {
+          latestAppliedMigration: renamedMigrations[0],
+        },
+      );
     });
 
     it("rejects gaps in applied migration history", (): void => {
@@ -341,15 +359,6 @@ describe("validation", (): void => {
           targetMigration: migrations[2],
         });
       }, /Gap in applied migration history/);
-    });
-
-    it("rejects version mismatches between applied rows and disk files", (): void => {
-      assert.throws((): void => {
-        validateUpPreconditions({
-          appliedRows: [row(createFile, "20260416090001")],
-          disk,
-        });
-      }, /Applied migration version mismatch for file "20260416090000_create\.sql": expected "20260416090000", got "20260416090001"/);
     });
   });
 });

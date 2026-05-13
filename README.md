@@ -291,7 +291,7 @@ pg-migrate up [options] [<database-url>]
 - With `--target`, stops after the target migration has been applied.
 - Creates the migration history table if it does not exist.
 - Validates files and applied history before running migration SQL.
-- Fails if applied history has gaps, duplicates, missing files, or version mismatches.
+- Fails if applied history has gaps, duplicates, or versions missing on disk.
 - Fails if the target is behind the latest applied migration.
 - Runs each migration file in its own transaction.
 - Stops at the first failed migration.
@@ -573,12 +573,13 @@ Before running migration SQL, `pg-migrate` validates that applied migrations sti
 
 It fails when:
 
-- An applied migration file is missing on disk.
-- Applied history contains duplicate files or duplicate versions.
-- A stored version does not match the version in the filename.
+- An applied migration version is missing on disk.
+- Applied history contains duplicate versions.
 - Applied migrations do not form a contiguous prefix of the ordered migration files.
 - A target migration cannot be found.
 - An `up --target` migration is older than the latest applied migration.
+
+The migration slug is not part of applied identity. Renaming `20260414153000_create_users.sql` to `20260414153000_create_accounts.sql` keeps the migration applied because the `20260414153000` timestamp is unchanged.
 
 `up` is append-only by version order. If you add an older migration after a newer migration has already been applied, `up` fails instead of applying it out of order.
 
