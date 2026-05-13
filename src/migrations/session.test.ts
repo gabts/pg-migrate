@@ -1,4 +1,4 @@
-import * as assert from "assert";
+import * as assert from "node:assert";
 import * as pg from "pg";
 import { readRuntimeEnv } from "../env.js";
 import type { Logger } from "../logging/logger.js";

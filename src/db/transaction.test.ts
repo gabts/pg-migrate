@@ -1,4 +1,4 @@
-import * as assert from "assert";
+import * as assert from "node:assert";
 import type * as pg from "pg";
 import { runInTransaction } from "./transaction.js";
 

@@ -1,7 +1,7 @@
-import * as assert from "assert";
-import * as fs from "fs/promises";
-import * as os from "os";
-import * as path from "path";
+import * as assert from "node:assert";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
 import { createMigration } from "./create.js";
 
 const fixedDate = new Date("2026-04-29T12:34:56.000Z");

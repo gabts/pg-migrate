@@ -1,7 +1,7 @@
-import * as assert from "assert";
-import * as fs from "fs/promises";
-import * as os from "os";
-import * as path from "path";
+import * as assert from "node:assert";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
 import * as pg from "pg";
 import { readRuntimeEnv } from "../env.js";
 import { runCli } from "./run.js";

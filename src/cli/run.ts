@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
 import { events } from "../logging/events.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import {
