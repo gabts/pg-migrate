@@ -49,6 +49,57 @@ describe("files", (): void => {
       );
     });
 
+    it("accepts marker-only lines with flexible whitespace", (): void => {
+      const migration = ` \t--   migrate:up  \r
+CREATE TABLE person (id integer);
+\t--migrate:down\t
+DROP TABLE person;
+`;
+
+      assert.equal(
+        parseMigration(migration, "up", "0_create.sql"),
+        "CREATE TABLE person (id integer);",
+      );
+      assert.equal(
+        parseMigration(migration, "down", "0_create.sql"),
+        "DROP TABLE person;",
+      );
+    });
+
+    it("does not treat marker text inside SQL strings or comments as markers", (): void => {
+      const migration = `-- migrate:up
+INSERT INTO audit_log(message) VALUES ('-- migrate:down');
+INSERT INTO audit_log(message) VALUES ('
+-- migrate:down
+');
+INSERT INTO audit_log(message) VALUES (E'it\\'s
+-- migrate:down
+fine');
+DO $body$
+BEGIN
+  RAISE NOTICE '-- migrate:down';
+-- migrate:down
+END;
+$body$;
+/*
+-- migrate:down
+*/
+-- marker mention: -- migrate:down
+-- migrate:down
+SELECT '-- migrate:up';
+`;
+      const upSql = parseMigration(migration, "up", "0_create.sql");
+
+      assert.match(upSql, /INSERT INTO audit_log/);
+      assert.match(upSql, /E'it\\'s/);
+      assert.match(upSql, /DO \$body\$/);
+      assert.match(upSql, /\/\*\n-- migrate:down\n\*\//);
+      assert.equal(
+        parseMigration(migration, "down", "0_create.sql"),
+        "SELECT '-- migrate:up';",
+      );
+    });
+
     it("rejects missing up or duplicated markers", (): void => {
       assert.throws((): void => {
         parseMigration("CREATE TABLE person (id integer);", "up", "0.sql");
@@ -59,14 +110,14 @@ describe("files", (): void => {
           "up",
           "0.sql",
         );
-      }, /Invalid migration file contents: 0\.sql/);
+      }, /Duplicate migrate:up marker in migration file: 0\.sql/);
       assert.throws((): void => {
         parseMigration(
           `${validMigration}\n-- migrate:down\nSELECT 1;`,
           "down",
           "0.sql",
         );
-      }, /Invalid migration file contents: 0\.sql/);
+      }, /Duplicate migrate:down marker in migration file: 0\.sql/);
     });
 
     it("extracts up and down SQL when down marker appears before up marker", (): void => {
