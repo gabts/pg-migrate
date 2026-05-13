@@ -1,13 +1,15 @@
 import * as assert from "assert";
 import * as pg from "pg";
+import { readRuntimeEnv } from "../env.js";
 import type { Logger } from "../logging/logger.js";
 import { withMigrationSession, withMigrationStatusSession } from "./session.js";
 
-if (!process.env.PGM_DATABASE_URL) {
+const testDatabaseUrl = readRuntimeEnv().databaseUrl;
+if (!testDatabaseUrl) {
   throw new Error("PGM_DATABASE_URL must be set to run integration tests");
 }
 
-const databaseConfig: string | pg.ClientConfig = process.env.PGM_DATABASE_URL;
+const databaseConfig: string | pg.ClientConfig = testDatabaseUrl;
 const client = new pg.Client(databaseConfig);
 const defaultMigrationHistoryTable = "migration_history";
 const schemaMigrationHistorySchema = "pgmigrate_test";

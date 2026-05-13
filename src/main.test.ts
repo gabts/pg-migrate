@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as pg from "pg";
+import { readRuntimeEnv } from "./env.js";
 import {
   down,
   status,
@@ -16,7 +17,8 @@ import {
   type ValidateOptions,
 } from "./main.js";
 
-if (!process.env.PGM_DATABASE_URL) {
+const testDatabaseUrl = readRuntimeEnv().databaseUrl;
+if (!testDatabaseUrl) {
   throw new Error("PGM_DATABASE_URL must be set to run integration tests");
 }
 
@@ -24,7 +26,7 @@ function normalizeMs(s: string): string {
   return s.replace(/\d+ms/, "<ms>");
 }
 
-const databaseConfig: ClientConfig = process.env.PGM_DATABASE_URL;
+const databaseConfig: ClientConfig = testDatabaseUrl;
 const client = new pg.Client(databaseConfig);
 const defaultMigrationHistoryTable = "migration_history";
 const tempMigrationDirectories: string[] = [];

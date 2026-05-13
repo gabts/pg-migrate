@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as pg from "pg";
+import { readRuntimeEnv } from "../env.js";
 import { runCli } from "./run.js";
 
 interface CliRunResult {
@@ -167,7 +168,7 @@ describe("cli run", (): void => {
   });
 
   it("emits parseable JSON for successful validate with no incidental stdout text", async function (this: Mocha.Context): Promise<void> {
-    const databaseUrl = process.env.PGM_DATABASE_URL;
+    const databaseUrl = readRuntimeEnv().databaseUrl;
     if (!databaseUrl) {
       this.skip();
       return;
