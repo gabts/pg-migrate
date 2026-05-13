@@ -75,16 +75,20 @@ function enrichLogRecord(
   };
 }
 
+function defaultClock(): Date {
+  return new Date();
+}
+
 /**
  * Creates a logger that emits enriched structured log records.
  */
 export function createLogger(options: LoggerOptions = {}): Logger {
   const sink = options.sink ?? createJsonLogWriter(process.stderr);
-  const clock = options.clock ?? ((): Date => new Date());
+  const clock = options.clock ?? defaultClock;
   const correlationId = options.correlationId ?? randomUUID();
 
   return {
-    emit(record: LogRecord): void {
+    emit: (record: LogRecord): void => {
       if (
         !shouldEmit(record, {
           quiet: options.quiet ?? false,

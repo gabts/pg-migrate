@@ -27,10 +27,10 @@ function createResultWriter(): CapturedResultWriter {
   return {
     jsonValues,
     textValues,
-    writeJson(value: unknown): void {
+    writeJson: (value: unknown): void => {
       jsonValues.push(value);
     },
-    writeText(value: string): void {
+    writeText: (value: string): void => {
       textValues.push(value);
     },
   };
@@ -38,7 +38,7 @@ function createResultWriter(): CapturedResultWriter {
 
 function createLogger(records: LogRecord[]): Logger {
   return {
-    emit(record: LogRecord): void {
+    emit: (record: LogRecord): void => {
       records.push(record);
     },
   };
@@ -46,16 +46,16 @@ function createLogger(records: LogRecord[]): Logger {
 
 function createLogSink(records: LogRecord[]): LogSink {
   return {
-    write(record: LogRecord): void {
+    write: (record: LogRecord): void => {
       records.push(record);
     },
   };
 }
 
 function createHandlers(overrides: Partial<CommandHandlers>): CommandHandlers {
-  const fail = (): never => {
+  function fail(): never {
     throw new Error("Unexpected command handler call");
-  };
+  }
 
   return {
     createMigration: fail,

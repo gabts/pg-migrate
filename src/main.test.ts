@@ -248,7 +248,8 @@ async function captureStderr<T>(run: () => Promise<T>): Promise<{
   type StderrWriteArgs = Parameters<typeof process.stderr.write>;
   const chunks: string[] = [];
   const originalWrite = process.stderr.write.bind(process.stderr);
-  const writeSpy = (...args: StderrWriteArgs): boolean => {
+
+  function writeSpy(...args: StderrWriteArgs): boolean {
     const [chunk, encodingOrCallback, callback] = args;
     if (typeof chunk === "string") {
       chunks.push(chunk);
@@ -262,7 +263,7 @@ async function captureStderr<T>(run: () => Promise<T>): Promise<{
       done();
     }
     return true;
-  };
+  }
 
   Object.defineProperty(process.stderr, "write", {
     configurable: true,
@@ -294,7 +295,7 @@ function stderrLogMessages(stderr: string): string[] {
 
 function createCapturedLogSink(records: LogRecord[]): LogSink {
   return {
-    write(record: LogRecord): void {
+    write: (record: LogRecord): void => {
       records.push(record);
     },
   };

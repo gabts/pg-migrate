@@ -14,10 +14,10 @@ function createResultWriter(): CapturedResultWriter {
   return {
     jsonValues,
     textValues,
-    writeJson(value: unknown): void {
+    writeJson: (value: unknown): void => {
       jsonValues.push(value);
     },
-    writeText(value: string): void {
+    writeText: (value: string): void => {
       textValues.push(value);
     },
   };

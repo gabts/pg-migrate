@@ -17,7 +17,7 @@ function createWritable(isTTY = false): CapturedWritable {
     chunks,
     stream: {
       isTTY,
-      write(chunk: string): boolean {
+      write: (chunk: string): boolean => {
         chunks.push(chunk);
         return true;
       },

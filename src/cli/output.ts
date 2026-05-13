@@ -43,7 +43,7 @@ export function createCliLogWriter(
   );
 
   return {
-    write(record: LogRecord): void {
+    write: (record: LogRecord): void => {
       stream.write(
         appendNewline(
           formatHumanLogRecord(record, {
@@ -61,13 +61,13 @@ export function createCliLogWriter(
  */
 export function createCliResultWriter(stream: CliWritable): CliResultWriter {
   return {
-    writeJson(value: unknown): void {
+    writeJson: (value: unknown): void => {
       const rendered = serializeValue(
         isObject(value) ? value : { data: value ?? null },
       );
       stream.write(appendNewline(rendered));
     },
-    writeText(value: string): void {
+    writeText: (value: string): void => {
       stream.write(appendNewline(value));
     },
   };

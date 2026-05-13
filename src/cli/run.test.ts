@@ -20,7 +20,7 @@ async function runCliInProcessRaw(args: string[]): Promise<CliRunResult> {
   const originalStdoutWrite = process.stdout.write.bind(process.stdout);
   const originalStderrWrite = process.stderr.write.bind(process.stderr);
 
-  const stdoutWriteSpy = (...writeArgs: StdoutWriteArgs): boolean => {
+  function stdoutWriteSpy(...writeArgs: StdoutWriteArgs): boolean {
     const [chunk, encodingOrCallback, callback] = writeArgs;
     if (typeof chunk === "string") {
       stdoutChunks.push(chunk);
@@ -33,9 +33,9 @@ async function runCliInProcessRaw(args: string[]): Promise<CliRunResult> {
       done();
     }
     return true;
-  };
+  }
 
-  const stderrWriteSpy = (...writeArgs: StderrWriteArgs): boolean => {
+  function stderrWriteSpy(...writeArgs: StderrWriteArgs): boolean {
     const [chunk, encodingOrCallback, callback] = writeArgs;
     if (typeof chunk === "string") {
       stderrChunks.push(chunk);
@@ -48,7 +48,7 @@ async function runCliInProcessRaw(args: string[]): Promise<CliRunResult> {
       done();
     }
     return true;
-  };
+  }
 
   // Color decisions still use the real process.stderr.isTTY; content assertions should strip ANSI.
   Object.defineProperty(process.stdout, "write", {
