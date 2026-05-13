@@ -1,4 +1,4 @@
-import * as assert from "assert";
+import * as assert from "node:assert";
 import type * as pg from "pg";
 import type { Logger } from "../logging/logger.js";
 import type { LogRecord } from "../logging/schema.js";

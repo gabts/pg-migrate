@@ -1,9 +1,9 @@
-import * as assert from "assert";
-import { spawnSync } from "child_process";
-import * as fs from "fs/promises";
-import * as os from "os";
-import * as path from "path";
-import { fileURLToPath } from "url";
+import * as assert from "node:assert";
+import { spawnSync } from "node:child_process";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 interface CliRunResult {
   status: number | null;

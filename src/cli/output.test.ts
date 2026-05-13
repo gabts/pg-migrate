@@ -1,4 +1,4 @@
-import * as assert from "assert";
+import * as assert from "node:assert";
 import type { LogRecord } from "../logging/schema.js";
 import { createCliLogWriter, createCliResultWriter } from "./output.js";
 

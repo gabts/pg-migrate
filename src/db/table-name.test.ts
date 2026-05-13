@@ -1,4 +1,4 @@
-import * as assert from "assert";
+import * as assert from "node:assert";
 import { parseTableName, qualifyTableName } from "./table-name.js";
 
 describe("table-name", (): void => {

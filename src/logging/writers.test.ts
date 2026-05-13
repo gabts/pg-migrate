@@ -1,4 +1,4 @@
-import * as assert from "assert";
+import * as assert from "node:assert";
 import type { LogRecord } from "./schema.js";
 import { createJsonLogWriter } from "./writers.js";
 

@@ -1,4 +1,4 @@
-import * as assert from "assert";
+import * as assert from "node:assert";
 import { formatHumanLogRecord } from "./format.js";
 import type { LogRecord } from "./schema.js";
 

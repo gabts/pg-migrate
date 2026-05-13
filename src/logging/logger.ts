@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
 import type { LogFields, LogRecord } from "./schema.js";
 import { createJsonLogWriter, type LogSink } from "./writers.js";
 
