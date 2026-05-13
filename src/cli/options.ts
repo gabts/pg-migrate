@@ -16,6 +16,8 @@ interface MigrationRunOptions extends DatabaseRunOptions {
   target?: string;
 }
 
+type RuntimeEnv = Awaited<ReturnType<typeof readRuntimeEnv>>;
+
 function buildClientConfig(connectionString: string): ClientConfig {
   return {
     connectionString,
@@ -23,9 +25,7 @@ function buildClientConfig(connectionString: string): ClientConfig {
   };
 }
 
-function readCliRuntimeEnv(
-  parsed: ParsedTokens,
-): ReturnType<typeof readRuntimeEnv> {
+async function readCliRuntimeEnv(parsed: ParsedTokens): Promise<RuntimeEnv> {
   return readRuntimeEnv(process.env, {
     envFilePath: valueFlag(parsed, "--env-file"),
   });
@@ -34,15 +34,15 @@ function readCliRuntimeEnv(
 /**
  * Builds validated options for the create command from parsed CLI tokens.
  */
-export function buildCreateOptions(
+export async function buildCreateOptions(
   parsed: ParsedTokens,
   extraPositional: readonly string[],
-): CreateMigrationOptions {
+): Promise<CreateMigrationOptions> {
   if (extraPositional.length > 0) {
     throw new Error(`Unexpected argument: ${extraPositional[0]}`);
   }
 
-  const runtimeEnv = readCliRuntimeEnv(parsed);
+  const runtimeEnv = await readCliRuntimeEnv(parsed);
 
   return {
     directory:
@@ -54,11 +54,11 @@ export function buildCreateOptions(
 /**
  * Builds validated options for commands that need a database connection.
  */
-export function buildDatabaseRunOptions(
+export async function buildDatabaseRunOptions(
   parsed: ParsedTokens,
   extraPositional: readonly string[],
   command: "up" | "down" | "validate" | "status",
-): DatabaseRunOptions {
+): Promise<DatabaseRunOptions> {
   if (extraPositional.length > 1) {
     throw new Error(`Unexpected argument: ${extraPositional[1]}`);
   }
@@ -72,7 +72,7 @@ export function buildDatabaseRunOptions(
     );
   }
 
-  const runtimeEnv = readCliRuntimeEnv(parsed);
+  const runtimeEnv = await readCliRuntimeEnv(parsed);
 
   const clientConfig = positionalUrl ?? flagUrl ?? runtimeEnv.databaseUrl;
   if (!clientConfig) {
@@ -92,12 +92,12 @@ export function buildDatabaseRunOptions(
 /**
  * Builds validated options for migration execution commands.
  */
-export function buildMigrationRunOptions(
+export async function buildMigrationRunOptions(
   parsed: ParsedTokens,
   extraPositional: readonly string[],
   command: "up" | "down",
-): MigrationRunOptions {
-  const base = buildDatabaseRunOptions(parsed, extraPositional, command);
+): Promise<MigrationRunOptions> {
+  const base = await buildDatabaseRunOptions(parsed, extraPositional, command);
 
   return {
     ...base,

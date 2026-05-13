@@ -89,7 +89,7 @@ export async function runCommand(
   handlers: CommandHandlers = defaultCommandHandlers,
 ): Promise<number> {
   if (command === "create") {
-    const options = buildCreateOptions(parsed, extraPositional);
+    const options = await buildCreateOptions(parsed, extraPositional);
 
     logger.emit(
       events.commandOptions({
@@ -99,7 +99,7 @@ export async function runCommand(
       }),
     );
 
-    const filePath = handlers.createMigration(options);
+    const filePath = await handlers.createMigration(options);
 
     if (runtime.json) {
       resultWriter.writeJson({
@@ -114,7 +114,7 @@ export async function runCommand(
   }
 
   if (command === "validate") {
-    const runOptions = buildDatabaseRunOptions(
+    const runOptions = await buildDatabaseRunOptions(
       parsed,
       extraPositional,
       command,
@@ -140,7 +140,7 @@ export async function runCommand(
   }
 
   if (command === "status") {
-    const runOptions = buildDatabaseRunOptions(
+    const runOptions = await buildDatabaseRunOptions(
       parsed,
       extraPositional,
       command,
@@ -168,7 +168,11 @@ export async function runCommand(
     return 0;
   }
 
-  const runOptions = buildMigrationRunOptions(parsed, extraPositional, command);
+  const runOptions = await buildMigrationRunOptions(
+    parsed,
+    extraPositional,
+    command,
+  );
   const runFn = command === "up" ? handlers.up : handlers.down;
 
   await runFn(runOptions.clientConfig, {

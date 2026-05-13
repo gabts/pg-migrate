@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import * as fs from "fs";
+import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import {
@@ -17,22 +17,22 @@ CREATE TABLE person (id integer);
 DROP TABLE person;
 `;
 
-function withMigrationsDirectory(
+async function withMigrationsDirectory(
   files: Record<string, string | Buffer>,
-  test: (directory: string) => void,
-): void {
-  const directory = fs.mkdtempSync(
+  test: (directory: string) => Promise<void>,
+): Promise<void> {
+  const directory = await fs.mkdtemp(
     path.join(os.tmpdir(), "pg_migrate-migration-files-"),
   );
 
   try {
     for (const [file, content] of Object.entries(files)) {
-      fs.writeFileSync(path.join(directory, file), content);
+      await fs.writeFile(path.join(directory, file), content);
     }
 
-    test(directory);
+    await test(directory);
   } finally {
-    fs.rmSync(directory, { recursive: true, force: true });
+    await fs.rm(directory, { recursive: true, force: true });
   }
 }
 
@@ -145,16 +145,16 @@ CREATE TABLE person (id integer);
   });
 
   describe("materializeSteps", (): void => {
-    it("reads migration files and extracts SQL for the given direction", (): void => {
-      withMigrationsDirectory(
+    it("reads migration files and extracts SQL for the given direction", async (): Promise<void> => {
+      await withMigrationsDirectory(
         {
           "20260416090000_create_person.sql": validMigration,
           "20260416090100_add_column.sql": validMigration,
         },
-        (directory): void => {
-          const disk = loadDiskMigrations(directory);
+        async (directory): Promise<void> => {
+          const disk = await loadDiskMigrations(directory);
 
-          assert.deepEqual(materializeSteps(disk.all, "up"), [
+          assert.deepEqual(await materializeSteps(disk.all, "up"), [
             {
               file: "20260416090000_create_person.sql",
               sql: "CREATE TABLE person (id integer);",
@@ -165,7 +165,7 @@ CREATE TABLE person (id integer);
             },
           ]);
 
-          assert.deepEqual(materializeSteps(disk.all, "down"), [
+          assert.deepEqual(await materializeSteps(disk.all, "down"), [
             {
               file: "20260416090000_create_person.sql",
               sql: "DROP TABLE person;",
@@ -179,45 +179,45 @@ CREATE TABLE person (id integer);
       );
     });
 
-    it("returns an empty array for an empty plan", (): void => {
-      assert.deepEqual(materializeSteps([], "up"), []);
+    it("returns an empty array for an empty plan", async (): Promise<void> => {
+      assert.deepEqual(await materializeSteps([], "up"), []);
     });
 
-    it("throws when a migration file is not valid UTF-8", (): void => {
-      withMigrationsDirectory(
+    it("throws when a migration file is not valid UTF-8", async (): Promise<void> => {
+      await withMigrationsDirectory(
         {
           "20260416090000_invalid_utf8.sql": Buffer.from([0xc3, 0x28]),
         },
-        (directory): void => {
-          const disk = loadDiskMigrations(directory);
-          assert.throws((): void => {
-            materializeSteps(disk.all, "up");
+        async (directory): Promise<void> => {
+          const disk = await loadDiskMigrations(directory);
+          await assert.rejects(async (): Promise<void> => {
+            await materializeSteps(disk.all, "up");
           }, /Migration file is not valid UTF-8: 20260416090000_invalid_utf8\.sql/);
         },
       );
     });
 
-    it("materializes SQL when down marker appears before up marker", (): void => {
+    it("materializes SQL when down marker appears before up marker", async (): Promise<void> => {
       const downBeforeUp = `-- migrate:down
 DROP TABLE person;
 -- migrate:up
 CREATE TABLE person (id integer);
 `;
 
-      withMigrationsDirectory(
+      await withMigrationsDirectory(
         {
           "20260416090000_create_person.sql": downBeforeUp,
         },
-        (directory): void => {
-          const disk = loadDiskMigrations(directory);
+        async (directory): Promise<void> => {
+          const disk = await loadDiskMigrations(directory);
 
-          assert.deepEqual(materializeSteps(disk.all, "up"), [
+          assert.deepEqual(await materializeSteps(disk.all, "up"), [
             {
               file: "20260416090000_create_person.sql",
               sql: "CREATE TABLE person (id integer);",
             },
           ]);
-          assert.deepEqual(materializeSteps(disk.all, "down"), [
+          assert.deepEqual(await materializeSteps(disk.all, "down"), [
             {
               file: "20260416090000_create_person.sql",
               sql: "DROP TABLE person;",
@@ -227,34 +227,34 @@ CREATE TABLE person (id integer);
       );
     });
 
-    it("materializes empty down SQL for irreversible migrations", (): void => {
+    it("materializes empty down SQL for irreversible migrations", async (): Promise<void> => {
       const irreversibleMigration = `-- migrate:up\nINSERT INTO data SELECT generate_series(1, 1000);\n-- migrate:down\n`;
 
-      withMigrationsDirectory(
+      await withMigrationsDirectory(
         {
           "20260416090000_backfill.sql": irreversibleMigration,
         },
-        (directory): void => {
-          const disk = loadDiskMigrations(directory);
+        async (directory): Promise<void> => {
+          const disk = await loadDiskMigrations(directory);
 
-          assert.deepEqual(materializeSteps(disk.all, "down"), [
+          assert.deepEqual(await materializeSteps(disk.all, "down"), [
             { file: "20260416090000_backfill.sql", sql: "" },
           ]);
         },
       );
     });
 
-    it("materializes empty down SQL when down marker is omitted", (): void => {
+    it("materializes empty down SQL when down marker is omitted", async (): Promise<void> => {
       const upOnlyMigration = `-- migrate:up\nINSERT INTO data SELECT generate_series(1, 1000);\n`;
 
-      withMigrationsDirectory(
+      await withMigrationsDirectory(
         {
           "20260416090000_backfill.sql": upOnlyMigration,
         },
-        (directory): void => {
-          const disk = loadDiskMigrations(directory);
+        async (directory): Promise<void> => {
+          const disk = await loadDiskMigrations(directory);
 
-          assert.deepEqual(materializeSteps(disk.all, "down"), [
+          assert.deepEqual(await materializeSteps(disk.all, "down"), [
             { file: "20260416090000_backfill.sql", sql: "" },
           ]);
         },
@@ -263,15 +263,15 @@ CREATE TABLE person (id integer);
   });
 
   describe("cached materialization", (): void => {
-    it("reuses parsed SQL across directions", (): void => {
-      withMigrationsDirectory(
+    it("reuses parsed SQL across directions", async (): Promise<void> => {
+      await withMigrationsDirectory(
         {
           "20260416090000_create_person.sql": validMigration,
           "20260416090100_add_column.sql": validMigration,
         },
-        (directory): void => {
-          const disk = loadDiskMigrations(directory);
-          const sqlByFile = readMigrationSqlByFile(disk.all);
+        async (directory): Promise<void> => {
+          const disk = await loadDiskMigrations(directory);
+          const sqlByFile = await readMigrationSqlByFile(disk.all);
 
           assert.deepEqual(materializeStepsFromSql(disk.all, "up", sqlByFile), [
             {
@@ -301,13 +301,13 @@ CREATE TABLE person (id integer);
       );
     });
 
-    it("throws when cached SQL is missing for a planned file", (): void => {
-      withMigrationsDirectory(
+    it("throws when cached SQL is missing for a planned file", async (): Promise<void> => {
+      await withMigrationsDirectory(
         {
           "20260416090000_create_person.sql": validMigration,
         },
-        (directory): void => {
-          const disk = loadDiskMigrations(directory);
+        async (directory): Promise<void> => {
+          const disk = await loadDiskMigrations(directory);
           assert.throws((): void => {
             materializeStepsFromSql(disk.all, "up", new Map());
           }, /Missing parsed migration SQL for file: 20260416090000_create_person\.sql/);
@@ -317,35 +317,35 @@ CREATE TABLE person (id integer);
   });
 
   describe("loadDiskMigrations", (): void => {
-    it("throws when the migrations directory has no SQL files", (): void => {
-      withMigrationsDirectory({}, (directory): void => {
-        assert.throws((): void => {
-          loadDiskMigrations(directory);
+    it("throws when the migrations directory has no SQL files", async (): Promise<void> => {
+      await withMigrationsDirectory({}, async (directory): Promise<void> => {
+        await assert.rejects(async (): Promise<void> => {
+          await loadDiskMigrations(directory);
         }, /No migration files found in directory/);
       });
     });
 
-    it("throws when the migrations directory does not exist", (): void => {
+    it("throws when the migrations directory does not exist", async (): Promise<void> => {
       const missingDirectory = path.join(
         os.tmpdir(),
         "pg_migrate-missing-directory",
       );
 
-      assert.throws((): void => {
-        loadDiskMigrations(missingDirectory);
+      await assert.rejects(async (): Promise<void> => {
+        await loadDiskMigrations(missingDirectory);
       }, /Migrations directory does not exist/);
     });
 
-    it("loads SQL migration files in version order", (): void => {
-      withMigrationsDirectory(
+    it("loads SQL migration files in version order", async (): Promise<void> => {
+      await withMigrationsDirectory(
         {
           "20260416090002_second.sql": validMigration,
           "20260416090001_first.sql": validMigration,
           "20260416090003_third.sql": validMigration,
           "notes.txt": "ignored",
         },
-        (directory): void => {
-          const disk = loadDiskMigrations(directory);
+        async (directory): Promise<void> => {
+          const disk = await loadDiskMigrations(directory);
 
           assert.deepEqual(
             disk.all.map(
@@ -380,29 +380,29 @@ CREATE TABLE person (id integer);
       );
     });
 
-    it("rejects invalid migration filenames", (): void => {
-      withMigrationsDirectory(
+    it("rejects invalid migration filenames", async (): Promise<void> => {
+      await withMigrationsDirectory(
         {
           "20260416090000_valid.sql": validMigration,
           "bad name.sql": validMigration,
         },
-        (directory): void => {
-          assert.throws((): void => {
-            loadDiskMigrations(directory);
+        async (directory): Promise<void> => {
+          await assert.rejects(async (): Promise<void> => {
+            await loadDiskMigrations(directory);
           }, /Invalid migration filename: bad name\.sql/);
         },
       );
     });
 
-    it("rejects duplicate migration versions across different files", (): void => {
-      withMigrationsDirectory(
+    it("rejects duplicate migration versions across different files", async (): Promise<void> => {
+      await withMigrationsDirectory(
         {
           "20260416090000_add_users.sql": validMigration,
           "20260416090000_add_roles.sql": validMigration,
         },
-        (directory): void => {
-          assert.throws((): void => {
-            loadDiskMigrations(directory);
+        async (directory): Promise<void> => {
+          await assert.rejects(async (): Promise<void> => {
+            await loadDiskMigrations(directory);
           }, /Duplicate migration version: 20260416090000/);
         },
       );

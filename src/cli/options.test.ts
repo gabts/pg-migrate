@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import * as fs from "fs";
+import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { parseTokens } from "./args.js";
@@ -9,10 +9,10 @@ import {
   buildMigrationRunOptions,
 } from "./options.js";
 
-function withEnvVars<T>(
+async function withEnvVars<T>(
   env: Record<string, string | undefined>,
-  fn: () => T,
-): T {
+  fn: () => Promise<T>,
+): Promise<T> {
   const originals = new Map<string, string | undefined>();
   const isolatedEnv = {
     PGM_ENV_FILE: "",
@@ -30,7 +30,7 @@ function withEnvVars<T>(
   }
 
   try {
-    return fn();
+    return await fn();
   } finally {
     for (const [key, value] of originals.entries()) {
       if (value === undefined) {
@@ -44,13 +44,12 @@ function withEnvVars<T>(
 
 describe("options", (): void => {
   describe("buildCreateOptions", (): void => {
-    it("uses PGM_MIGRATIONS_DIRECTORY when directory is omitted", (): void => {
+    it("uses PGM_MIGRATIONS_DIRECTORY when directory is omitted", async (): Promise<void> => {
       const parsed = parseTokens(["create", "--name", "create_person"]);
 
-      const options = withEnvVars(
+      const options = await withEnvVars(
         { PGM_MIGRATIONS_DIRECTORY: "sql/migrations" },
-        (): ReturnType<typeof buildCreateOptions> =>
-          buildCreateOptions(parsed, parsed.extraPositional),
+        () => buildCreateOptions(parsed, parsed.extraPositional),
       );
 
       assert.deepEqual(options, {
@@ -59,7 +58,7 @@ describe("options", (): void => {
       });
     });
 
-    it("prefers explicit directory and strips .sql from names", (): void => {
+    it("prefers explicit directory and strips .sql from names", async (): Promise<void> => {
       const parsed = parseTokens([
         "create",
         "--directory",
@@ -68,10 +67,9 @@ describe("options", (): void => {
         "create_person.sql",
       ]);
 
-      const options = withEnvVars(
+      const options = await withEnvVars(
         { PGM_MIGRATIONS_DIRECTORY: "from-env" },
-        (): ReturnType<typeof buildCreateOptions> =>
-          buildCreateOptions(parsed, parsed.extraPositional),
+        () => buildCreateOptions(parsed, parsed.extraPositional),
       );
 
       assert.deepEqual(options, {
@@ -80,17 +78,17 @@ describe("options", (): void => {
       });
     });
 
-    it("rejects positional create arguments", (): void => {
+    it("rejects positional create arguments", async (): Promise<void> => {
       const parsed = parseTokens(["create", "unexpected"]);
 
-      assert.throws((): void => {
-        buildCreateOptions(parsed, parsed.extraPositional);
+      await assert.rejects(async (): Promise<void> => {
+        await buildCreateOptions(parsed, parsed.extraPositional);
       }, /Unexpected argument: unexpected/);
     });
   });
 
   describe("buildDatabaseRunOptions", (): void => {
-    it("resolves database URL, directory, and table from flags", (): void => {
+    it("resolves database URL, directory, and table from flags", async (): Promise<void> => {
       const parsed = parseTokens([
         "validate",
         "--url",
@@ -102,7 +100,11 @@ describe("options", (): void => {
       ]);
 
       assert.deepEqual(
-        buildDatabaseRunOptions(parsed, parsed.extraPositional, "validate"),
+        await buildDatabaseRunOptions(
+          parsed,
+          parsed.extraPositional,
+          "validate",
+        ),
         {
           clientConfig: {
             connectionString: "postgres://example/db",
@@ -114,16 +116,15 @@ describe("options", (): void => {
       );
     });
 
-    it("uses PGM_DATABASE_URL and shared defaults when flags are omitted", (): void => {
+    it("uses PGM_DATABASE_URL and shared defaults when flags are omitted", async (): Promise<void> => {
       const parsed = parseTokens(["up"]);
 
-      const options = withEnvVars(
+      const options = await withEnvVars(
         {
           PGM_DATABASE_URL: "postgres://env/db",
           PGM_MIGRATIONS_DIRECTORY: undefined,
         },
-        (): ReturnType<typeof buildDatabaseRunOptions> =>
-          buildDatabaseRunOptions(parsed, parsed.extraPositional, "up"),
+        () => buildDatabaseRunOptions(parsed, parsed.extraPositional, "up"),
       );
 
       assert.deepEqual(options, {
@@ -136,12 +137,12 @@ describe("options", (): void => {
       });
     });
 
-    it("uses --env-file values when environment variables are omitted", (): void => {
-      const tempDir = fs.mkdtempSync(
+    it("uses --env-file values when environment variables are omitted", async (): Promise<void> => {
+      const tempDir = await fs.mkdtemp(
         path.join(os.tmpdir(), "pg_migrate-options-"),
       );
       const envFilePath = path.join(tempDir, ".env");
-      fs.writeFileSync(
+      await fs.writeFile(
         envFilePath,
         `
 PGM_DATABASE_URL=postgres://file/db
@@ -151,12 +152,12 @@ PGM_MIGRATIONS_DIRECTORY=file/migrations
       const parsed = parseTokens(["status", "--env-file", envFilePath]);
 
       try {
-        const options = withEnvVars(
+        const options = await withEnvVars(
           {
             PGM_DATABASE_URL: undefined,
             PGM_MIGRATIONS_DIRECTORY: undefined,
           },
-          (): ReturnType<typeof buildDatabaseRunOptions> =>
+          () =>
             buildDatabaseRunOptions(parsed, parsed.extraPositional, "status"),
         );
 
@@ -169,17 +170,16 @@ PGM_MIGRATIONS_DIRECTORY=file/migrations
           table: "schema_migrations",
         });
       } finally {
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        await fs.rm(tempDir, { recursive: true, force: true });
       }
     });
 
-    it("uses PGM_MIGRATIONS_DIRECTORY when database command directory is omitted", (): void => {
+    it("uses PGM_MIGRATIONS_DIRECTORY when database command directory is omitted", async (): Promise<void> => {
       const parsed = parseTokens(["down", "postgres://example/db"]);
 
-      const options = withEnvVars(
+      const options = await withEnvVars(
         { PGM_MIGRATIONS_DIRECTORY: "sql/migrations" },
-        (): ReturnType<typeof buildDatabaseRunOptions> =>
-          buildDatabaseRunOptions(parsed, parsed.extraPositional, "down"),
+        () => buildDatabaseRunOptions(parsed, parsed.extraPositional, "down"),
       );
 
       assert.deepEqual(options, {
@@ -192,7 +192,7 @@ PGM_MIGRATIONS_DIRECTORY=file/migrations
       });
     });
 
-    it("rejects duplicate explicit database URLs", (): void => {
+    it("rejects duplicate explicit database URLs", async (): Promise<void> => {
       const parsed = parseTokens([
         "down",
         "postgres://positional/db",
@@ -200,19 +200,23 @@ PGM_MIGRATIONS_DIRECTORY=file/migrations
         "postgres://flag/db",
       ]);
 
-      assert.throws((): void => {
-        buildDatabaseRunOptions(parsed, parsed.extraPositional, "down");
+      await assert.rejects(async (): Promise<void> => {
+        await buildDatabaseRunOptions(parsed, parsed.extraPositional, "down");
       }, /Database URL provided multiple times/);
     });
 
-    it("rejects missing database URLs", (): void => {
+    it("rejects missing database URLs", async (): Promise<void> => {
       for (const command of ["up", "down", "validate", "status"] as const) {
         const parsed = parseTokens([command]);
 
-        withEnvVars({ PGM_DATABASE_URL: undefined }, (): void => {
-          assert.throws(
-            (): void => {
-              buildDatabaseRunOptions(parsed, parsed.extraPositional, command);
+        await withEnvVars({ PGM_DATABASE_URL: undefined }, async () => {
+          await assert.rejects(
+            async (): Promise<void> => {
+              await buildDatabaseRunOptions(
+                parsed,
+                parsed.extraPositional,
+                command,
+              );
             },
             new RegExp(`Database URL is required for ${command}`),
           );
@@ -222,7 +226,7 @@ PGM_MIGRATIONS_DIRECTORY=file/migrations
   });
 
   describe("buildMigrationRunOptions", (): void => {
-    it("adds migration-only dry-run and target options", (): void => {
+    it("adds migration-only dry-run and target options", async (): Promise<void> => {
       const parsed = parseTokens([
         "up",
         "postgres://example/db",
@@ -231,10 +235,9 @@ PGM_MIGRATIONS_DIRECTORY=file/migrations
         "20260429123456_create.sql",
       ]);
 
-      const options = withEnvVars(
+      const options = await withEnvVars(
         { PGM_MIGRATIONS_DIRECTORY: undefined },
-        (): ReturnType<typeof buildMigrationRunOptions> =>
-          buildMigrationRunOptions(parsed, parsed.extraPositional, "up"),
+        () => buildMigrationRunOptions(parsed, parsed.extraPositional, "up"),
       );
 
       assert.deepEqual(options, {

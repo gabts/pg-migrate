@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import * as fs from "fs";
+import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import * as pg from "pg";
@@ -104,12 +104,12 @@ function stripAnsi(value: string): string {
 describe("cli run", (): void => {
   let tempDir: string;
 
-  beforeEach((): void => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pg_migrate-cli-run-"));
+  beforeEach(async (): Promise<void> => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pg_migrate-cli-run-"));
   });
 
-  afterEach((): void => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+  afterEach(async (): Promise<void> => {
+    await fs.rm(tempDir, { recursive: true, force: true });
   });
 
   it("prints help text", async (): Promise<void> => {
@@ -163,12 +163,12 @@ describe("cli run", (): void => {
     assert.equal(result.status, 0);
     const parsed = JSON.parse(result.stdout);
     assert.equal(path.dirname(parsed.file), directory);
-    assert.equal(fs.statSync(directory).isDirectory(), true);
+    assert.equal((await fs.stat(directory)).isDirectory(), true);
     assert.equal(result.stderr, "");
   });
 
   it("emits parseable JSON for successful validate with no incidental stdout text", async function (this: Mocha.Context): Promise<void> {
-    const databaseUrl = readRuntimeEnv().databaseUrl;
+    const databaseUrl = (await readRuntimeEnv()).databaseUrl;
     if (!databaseUrl) {
       this.skip();
       return;
@@ -176,7 +176,7 @@ describe("cli run", (): void => {
 
     const createFile = "20260416090000_create.sql";
     const insertFile = "20260416090100_insert.sql";
-    fs.writeFileSync(
+    await fs.writeFile(
       path.join(tempDir, createFile),
       `-- migrate:up
 CREATE TABLE cli_validate_person (
@@ -187,7 +187,7 @@ CREATE TABLE cli_validate_person (
 DROP TABLE cli_validate_person;
 `,
     );
-    fs.writeFileSync(
+    await fs.writeFile(
       path.join(tempDir, insertFile),
       `-- migrate:up
 INSERT INTO cli_validate_person DEFAULT VALUES;

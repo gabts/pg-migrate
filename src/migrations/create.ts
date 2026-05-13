@@ -1,4 +1,4 @@
-import * as fs from "fs";
+import * as fs from "fs/promises";
 import * as path from "path";
 import {
   assertValidMigrationName,
@@ -26,10 +26,12 @@ function formatTimestamp(date = new Date()): string {
   return `${year}${month}${day}${hour}${minute}${second}`;
 }
 
-function readExistingMigrationVersions(directory: string): Set<string> {
+async function readExistingMigrationVersions(
+  directory: string,
+): Promise<Set<string>> {
   const versions = new Set<string>();
 
-  for (const file of fs.readdirSync(directory)) {
+  for (const file of await fs.readdir(directory)) {
     if (isMigrationFilename(file)) {
       versions.add(getMigrationVersion(file));
     }
@@ -41,7 +43,9 @@ function readExistingMigrationVersions(directory: string): Set<string> {
 /**
  * Creates a timestamped migration file from a migration name slug.
  */
-export function createMigration(opts: CreateMigrationOptions): string {
+export async function createMigration(
+  opts: CreateMigrationOptions,
+): Promise<string> {
   if (!opts.name) {
     throw new Error("Name flag (--name, -n) is required");
   }
@@ -49,7 +53,7 @@ export function createMigration(opts: CreateMigrationOptions): string {
   assertValidMigrationName(opts.name);
 
   try {
-    fs.mkdirSync(opts.directory, { recursive: true });
+    await fs.mkdir(opts.directory, { recursive: true });
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "EEXIST" || code === "ENOTDIR") {
@@ -58,11 +62,11 @@ export function createMigration(opts: CreateMigrationOptions): string {
     throw error;
   }
 
-  if (!fs.statSync(opts.directory).isDirectory()) {
+  if (!(await fs.stat(opts.directory)).isDirectory()) {
     throw new Error(`Migration path is not a directory: ${opts.directory}`);
   }
 
-  const existingVersions = readExistingMigrationVersions(opts.directory);
+  const existingVersions = await readExistingMigrationVersions(opts.directory);
   const version = formatTimestamp(opts.clock?.());
 
   if (existingVersions.has(version)) {
@@ -73,7 +77,7 @@ export function createMigration(opts: CreateMigrationOptions): string {
   const fileContent = "-- migrate:up\n\n-- migrate:down\n";
 
   try {
-    fs.writeFileSync(filePath, fileContent, { flag: "wx" });
+    await fs.writeFile(filePath, fileContent, { flag: "wx" });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") {
       throw new Error(
