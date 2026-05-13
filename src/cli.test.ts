@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { spawnSync } from "child_process";
-import * as fs from "fs";
+import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { fileURLToPath } from "url";
@@ -36,12 +36,12 @@ function runCliRaw(args: string[]): CliRunResult {
 describe("cli process", (): void => {
   let tempDir: string;
 
-  beforeEach((): void => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pg_migrate-cli-"));
+  beforeEach(async (): Promise<void> => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pg_migrate-cli-"));
   });
 
-  afterEach((): void => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+  afterEach(async (): Promise<void> => {
+    await fs.rm(tempDir, { recursive: true, force: true });
   });
 
   it("separates failed up logs to stderr while keeping stdout empty", (): void => {

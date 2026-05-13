@@ -1,4 +1,4 @@
-import * as fs from "fs";
+import * as fs from "fs/promises";
 import * as path from "path";
 import { assertValidMigrationFilename, getMigrationVersion } from "./naming.js";
 import type {
@@ -19,8 +19,11 @@ const migrationMarkers = {
   down: "-- migrate:down",
 };
 
-function readFileUtf8Strict(filePath: string, file: string): string {
-  const bytes = fs.readFileSync(filePath);
+async function readFileUtf8Strict(
+  filePath: string,
+  file: string,
+): Promise<string> {
+  const bytes = await fs.readFile(filePath);
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch {
@@ -98,13 +101,13 @@ export function parseMigration(
 /**
  * Reads and parses SQL sections for each disk migration by file name.
  */
-export function readMigrationSqlByFile(
+export async function readMigrationSqlByFile(
   migrations: DiskMigration[],
-): Map<string, ParsedMigrationSql> {
+): Promise<Map<string, ParsedMigrationSql>> {
   const sqlByFile = new Map<string, ParsedMigrationSql>();
 
   for (const { file, path: filePath } of migrations) {
-    const sql = readFileUtf8Strict(filePath, file);
+    const sql = await readFileUtf8Strict(filePath, file);
     sqlByFile.set(file, parseMigrationSections(sql, file));
   }
 
@@ -134,26 +137,29 @@ export function materializeStepsFromSql(
 /**
  * Reads and materializes executable steps from migration files on disk.
  */
-export function materializeSteps(
+export async function materializeSteps(
   migrations: DiskMigration[],
   direction: MigrationDirection,
-): MigrationStep[] {
+): Promise<MigrationStep[]> {
   return materializeStepsFromSql(
     migrations,
     direction,
-    readMigrationSqlByFile(migrations),
+    await readMigrationSqlByFile(migrations),
   );
 }
 
 /**
  * Loads, validates, and orders migration files from a directory.
  */
-export function loadDiskMigrations(directory: string): LoadedMigrations {
-  if (!fs.existsSync(directory) || !fs.statSync(directory).isDirectory()) {
+export async function loadDiskMigrations(
+  directory: string,
+): Promise<LoadedMigrations> {
+  const directoryStats = await fs.stat(directory).catch((): null => null);
+  if (!directoryStats?.isDirectory()) {
     throw new Error(`Migrations directory does not exist: ${directory}`);
   }
 
-  const files = fs.readdirSync(directory);
+  const files = await fs.readdir(directory);
   const migrationFiles = files.filter((file): boolean => file.endsWith(".sql"));
 
   if (!migrationFiles.length) {

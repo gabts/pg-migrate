@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import * as fs from "fs";
+import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import type { Logger } from "../logging/logger.js";
@@ -78,12 +78,12 @@ function createHandlers(overrides: Partial<CommandHandlers>): CommandHandlers {
 describe("commands", (): void => {
   let tempDir: string;
 
-  beforeEach((): void => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pg_migrate-command-"));
+  beforeEach(async (): Promise<void> => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pg_migrate-command-"));
   });
 
-  afterEach((): void => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+  afterEach(async (): Promise<void> => {
+    await fs.rm(tempDir, { recursive: true, force: true });
   });
 
   it("runs create and writes the created file path as text", async (): Promise<void> => {

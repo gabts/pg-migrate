@@ -1,4 +1,4 @@
-import * as fs from "fs";
+import * as fs from "fs/promises";
 import * as path from "path";
 
 interface RuntimeEnv {
@@ -67,10 +67,10 @@ function resolveEnvFile(
   return { path: defaultEnvFilePath, required: false };
 }
 
-function readEnvFile(
+async function readEnvFile(
   env: NodeJS.ProcessEnv,
   configuredPath: string | false | undefined,
-): Record<string, string> {
+): Promise<Record<string, string>> {
   const envFile = resolveEnvFile(env, configuredPath);
   if (!envFile) {
     return {};
@@ -79,7 +79,7 @@ function readEnvFile(
   const resolvedPath = path.resolve(envFile.path);
 
   try {
-    return parseEnvFileContents(fs.readFileSync(resolvedPath, "utf8"));
+    return parseEnvFileContents(await fs.readFile(resolvedPath, "utf8"));
   } catch (error) {
     const code =
       error instanceof Error && "code" in error ? error.code : undefined;
@@ -103,11 +103,11 @@ function runtimeValue(
 /**
  * Reads runtime configuration from environment variables and .env files.
  */
-export function readRuntimeEnv(
+export async function readRuntimeEnv(
   env: NodeJS.ProcessEnv = process.env,
   options: ReadRuntimeEnvOptions = {},
-): RuntimeEnv {
-  const fileEnv = readEnvFile(env, options.envFilePath);
+): Promise<RuntimeEnv> {
+  const fileEnv = await readEnvFile(env, options.envFilePath);
 
   return {
     databaseUrl: runtimeValue(env, fileEnv, databaseUrlEnvVar),

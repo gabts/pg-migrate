@@ -78,12 +78,12 @@ type CommonOptions = Pick<
   "directory" | "logSink" | "quiet" | "correlationId" | "table" | "verbose"
 >;
 
-function normalizeCommonOptions(args: CommonOptions): {
+async function normalizeCommonOptions(args: CommonOptions): Promise<{
   logger: Logger;
   directory: string;
   table: string;
-} {
-  const runtimeEnv = readRuntimeEnv();
+}> {
+  const runtimeEnv = await readRuntimeEnv();
   const logger = createLogger({
     quiet: args.quiet,
     correlationId: args.correlationId,
@@ -112,7 +112,7 @@ export async function up(
   clientConfig: ClientConfig,
   args: MigrationOptions = {},
 ): Promise<void> {
-  const { logger, directory, table } = normalizeCommonOptions(args);
+  const { logger, directory, table } = await normalizeCommonOptions(args);
   const dryRun = args.dryRun ?? false;
   const target = args.target;
 
@@ -137,7 +137,7 @@ export async function up(
   );
 
   try {
-    const disk = loadDiskMigrations(directory);
+    const disk = await loadDiskMigrations(directory);
     const targetMigration = resolveOptionalTargetMigration(target, disk);
     if (targetMigration) {
       logger.emit(events.targetSelected(targetMigration.file));
@@ -145,7 +145,7 @@ export async function up(
 
     // Validate and parse the full migration set before opening a DB session
     // or running any SQL.
-    const sqlByFile = readMigrationSqlByFile(disk.all);
+    const sqlByFile = await readMigrationSqlByFile(disk.all);
 
     await withMigrationSession({
       clientConfig,
@@ -190,7 +190,7 @@ export async function down(
   clientConfig: ClientConfig,
   args: MigrationOptions = {},
 ): Promise<void> {
-  const { logger, directory, table } = normalizeCommonOptions(args);
+  const { logger, directory, table } = await normalizeCommonOptions(args);
   const dryRun = args.dryRun ?? false;
   const target = args.target;
 
@@ -215,7 +215,7 @@ export async function down(
   );
 
   try {
-    const disk = loadDiskMigrations(directory);
+    const disk = await loadDiskMigrations(directory);
     const targetMigration = resolveOptionalTargetMigration(target, disk);
     if (targetMigration) {
       logger.emit(events.targetSelected(targetMigration.file));
@@ -223,7 +223,7 @@ export async function down(
 
     // Validate and parse the full migration set before opening a DB session
     // or running any SQL.
-    const sqlByFile = readMigrationSqlByFile(disk.all);
+    const sqlByFile = await readMigrationSqlByFile(disk.all);
 
     await withMigrationSession({
       clientConfig,
@@ -269,7 +269,7 @@ export async function validate(
   clientConfig: ClientConfig,
   args: ValidateOptions = {},
 ): Promise<void> {
-  const { logger, directory, table } = normalizeCommonOptions(args);
+  const { logger, directory, table } = await normalizeCommonOptions(args);
 
   logger.emit(
     events.runTelemetry({
@@ -288,9 +288,9 @@ export async function validate(
   );
 
   try {
-    const disk = loadDiskMigrations(directory);
+    const disk = await loadDiskMigrations(directory);
     // Parse only; throws on malformed SQL before opening a DB session.
-    readMigrationSqlByFile(disk.all);
+    await readMigrationSqlByFile(disk.all);
 
     await withMigrationSession({
       clientConfig,
@@ -339,7 +339,7 @@ export async function status(
   clientConfig: ClientConfig,
   args: StatusOptions = {},
 ): Promise<MigrationStatusResult> {
-  const { logger, directory, table } = normalizeCommonOptions(args);
+  const { logger, directory, table } = await normalizeCommonOptions(args);
 
   logger.emit(
     events.runTelemetry({
@@ -358,9 +358,9 @@ export async function status(
   );
 
   try {
-    const disk = loadDiskMigrations(directory);
+    const disk = await loadDiskMigrations(directory);
     // Parse only; throws on malformed SQL before opening a DB session.
-    readMigrationSqlByFile(disk.all);
+    await readMigrationSqlByFile(disk.all);
 
     const result = await withMigrationStatusSession({
       clientConfig,

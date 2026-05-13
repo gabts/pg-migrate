@@ -4,7 +4,7 @@ import { readRuntimeEnv } from "../env.js";
 import type { Logger } from "../logging/logger.js";
 import { withMigrationSession, withMigrationStatusSession } from "./session.js";
 
-const testDatabaseUrl = readRuntimeEnv().databaseUrl;
+const testDatabaseUrl = (await readRuntimeEnv()).databaseUrl;
 if (!testDatabaseUrl) {
   throw new Error("PGM_DATABASE_URL must be set to run integration tests");
 }
