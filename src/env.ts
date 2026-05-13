@@ -15,9 +15,9 @@ const defaultMigrationDirectory = "migrations";
 const defaultMigrationHistoryTable = "migration_history";
 const defaultEnvFilePath = ".env";
 
-const databaseUrlEnvVar = "DATABASE_URL";
-const migrationDirectoryEnvVar = "MIGRATION_DIRECTORY";
-const envFilePathEnvVar = "PG_MIGRATE_ENV_FILE";
+const databaseUrlEnvVar = "PGM_DATABASE_URL";
+const migrationDirectoryEnvVar = "PGM_MIGRATION_DIRECTORY";
+const envFilePathEnvVar = "PGM_ENV_FILE";
 
 function parseEnvFileContents(contents: string): Record<string, string> {
   const values: Record<string, string> = {};

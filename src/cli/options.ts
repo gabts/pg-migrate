@@ -77,7 +77,7 @@ export function buildDatabaseRunOptions(
   const clientConfig = positionalUrl ?? flagUrl ?? runtimeEnv.databaseUrl;
   if (!clientConfig) {
     throw new Error(
-      `Database URL is required for ${command}; pass it as an argument, --url, set DATABASE_URL, or add DATABASE_URL to .env`,
+      `Database URL is required for ${command}; pass it as an argument, --url, set PGM_DATABASE_URL, or add PGM_DATABASE_URL to .env`,
     );
   }
 

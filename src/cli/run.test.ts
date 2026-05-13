@@ -167,7 +167,7 @@ describe("cli run", (): void => {
   });
 
   it("emits parseable JSON for successful validate with no incidental stdout text", async function (this: Mocha.Context): Promise<void> {
-    const databaseUrl = process.env.DATABASE_URL;
+    const databaseUrl = process.env.PGM_DATABASE_URL;
     if (!databaseUrl) {
       this.skip();
       return;

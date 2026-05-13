@@ -15,7 +15,7 @@ function withEnvVars<T>(
 ): T {
   const originals = new Map<string, string | undefined>();
   const isolatedEnv = {
-    PG_MIGRATE_ENV_FILE: "",
+    PGM_ENV_FILE: "",
     ...env,
   };
 
@@ -44,11 +44,11 @@ function withEnvVars<T>(
 
 describe("options", (): void => {
   describe("buildCreateOptions", (): void => {
-    it("uses MIGRATION_DIRECTORY when directory is omitted", (): void => {
+    it("uses PGM_MIGRATION_DIRECTORY when directory is omitted", (): void => {
       const parsed = parseTokens(["create", "--name", "create_person"]);
 
       const options = withEnvVars(
-        { MIGRATION_DIRECTORY: "sql/migrations" },
+        { PGM_MIGRATION_DIRECTORY: "sql/migrations" },
         (): ReturnType<typeof buildCreateOptions> =>
           buildCreateOptions(parsed, parsed.extraPositional),
       );
@@ -69,7 +69,7 @@ describe("options", (): void => {
       ]);
 
       const options = withEnvVars(
-        { MIGRATION_DIRECTORY: "from-env" },
+        { PGM_MIGRATION_DIRECTORY: "from-env" },
         (): ReturnType<typeof buildCreateOptions> =>
           buildCreateOptions(parsed, parsed.extraPositional),
       );
@@ -114,13 +114,13 @@ describe("options", (): void => {
       );
     });
 
-    it("uses DATABASE_URL and shared defaults when flags are omitted", (): void => {
+    it("uses PGM_DATABASE_URL and shared defaults when flags are omitted", (): void => {
       const parsed = parseTokens(["up"]);
 
       const options = withEnvVars(
         {
-          DATABASE_URL: "postgres://env/db",
-          MIGRATION_DIRECTORY: undefined,
+          PGM_DATABASE_URL: "postgres://env/db",
+          PGM_MIGRATION_DIRECTORY: undefined,
         },
         (): ReturnType<typeof buildDatabaseRunOptions> =>
           buildDatabaseRunOptions(parsed, parsed.extraPositional, "up"),
@@ -144,8 +144,8 @@ describe("options", (): void => {
       fs.writeFileSync(
         envFilePath,
         `
-DATABASE_URL=postgres://file/db
-MIGRATION_DIRECTORY=file/migrations
+PGM_DATABASE_URL=postgres://file/db
+PGM_MIGRATION_DIRECTORY=file/migrations
 `,
       );
       const parsed = parseTokens(["status", "--env-file", envFilePath]);
@@ -153,8 +153,8 @@ MIGRATION_DIRECTORY=file/migrations
       try {
         const options = withEnvVars(
           {
-            DATABASE_URL: undefined,
-            MIGRATION_DIRECTORY: undefined,
+            PGM_DATABASE_URL: undefined,
+            PGM_MIGRATION_DIRECTORY: undefined,
           },
           (): ReturnType<typeof buildDatabaseRunOptions> =>
             buildDatabaseRunOptions(parsed, parsed.extraPositional, "status"),
@@ -173,11 +173,11 @@ MIGRATION_DIRECTORY=file/migrations
       }
     });
 
-    it("uses MIGRATION_DIRECTORY when database command directory is omitted", (): void => {
+    it("uses PGM_MIGRATION_DIRECTORY when database command directory is omitted", (): void => {
       const parsed = parseTokens(["down", "postgres://example/db"]);
 
       const options = withEnvVars(
-        { MIGRATION_DIRECTORY: "sql/migrations" },
+        { PGM_MIGRATION_DIRECTORY: "sql/migrations" },
         (): ReturnType<typeof buildDatabaseRunOptions> =>
           buildDatabaseRunOptions(parsed, parsed.extraPositional, "down"),
       );
@@ -209,7 +209,7 @@ MIGRATION_DIRECTORY=file/migrations
       for (const command of ["up", "down", "validate", "status"] as const) {
         const parsed = parseTokens([command]);
 
-        withEnvVars({ DATABASE_URL: undefined }, (): void => {
+        withEnvVars({ PGM_DATABASE_URL: undefined }, (): void => {
           assert.throws(
             (): void => {
               buildDatabaseRunOptions(parsed, parsed.extraPositional, command);
@@ -232,7 +232,7 @@ MIGRATION_DIRECTORY=file/migrations
       ]);
 
       const options = withEnvVars(
-        { MIGRATION_DIRECTORY: undefined },
+        { PGM_MIGRATION_DIRECTORY: undefined },
         (): ReturnType<typeof buildMigrationRunOptions> =>
           buildMigrationRunOptions(parsed, parsed.extraPositional, "up"),
       );
