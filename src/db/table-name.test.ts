@@ -18,7 +18,7 @@ describe("table-name", (): void => {
 
     it("rejects unconventional table names", (): void => {
       for (const tableName of [
-        "MigrationHistory",
+        "MigrationsTable",
         "1migration_history",
         "migration-history",
         "migration.history.extra",

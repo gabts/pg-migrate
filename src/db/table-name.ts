@@ -12,7 +12,7 @@ const conventionalTableNamePattern =
 export function parseTableName(tableName: string): TableNameParts {
   if (!tableName.match(conventionalTableNamePattern)) {
     throw new Error(
-      `Invalid migration table name: ${tableName}. Must be lowercase with underscores (e.g. migration_history or schema_name.table_name)`,
+      `Invalid migration table name: ${tableName}. Must be lowercase with underscores (e.g. schema_migrations or schema_name.table_name)`,
     );
   }
 

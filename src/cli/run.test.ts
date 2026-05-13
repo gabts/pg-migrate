@@ -255,7 +255,7 @@ DELETE FROM cli_validate_person;
     assert.match(
       parsed.error,
       new RegExp(
-        `Migration directory does not exist: ${escapeRegExp(missingDirectory)}`,
+        `Migrations directory does not exist: ${escapeRegExp(missingDirectory)}`,
       ),
     );
     const logs = result.stderr
@@ -274,7 +274,7 @@ DELETE FROM cli_validate_person;
       logs.some(
         (log): boolean =>
           log.error?.message ===
-          `Migration directory does not exist: ${missingDirectory}`,
+          `Migrations directory does not exist: ${missingDirectory}`,
       ),
     );
     assert.ok(
@@ -346,7 +346,7 @@ DELETE FROM cli_validate_person;
     assert.match(result.stderr, /Migration run aborted/);
     assert.match(
       result.stderr,
-      new RegExp(`Migration directory does not exist: ${missingDirectory}`),
+      new RegExp(`Migrations directory does not exist: ${missingDirectory}`),
     );
   });
 

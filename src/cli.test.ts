@@ -60,7 +60,7 @@ describe("cli process", (): void => {
     assert.match(result.stderr, /Migration run aborted/);
     assert.match(
       result.stderr,
-      new RegExp(`Migration directory does not exist: ${missingDirectory}`),
+      new RegExp(`Migrations directory does not exist: ${missingDirectory}`),
     );
   });
 

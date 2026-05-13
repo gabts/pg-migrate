@@ -7,22 +7,22 @@ import { validateAppliedHistory } from "./validation.js";
 /**
  * Returns whether the configured migration history table exists.
  */
-export async function migrationHistoryExists(
+export async function migrationsTableExists(
   client: pg.Client,
   qualifiedTableName: string,
 ): Promise<boolean> {
-  const migrationTableQueryResult = await client.query(
+  const migrationsTableQueryResult = await client.query(
     `SELECT to_regclass($1) IS NOT NULL AS exists;`,
     [qualifiedTableName],
   );
 
-  return migrationTableQueryResult.rows[0]?.exists ?? false;
+  return migrationsTableQueryResult.rows[0]?.exists ?? false;
 }
 
 /**
  * Ensures migration history is stored by version only.
  */
-export async function ensureMigrationHistory(args: {
+export async function ensureMigrationsTable(args: {
   client: pg.Client;
   logger: Logger;
   qualifiedTableName: string;
@@ -30,8 +30,8 @@ export async function ensureMigrationHistory(args: {
 }): Promise<void> {
   const { client, logger, qualifiedTableName, table } = args;
 
-  if (!(await migrationHistoryExists(client, qualifiedTableName))) {
-    logger.emit(events.historyTableCreating(table));
+  if (!(await migrationsTableExists(client, qualifiedTableName))) {
+    logger.emit(events.migrationsTableCreating(table));
     await client.query(`
       CREATE TABLE ${qualifiedTableName}
       (
@@ -45,7 +45,7 @@ export async function ensureMigrationHistory(args: {
 /**
  * Verifies the migration history table exposes required columns.
  */
-export async function assertMigrationHistoryTableShape(args: {
+export async function assertMigrationsTableShape(args: {
   client: pg.Client;
   qualifiedTableName: string;
   table: string;

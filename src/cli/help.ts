@@ -24,7 +24,7 @@ const createHelpText = `Usage: pg-migrate create --name <name> [options]
 
 Options:
   -n, --name <name>         Migration name slug
-  -d, --directory <dir>     Output directory, defaults to PGM_MIGRATION_DIRECTORY (env or .env) or migrations
+  -d, --directory <dir>     Output directory, defaults to PGM_MIGRATIONS_DIRECTORY (env or .env) or migrations
   --json                    Emit structured command result and logs
   --quiet                   Suppress non-error logs
   --verbose, -v             Show debug logs
@@ -48,9 +48,9 @@ const upHelpText = `Usage: pg-migrate up [options] [<database-url>]
 
 Options:
   --url <database-url>      Database URL (alternative to positional URL)
-  -d, --directory <dir>     Migrations directory, defaults to PGM_MIGRATION_DIRECTORY (env or .env) or migrations
+  -d, --directory <dir>     Migrations directory, defaults to PGM_MIGRATIONS_DIRECTORY (env or .env) or migrations
   -t, --target <target>     Apply pending migrations up to and including target
-  --table <table-name>      Migration history table, defaults to migration_history
+  --table <table-name>      Migration history table, defaults to schema_migrations
   --dry-run                 Run planned SQL and history writes, then roll back
   --json                    Emit structured command result and logs
   --quiet                   Suppress non-error logs
@@ -63,7 +63,7 @@ Behavior:
   - Without --target, applies all pending migrations.
   - --target accepts <YYYYMMDDHHMMSS> or <YYYYMMDDHHMMSS>_<slug>.sql.
   - Provide exactly one of positional <database-url> or --url; otherwise PGM_DATABASE_URL from the environment or .env is used.
-  - --directory takes precedence over PGM_MIGRATION_DIRECTORY.
+  - --directory takes precedence over PGM_MIGRATIONS_DIRECTORY.
 
 Examples:
   pg-migrate up postgres://localhost:5432/app
@@ -76,9 +76,9 @@ const downHelpText = `Usage: pg-migrate down [options] [<database-url>]
 
 Options:
   --url <database-url>      Database URL (alternative to positional URL)
-  -d, --directory <dir>     Migrations directory, defaults to PGM_MIGRATION_DIRECTORY (env or .env) or migrations
+  -d, --directory <dir>     Migrations directory, defaults to PGM_MIGRATIONS_DIRECTORY (env or .env) or migrations
   -t, --target <target>     Roll back newer migrations; target remains applied
-  --table <table-name>      Migration history table, defaults to migration_history
+  --table <table-name>      Migration history table, defaults to schema_migrations
   --dry-run                 Run planned SQL and history writes, then roll back
   --json                    Emit structured command result and logs
   --quiet                   Suppress non-error logs
@@ -92,7 +92,7 @@ Behavior:
   - With --target, target migration is excluded from rollback and stays applied.
   - --target accepts <YYYYMMDDHHMMSS> or <YYYYMMDDHHMMSS>_<slug>.sql.
   - Provide exactly one of positional <database-url> or --url; otherwise PGM_DATABASE_URL from the environment or .env is used.
-  - --directory takes precedence over PGM_MIGRATION_DIRECTORY.
+  - --directory takes precedence over PGM_MIGRATIONS_DIRECTORY.
 
 Examples:
   pg-migrate down postgres://localhost:5432/app
@@ -104,8 +104,8 @@ const validateHelpText = `Usage: pg-migrate validate [options] [<database-url>]
 
 Options:
   --url <database-url>      Database URL (alternative to positional URL)
-  -d, --directory <dir>     Migrations directory, defaults to PGM_MIGRATION_DIRECTORY (env or .env) or migrations
-  --table <table-name>      Migration history table, defaults to migration_history
+  -d, --directory <dir>     Migrations directory, defaults to PGM_MIGRATIONS_DIRECTORY (env or .env) or migrations
+  --table <table-name>      Migration history table, defaults to schema_migrations
   --json                    Emit structured command result and logs
   --quiet                   Suppress non-error logs
   --verbose, -v             Show debug logs
@@ -119,19 +119,19 @@ Behavior:
   - Does not create missing migration history tables.
   - Uses the same advisory lock as up/down/status; fails fast if another pg-migrate process holds it.
   - Provide exactly one of positional <database-url> or --url; otherwise PGM_DATABASE_URL from the environment or .env is used.
-  - --directory takes precedence over PGM_MIGRATION_DIRECTORY.
+  - --directory takes precedence over PGM_MIGRATIONS_DIRECTORY.
 
 Examples:
   pg-migrate validate postgres://localhost:5432/app
-  pg-migrate validate --url postgres://localhost:5432/app --table migration_history
+  pg-migrate validate --url postgres://localhost:5432/app --table schema_migrations
 `;
 
 const statusHelpText = `Usage: pg-migrate status [options] [<database-url>]
 
 Options:
   --url <database-url>      Database URL (alternative to positional URL)
-  -d, --directory <dir>     Migrations directory, defaults to PGM_MIGRATION_DIRECTORY (env or .env) or migrations
-  --table <table-name>      Migration history table, defaults to migration_history
+  -d, --directory <dir>     Migrations directory, defaults to PGM_MIGRATIONS_DIRECTORY (env or .env) or migrations
+  --table <table-name>      Migration history table, defaults to schema_migrations
   --json                    Emit structured command result and logs
   --quiet                   Suppress non-error logs
   --verbose, -v             Show debug logs
@@ -146,11 +146,11 @@ Behavior:
   - Does not create missing migration history tables; reports initialized=false instead.
   - Uses the same advisory lock as up/down/validate; fails fast if another pg-migrate process holds it.
   - Provide exactly one of positional <database-url> or --url; otherwise PGM_DATABASE_URL from the environment or .env is used.
-  - --directory takes precedence over PGM_MIGRATION_DIRECTORY.
+  - --directory takes precedence over PGM_MIGRATIONS_DIRECTORY.
 
 Examples:
   pg-migrate status postgres://localhost:5432/app
-  pg-migrate status --url postgres://localhost:5432/app --table migration_history
+  pg-migrate status --url postgres://localhost:5432/app --table schema_migrations
 `;
 
 function helpTextFor(command: CommandName | undefined): string {

@@ -93,8 +93,8 @@ function normalizeCommonOptions(args: CommonOptions): {
 
   return {
     logger,
-    directory: args.directory ?? runtimeEnv.migrationDirectory,
-    table: args.table ?? runtimeEnv.migrationHistoryTable,
+    directory: args.directory ?? runtimeEnv.migrationsDirectory,
+    table: args.table ?? runtimeEnv.migrationsTable,
   };
 }
 

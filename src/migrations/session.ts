@@ -4,9 +4,9 @@ import { runInTransaction } from "../db/transaction.js";
 import type { ClientConfig } from "../db/types.js";
 import type { Logger } from "../logging/logger.js";
 import {
-  assertMigrationHistoryTableShape,
-  ensureMigrationHistory,
-  migrationHistoryExists,
+  assertMigrationsTableShape,
+  ensureMigrationsTable,
+  migrationsTableExists,
   readAppliedRows,
   readAppliedStatusRows,
 } from "./history.js";
@@ -22,13 +22,13 @@ async function withMigrationSessionNormal<T>(args: {
   const { client, logger, qualifiedTableName, run, table } = args;
 
   await runInTransaction(client, async (): Promise<void> => {
-    await ensureMigrationHistory({
+    await ensureMigrationsTable({
       client,
       logger,
       qualifiedTableName,
       table,
     });
-    await assertMigrationHistoryTableShape({
+    await assertMigrationsTableShape({
       client,
       qualifiedTableName,
       table,
@@ -46,11 +46,11 @@ async function withMigrationSessionValidateOnly<T>(args: {
   run: (ctx: { appliedRows: AppliedRow[]; client: pg.Client }) => Promise<T>;
 }): Promise<T> {
   const { client, qualifiedTableName, table, run } = args;
-  const tableExists = await migrationHistoryExists(client, qualifiedTableName);
+  const tableExists = await migrationsTableExists(client, qualifiedTableName);
   if (!tableExists) {
     throw new Error(`Migration history table does not exist: ${table}`);
   }
-  await assertMigrationHistoryTableShape({
+  await assertMigrationsTableShape({
     client,
     qualifiedTableName,
     table,
@@ -71,13 +71,13 @@ async function withMigrationSessionDryRun<T>(args: {
 
   await client.query("BEGIN;");
   try {
-    await ensureMigrationHistory({
+    await ensureMigrationsTable({
       client,
       logger,
       qualifiedTableName,
       table,
     });
-    await assertMigrationHistoryTableShape({
+    await assertMigrationsTableShape({
       client,
       qualifiedTableName,
       table,
@@ -105,13 +105,13 @@ async function withMigrationSessionStatus<T>(args: {
   }) => Promise<T>;
 }): Promise<T> {
   const { client, qualifiedTableName, table, run } = args;
-  const tableExists = await migrationHistoryExists(client, qualifiedTableName);
+  const tableExists = await migrationsTableExists(client, qualifiedTableName);
 
   if (!tableExists) {
     return await run({ appliedRows: [], client, initialized: false });
   }
 
-  await assertMigrationHistoryTableShape({
+  await assertMigrationsTableShape({
     client,
     qualifiedTableName,
     table,
@@ -138,8 +138,8 @@ async function withLockedMigrationClient<T>(args: {
     // Session-level advisory lock guards validation and execution for the
     // whole run so we can use one transaction per migration while still
     // preventing interleaved writes to the history table. The key is the
-    // unqualified table name so "migration_history" and
-    // "public.migration_history" hash to the same lock - runners against
+    // unqualified table name so "schema_migrations" and
+    // "public.schema_migrations" hash to the same lock - runners against
     // same-named tables in different schemas will contend; use distinct table
     // names when that concurrency matters. Only mark lockKey after the lock
     // is acquired so `finally` does not issue an unlock we never acquired.

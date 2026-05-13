@@ -340,7 +340,7 @@ describe("commands", (): void => {
             pending: 0,
             total: 0,
           },
-          table: "migration_history",
+          table: "schema_migrations",
         }),
       }),
     );
@@ -360,7 +360,7 @@ describe("commands", (): void => {
           pending: 0,
           total: 0,
         },
-        table: "migration_history",
+        table: "schema_migrations",
       },
     ]);
     assert.deepEqual(resultWriter.textValues, []);
@@ -420,7 +420,7 @@ describe("commands", (): void => {
     assert.equal(capturedOptions?.logSink, logSink);
     assert.equal(capturedOptions?.quiet, false);
     assert.equal(capturedOptions?.correlationId, "test-correlation-id");
-    assert.equal(capturedOptions?.table, "migration_history");
+    assert.equal(capturedOptions?.table, "schema_migrations");
     assert.equal(capturedOptions?.target, "20260429123456_create.sql");
     assert.equal(capturedOptions?.verbose, true);
   });

@@ -44,11 +44,11 @@ function withEnvVars<T>(
 
 describe("options", (): void => {
   describe("buildCreateOptions", (): void => {
-    it("uses PGM_MIGRATION_DIRECTORY when directory is omitted", (): void => {
+    it("uses PGM_MIGRATIONS_DIRECTORY when directory is omitted", (): void => {
       const parsed = parseTokens(["create", "--name", "create_person"]);
 
       const options = withEnvVars(
-        { PGM_MIGRATION_DIRECTORY: "sql/migrations" },
+        { PGM_MIGRATIONS_DIRECTORY: "sql/migrations" },
         (): ReturnType<typeof buildCreateOptions> =>
           buildCreateOptions(parsed, parsed.extraPositional),
       );
@@ -69,7 +69,7 @@ describe("options", (): void => {
       ]);
 
       const options = withEnvVars(
-        { PGM_MIGRATION_DIRECTORY: "from-env" },
+        { PGM_MIGRATIONS_DIRECTORY: "from-env" },
         (): ReturnType<typeof buildCreateOptions> =>
           buildCreateOptions(parsed, parsed.extraPositional),
       );
@@ -120,7 +120,7 @@ describe("options", (): void => {
       const options = withEnvVars(
         {
           PGM_DATABASE_URL: "postgres://env/db",
-          PGM_MIGRATION_DIRECTORY: undefined,
+          PGM_MIGRATIONS_DIRECTORY: undefined,
         },
         (): ReturnType<typeof buildDatabaseRunOptions> =>
           buildDatabaseRunOptions(parsed, parsed.extraPositional, "up"),
@@ -132,7 +132,7 @@ describe("options", (): void => {
           connectionTimeoutMillis: 10_000,
         },
         directory: "migrations",
-        table: "migration_history",
+        table: "schema_migrations",
       });
     });
 
@@ -145,7 +145,7 @@ describe("options", (): void => {
         envFilePath,
         `
 PGM_DATABASE_URL=postgres://file/db
-PGM_MIGRATION_DIRECTORY=file/migrations
+PGM_MIGRATIONS_DIRECTORY=file/migrations
 `,
       );
       const parsed = parseTokens(["status", "--env-file", envFilePath]);
@@ -154,7 +154,7 @@ PGM_MIGRATION_DIRECTORY=file/migrations
         const options = withEnvVars(
           {
             PGM_DATABASE_URL: undefined,
-            PGM_MIGRATION_DIRECTORY: undefined,
+            PGM_MIGRATIONS_DIRECTORY: undefined,
           },
           (): ReturnType<typeof buildDatabaseRunOptions> =>
             buildDatabaseRunOptions(parsed, parsed.extraPositional, "status"),
@@ -166,18 +166,18 @@ PGM_MIGRATION_DIRECTORY=file/migrations
             connectionTimeoutMillis: 10_000,
           },
           directory: "file/migrations",
-          table: "migration_history",
+          table: "schema_migrations",
         });
       } finally {
         fs.rmSync(tempDir, { recursive: true, force: true });
       }
     });
 
-    it("uses PGM_MIGRATION_DIRECTORY when database command directory is omitted", (): void => {
+    it("uses PGM_MIGRATIONS_DIRECTORY when database command directory is omitted", (): void => {
       const parsed = parseTokens(["down", "postgres://example/db"]);
 
       const options = withEnvVars(
-        { PGM_MIGRATION_DIRECTORY: "sql/migrations" },
+        { PGM_MIGRATIONS_DIRECTORY: "sql/migrations" },
         (): ReturnType<typeof buildDatabaseRunOptions> =>
           buildDatabaseRunOptions(parsed, parsed.extraPositional, "down"),
       );
@@ -188,7 +188,7 @@ PGM_MIGRATION_DIRECTORY=file/migrations
           connectionTimeoutMillis: 10_000,
         },
         directory: "sql/migrations",
-        table: "migration_history",
+        table: "schema_migrations",
       });
     });
 
@@ -232,7 +232,7 @@ PGM_MIGRATION_DIRECTORY=file/migrations
       ]);
 
       const options = withEnvVars(
-        { PGM_MIGRATION_DIRECTORY: undefined },
+        { PGM_MIGRATIONS_DIRECTORY: undefined },
         (): ReturnType<typeof buildMigrationRunOptions> =>
           buildMigrationRunOptions(parsed, parsed.extraPositional, "up"),
       );
@@ -244,7 +244,7 @@ PGM_MIGRATION_DIRECTORY=file/migrations
         },
         directory: "migrations",
         dryRun: true,
-        table: "migration_history",
+        table: "schema_migrations",
         target: "20260429123456_create.sql",
       });
     });

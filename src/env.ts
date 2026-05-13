@@ -3,20 +3,20 @@ import * as path from "path";
 
 interface RuntimeEnv {
   databaseUrl?: string;
-  migrationDirectory: string;
-  migrationHistoryTable: string;
+  migrationsDirectory: string;
+  migrationsTable: string;
 }
 
 interface ReadRuntimeEnvOptions {
   envFilePath?: string | false;
 }
 
-const defaultMigrationDirectory = "migrations";
-const defaultMigrationHistoryTable = "migration_history";
+const defaultMigrationsDirectory = "migrations";
+const defaultMigrationsTable = "schema_migrations";
 const defaultEnvFilePath = ".env";
 
 const databaseUrlEnvVar = "PGM_DATABASE_URL";
-const migrationDirectoryEnvVar = "PGM_MIGRATION_DIRECTORY";
+const migrationsDirectoryEnvVar = "PGM_MIGRATIONS_DIRECTORY";
 const envFilePathEnvVar = "PGM_ENV_FILE";
 
 function parseEnvFileContents(contents: string): Record<string, string> {
@@ -111,9 +111,9 @@ export function readRuntimeEnv(
 
   return {
     databaseUrl: runtimeValue(env, fileEnv, databaseUrlEnvVar),
-    migrationDirectory:
-      runtimeValue(env, fileEnv, migrationDirectoryEnvVar) ||
-      defaultMigrationDirectory,
-    migrationHistoryTable: defaultMigrationHistoryTable,
+    migrationsDirectory:
+      runtimeValue(env, fileEnv, migrationsDirectoryEnvVar) ||
+      defaultMigrationsDirectory,
+    migrationsTable: defaultMigrationsTable,
   };
 }

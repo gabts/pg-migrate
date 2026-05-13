@@ -46,7 +46,7 @@ export function buildCreateOptions(
 
   return {
     directory:
-      valueFlag(parsed, "--directory") ?? runtimeEnv.migrationDirectory,
+      valueFlag(parsed, "--directory") ?? runtimeEnv.migrationsDirectory,
     name: valueFlag(parsed, "--name")?.replace(/\.sql$/, ""),
   };
 }
@@ -84,8 +84,8 @@ export function buildDatabaseRunOptions(
   return {
     clientConfig: buildClientConfig(clientConfig),
     directory:
-      valueFlag(parsed, "--directory") ?? runtimeEnv.migrationDirectory,
-    table: valueFlag(parsed, "--table") ?? runtimeEnv.migrationHistoryTable,
+      valueFlag(parsed, "--directory") ?? runtimeEnv.migrationsDirectory,
+    table: valueFlag(parsed, "--table") ?? runtimeEnv.migrationsTable,
   };
 }
 

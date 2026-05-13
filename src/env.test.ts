@@ -10,14 +10,14 @@ describe("env", (): void => {
       readRuntimeEnv(
         {
           PGM_DATABASE_URL: "postgres://example/db",
-          PGM_MIGRATION_DIRECTORY: "sql/migrations",
+          PGM_MIGRATIONS_DIRECTORY: "sql/migrations",
         },
         { envFilePath: false },
       ),
       {
         databaseUrl: "postgres://example/db",
-        migrationDirectory: "sql/migrations",
-        migrationHistoryTable: "migration_history",
+        migrationsDirectory: "sql/migrations",
+        migrationsTable: "schema_migrations",
       },
     );
   });
@@ -25,8 +25,8 @@ describe("env", (): void => {
   it("fills missing runtime values with defaults", (): void => {
     assert.deepEqual(readRuntimeEnv({}, { envFilePath: false }), {
       databaseUrl: undefined,
-      migrationDirectory: "migrations",
-      migrationHistoryTable: "migration_history",
+      migrationsDirectory: "migrations",
+      migrationsTable: "schema_migrations",
     });
   });
 
@@ -35,14 +35,14 @@ describe("env", (): void => {
       readRuntimeEnv(
         {
           DATABASE_URL: "postgres://example/db",
-          MIGRATION_DIRECTORY: "sql/migrations",
+          MIGRATIONS_DIRECTORY: "sql/migrations",
         },
         { envFilePath: false },
       ),
       {
         databaseUrl: undefined,
-        migrationDirectory: "migrations",
-        migrationHistoryTable: "migration_history",
+        migrationsDirectory: "migrations",
+        migrationsTable: "schema_migrations",
       },
     );
   });
@@ -56,14 +56,14 @@ describe("env", (): void => {
         envFilePath,
         `
 PGM_DATABASE_URL=postgres://file/db
-PGM_MIGRATION_DIRECTORY=sql/migrations
+PGM_MIGRATIONS_DIRECTORY=sql/migrations
 `,
       );
 
       assert.deepEqual(readRuntimeEnv({}, { envFilePath }), {
         databaseUrl: "postgres://file/db",
-        migrationDirectory: "sql/migrations",
-        migrationHistoryTable: "migration_history",
+        migrationsDirectory: "sql/migrations",
+        migrationsTable: "schema_migrations",
       });
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
@@ -98,7 +98,7 @@ PGM_MIGRATION_DIRECTORY=sql/migrations
         envFilePath,
         `
 PGM_DATABASE_URL=postgres://file/db
-PGM_MIGRATION_DIRECTORY=file/migrations
+PGM_MIGRATIONS_DIRECTORY=file/migrations
 `,
       );
 
@@ -111,8 +111,8 @@ PGM_MIGRATION_DIRECTORY=file/migrations
         ),
         {
           databaseUrl: "postgres://env/db",
-          migrationDirectory: "file/migrations",
-          migrationHistoryTable: "migration_history",
+          migrationsDirectory: "file/migrations",
+          migrationsTable: "schema_migrations",
         },
       );
     } finally {
@@ -133,8 +133,8 @@ PGM_MIGRATION_DIRECTORY=file/migrations
         }),
         {
           databaseUrl: "postgres://custom/db",
-          migrationDirectory: "migrations",
-          migrationHistoryTable: "migration_history",
+          migrationsDirectory: "migrations",
+          migrationsTable: "schema_migrations",
         },
       );
     } finally {
