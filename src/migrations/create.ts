@@ -49,6 +49,24 @@ function migrationFileContent(irreversible: boolean): string {
   return "-- migrate:up\n\n-- migrate:down\n";
 }
 
+async function acquireMigrationVersionLock(
+  directory: string,
+  version: string,
+): Promise<string> {
+  const lockPath = path.join(directory, `.${version}.lock`);
+
+  try {
+    await fs.writeFile(lockPath, "", { flag: "wx" });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new Error(`Migration version already exists: ${version}`);
+    }
+    throw error;
+  }
+
+  return lockPath;
+}
+
 /**
  * Creates a timestamped migration file from a migration name slug.
  */
@@ -75,26 +93,34 @@ export async function createMigration(
     throw new Error(`Migration path is not a directory: ${opts.directory}`);
   }
 
-  const existingVersions = await readExistingMigrationVersions(opts.directory);
   const version = formatTimestamp(opts.clock?.());
-
-  if (existingVersions.has(version)) {
-    throw new Error(`Migration version already exists: ${version}`);
-  }
-
-  const filePath = path.join(opts.directory, `${version}_${opts.name}.sql`);
-  const fileContent = migrationFileContent(opts.irreversible);
+  const lockPath = await acquireMigrationVersionLock(opts.directory, version);
 
   try {
-    await fs.writeFile(filePath, fileContent, { flag: "wx" });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-      throw new Error(
-        `Migration file already exists: ${filePath}. Another create may have run concurrently.`,
-      );
-    }
-    throw error;
-  }
+    const existingVersions = await readExistingMigrationVersions(
+      opts.directory,
+    );
 
-  return filePath;
+    if (existingVersions.has(version)) {
+      throw new Error(`Migration version already exists: ${version}`);
+    }
+
+    const filePath = path.join(opts.directory, `${version}_${opts.name}.sql`);
+    const fileContent = migrationFileContent(opts.irreversible);
+
+    try {
+      await fs.writeFile(filePath, fileContent, { flag: "wx" });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+        throw new Error(
+          `Migration file already exists: ${filePath}. Another create may have run concurrently.`,
+        );
+      }
+      throw error;
+    }
+
+    return filePath;
+  } finally {
+    await fs.rm(lockPath, { force: true });
+  }
 }

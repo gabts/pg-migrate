@@ -92,6 +92,46 @@ describe("create", (): void => {
     }, /Migration version already exists: 20260429123456/);
   });
 
+  it("rejects concurrent creates in the same second with different names", async (): Promise<void> => {
+    const results = await Promise.allSettled([
+      createMigration({
+        clock: (): Date => fixedDate,
+        directory: tempDir,
+        irreversible: false,
+        name: "create_person",
+      }),
+      createMigration({
+        clock: (): Date => fixedDate,
+        directory: tempDir,
+        irreversible: false,
+        name: "add_email",
+      }),
+    ]);
+    const fulfilled = results.filter(
+      (result): result is PromiseFulfilledResult<string> =>
+        result.status === "fulfilled",
+    );
+    const rejected = results.filter(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+
+    assert.equal(fulfilled.length, 1);
+    assert.equal(rejected.length, 1);
+    const rejection = rejected[0];
+    assert.ok(rejection);
+    assert.ok(rejection.reason instanceof Error);
+    assert.match(
+      rejection.reason.message,
+      /Migration version already exists: 20260429123456/,
+    );
+
+    const files = await fs.readdir(tempDir);
+    assert.equal(files.length, 1);
+    const file = files[0];
+    assert.ok(file);
+    assert.match(file, /^20260429123456_(add_email|create_person)\.sql$/);
+  });
+
   it("requires a migration name", async (): Promise<void> => {
     await assert.rejects(async (): Promise<void> => {
       await createMigration({ directory: tempDir, irreversible: false });
