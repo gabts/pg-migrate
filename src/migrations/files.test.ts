@@ -17,6 +17,10 @@ CREATE TABLE person (id integer);
 DROP TABLE person;
 `;
 
+const validIrreversibleMigration = `-- migrate:irreversible
+INSERT INTO audit_log(message) VALUES ('seeded');
+`;
+
 async function withMigrationsDirectory(
   files: Record<string, string | Buffer>,
   test: (directory: string) => Promise<void>,
@@ -66,9 +70,21 @@ DROP TABLE person;
       );
     });
 
+    it("extracts irreversible SQL as up SQL and empty down SQL", (): void => {
+      assert.equal(
+        parseMigration(validIrreversibleMigration, "up", "0_seed.sql"),
+        "INSERT INTO audit_log(message) VALUES ('seeded');",
+      );
+      assert.equal(
+        parseMigration(validIrreversibleMigration, "down", "0_seed.sql"),
+        "",
+      );
+    });
+
     it("does not treat marker text inside SQL strings or comments as markers", (): void => {
       const migration = `-- migrate:up
 INSERT INTO audit_log(message) VALUES ('-- migrate:down');
+INSERT INTO audit_log(message) VALUES ('-- migrate:irreversible');
 INSERT INTO audit_log(message) VALUES ('
 -- migrate:down
 ');
@@ -83,6 +99,7 @@ END;
 $body$;
 /*
 -- migrate:down
+-- migrate:irreversible
 */
 -- marker mention: -- migrate:down
 -- migrate:down
@@ -93,17 +110,20 @@ SELECT '-- migrate:up';
       assert.match(upSql, /INSERT INTO audit_log/);
       assert.match(upSql, /E'it\\'s/);
       assert.match(upSql, /DO \$body\$/);
-      assert.match(upSql, /\/\*\n-- migrate:down\n\*\//);
+      assert.match(
+        upSql,
+        /\/\*\n-- migrate:down\n-- migrate:irreversible\n\*\//,
+      );
       assert.equal(
         parseMigration(migration, "down", "0_create.sql"),
         "SELECT '-- migrate:up';",
       );
     });
 
-    it("rejects missing up or duplicated markers", (): void => {
+    it("rejects missing section markers or duplicated markers", (): void => {
       assert.throws((): void => {
         parseMigration("CREATE TABLE person (id integer);", "up", "0.sql");
-      }, /Invalid migration file contents: 0\.sql/);
+      }, /Missing migrate:up or migrate:irreversible marker in migration file: 0\.sql/);
       assert.throws((): void => {
         parseMigration(
           `${validMigration}\n-- migrate:up\nSELECT 1;`,
@@ -118,23 +138,25 @@ SELECT '-- migrate:up';
           "0.sql",
         );
       }, /Duplicate migrate:down marker in migration file: 0\.sql/);
+      assert.throws((): void => {
+        parseMigration(
+          `${validIrreversibleMigration}\n-- migrate:irreversible\nSELECT 1;`,
+          "up",
+          "0.sql",
+        );
+      }, /Duplicate migrate:irreversible marker in migration file: 0\.sql/);
     });
 
-    it("extracts up and down SQL when down marker appears before up marker", (): void => {
+    it("rejects down markers before up markers", (): void => {
       const downBeforeUp = `-- migrate:down
 DROP TABLE person;
 -- migrate:up
 CREATE TABLE person (id integer);
 `;
 
-      assert.equal(
-        parseMigration(downBeforeUp, "up", "0_create.sql"),
-        "CREATE TABLE person (id integer);",
-      );
-      assert.equal(
-        parseMigration(downBeforeUp, "down", "0_create.sql"),
-        "DROP TABLE person;",
-      );
+      assert.throws((): void => {
+        parseMigration(downBeforeUp, "up", "0_create.sql");
+      }, /migrate:up marker must appear before migrate:down marker in migration file: 0_create\.sql/);
     });
 
     it("rejects empty up sections", (): void => {
@@ -144,17 +166,31 @@ CREATE TABLE person (id integer);
           "up",
           "0.sql",
         );
-      }, /Invalid migration file contents: 0\.sql/);
+      }, /Empty migrate:up section in migration file: 0\.sql/);
     });
 
-    it("rejects non-comment content before the first marker", (): void => {
+    it("rejects non-comment content before the initial migration marker", (): void => {
       assert.throws((): void => {
         parseMigration(
           `DROP TABLE important_data;\n-- migrate:up\nCREATE TABLE t (id int);\n-- migrate:down\nDROP TABLE t;`,
           "up",
           "0.sql",
         );
-      }, /Unexpected content before up marker in: 0\.sql/);
+      }, /Unexpected content before migration marker in: 0\.sql/);
+      assert.throws((): void => {
+        parseMigration(
+          `SELECT 1;\n-- migrate:irreversible\nINSERT INTO audit_log(message) VALUES ('seeded');`,
+          "up",
+          "0.sql",
+        );
+      }, /Unexpected content before migration marker in: 0\.sql/);
+      assert.throws((): void => {
+        parseMigration(
+          `SELECT 1;\n-- migrate:down\nDROP TABLE t;\n-- migrate:up\nCREATE TABLE t (id int);`,
+          "up",
+          "0.sql",
+        );
+      }, /Unexpected content before migration marker in: 0\.sql/);
     });
 
     it("allows comments and whitespace before the up marker", (): void => {
@@ -166,6 +202,9 @@ CREATE TABLE person (id integer);
 
 -- migrate:up
 CREATE TABLE person (id integer);
+
+-- migrate:down
+DROP TABLE person;
 `,
           "up",
           "0.sql",
@@ -174,24 +213,51 @@ CREATE TABLE person (id integer);
       );
     });
 
-    it("allows empty down sections for irreversible migrations", (): void => {
-      assert.equal(
+    it("rejects empty down sections", (): void => {
+      assert.throws((): void => {
         parseMigration(
           `-- migrate:up\nCREATE TABLE person (id integer);\n-- migrate:down\n`,
           "down",
           "0.sql",
-        ),
-        "",
-      );
+        );
+      }, /Empty migrate:down section in migration file: 0\.sql\. Use migrate:irreversible for forward-only migrations\./);
+      assert.throws((): void => {
+        parseMigration(
+          `-- migrate:up\nCREATE TABLE person (id integer);\n-- migrate:down\n-- explain rollback manually\n`,
+          "down",
+          "0.sql",
+        );
+      }, /Empty migrate:down section in migration file: 0\.sql\. Use migrate:irreversible for forward-only migrations\./);
     });
 
-    it("allows migrations without a down marker", (): void => {
+    it("rejects up sections without a down marker", (): void => {
       const upOnlyMigration = `-- migrate:up\nCREATE TABLE person (id integer);\n`;
-      assert.equal(
-        parseMigration(upOnlyMigration, "up", "0.sql"),
-        "CREATE TABLE person (id integer);",
-      );
-      assert.equal(parseMigration(upOnlyMigration, "down", "0.sql"), "");
+      assert.throws((): void => {
+        parseMigration(upOnlyMigration, "up", "0.sql");
+      }, /Missing migrate:down marker in migration file: 0\.sql\. Use migrate:irreversible for forward-only migrations\./);
+    });
+
+    it("rejects irreversible markers combined with reversible markers", (): void => {
+      assert.throws((): void => {
+        parseMigration(
+          `-- migrate:irreversible\nSELECT 1;\n-- migrate:down\nSELECT 2;`,
+          "up",
+          "0.sql",
+        );
+      }, /migrate:irreversible marker cannot be combined with migrate:up or migrate:down markers in migration file: 0\.sql/);
+    });
+
+    it("rejects empty irreversible sections", (): void => {
+      assert.throws((): void => {
+        parseMigration(`-- migrate:irreversible\n`, "up", "0.sql");
+      }, /Empty migrate:irreversible section in migration file: 0\.sql/);
+      assert.throws((): void => {
+        parseMigration(
+          `-- migrate:irreversible\n-- data loaded elsewhere\n`,
+          "up",
+          "0.sql",
+        );
+      }, /Empty migrate:irreversible section in migration file: 0\.sql/);
     });
   });
 
@@ -248,7 +314,7 @@ CREATE TABLE person (id integer);
       );
     });
 
-    it("materializes SQL when down marker appears before up marker", async (): Promise<void> => {
+    it("rejects materialization when down marker appears before up marker", async (): Promise<void> => {
       const downBeforeUp = `-- migrate:down
 DROP TABLE person;
 -- migrate:up
@@ -262,32 +328,27 @@ CREATE TABLE person (id integer);
         async (directory): Promise<void> => {
           const disk = await loadDiskMigrations(directory);
 
-          assert.deepEqual(await materializeSteps(disk.all, "up"), [
-            {
-              file: "20260416090000_create_person.sql",
-              sql: "CREATE TABLE person (id integer);",
-            },
-          ]);
-          assert.deepEqual(await materializeSteps(disk.all, "down"), [
-            {
-              file: "20260416090000_create_person.sql",
-              sql: "DROP TABLE person;",
-            },
-          ]);
+          await assert.rejects(async (): Promise<void> => {
+            await materializeSteps(disk.all, "up");
+          }, /migrate:up marker must appear before migrate:down marker in migration file: 20260416090000_create_person\.sql/);
         },
       );
     });
 
-    it("materializes empty down SQL for irreversible migrations", async (): Promise<void> => {
-      const irreversibleMigration = `-- migrate:up\nINSERT INTO data SELECT generate_series(1, 1000);\n-- migrate:down\n`;
-
+    it("materializes irreversible migrations as empty down SQL", async (): Promise<void> => {
       await withMigrationsDirectory(
         {
-          "20260416090000_backfill.sql": irreversibleMigration,
+          "20260416090000_backfill.sql": validIrreversibleMigration,
         },
         async (directory): Promise<void> => {
           const disk = await loadDiskMigrations(directory);
 
+          assert.deepEqual(await materializeSteps(disk.all, "up"), [
+            {
+              file: "20260416090000_backfill.sql",
+              sql: "INSERT INTO audit_log(message) VALUES ('seeded');",
+            },
+          ]);
           assert.deepEqual(await materializeSteps(disk.all, "down"), [
             { file: "20260416090000_backfill.sql", sql: "" },
           ]);
@@ -295,7 +356,7 @@ CREATE TABLE person (id integer);
       );
     });
 
-    it("materializes empty down SQL when down marker is omitted", async (): Promise<void> => {
+    it("rejects materialization when down marker is omitted", async (): Promise<void> => {
       const upOnlyMigration = `-- migrate:up\nINSERT INTO data SELECT generate_series(1, 1000);\n`;
 
       await withMigrationsDirectory(
@@ -305,9 +366,9 @@ CREATE TABLE person (id integer);
         async (directory): Promise<void> => {
           const disk = await loadDiskMigrations(directory);
 
-          assert.deepEqual(await materializeSteps(disk.all, "down"), [
-            { file: "20260416090000_backfill.sql", sql: "" },
-          ]);
+          await assert.rejects(async (): Promise<void> => {
+            await materializeSteps(disk.all, "down");
+          }, /Missing migrate:down marker in migration file: 20260416090000_backfill\.sql\. Use migrate:irreversible for forward-only migrations\./);
         },
       );
     });

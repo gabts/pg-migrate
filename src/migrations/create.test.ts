@@ -25,6 +25,7 @@ describe("create", (): void => {
     const filePath = await createMigration({
       clock: (): Date => fixedDate,
       directory: tempDir,
+      irreversible: false,
       name: "create_person",
     });
 
@@ -38,6 +39,24 @@ describe("create", (): void => {
     );
   });
 
+  it("creates an irreversible migration file when requested", async (): Promise<void> => {
+    const filePath = await createMigration({
+      clock: (): Date => fixedDate,
+      directory: tempDir,
+      irreversible: true,
+      name: "purge_old_posts",
+    });
+
+    assert.equal(
+      filePath,
+      path.join(tempDir, "20260429123456_purge_old_posts.sql"),
+    );
+    assert.equal(
+      await fs.readFile(filePath, "utf8"),
+      "-- migrate:irreversible\n",
+    );
+  });
+
   it("ignores non-canonical SQL filenames while checking versions", async (): Promise<void> => {
     await fs.writeFile(path.join(tempDir, "000_initial.sql"), "existing\n");
     await fs.writeFile(path.join(tempDir, "bad name.sql"), "existing\n");
@@ -45,6 +64,7 @@ describe("create", (): void => {
     const filePath = await createMigration({
       clock: (): Date => fixedDate,
       directory: tempDir,
+      irreversible: false,
       name: "create_person",
     });
 
@@ -58,6 +78,7 @@ describe("create", (): void => {
     await createMigration({
       clock: (): Date => fixedDate,
       directory: tempDir,
+      irreversible: false,
       name: "create_person",
     });
 
@@ -65,6 +86,7 @@ describe("create", (): void => {
       await createMigration({
         clock: (): Date => fixedDate,
         directory: tempDir,
+        irreversible: false,
         name: "add_email",
       });
     }, /Migration version already exists: 20260429123456/);
@@ -72,16 +94,24 @@ describe("create", (): void => {
 
   it("requires a migration name", async (): Promise<void> => {
     await assert.rejects(async (): Promise<void> => {
-      await createMigration({ directory: tempDir });
+      await createMigration({ directory: tempDir, irreversible: false });
     }, /Name flag \(\-\-name, -n\) is required/);
   });
 
   it("rejects invalid migration names", async (): Promise<void> => {
     await assert.rejects(async (): Promise<void> => {
-      await createMigration({ directory: tempDir, name: "CreatePerson" });
+      await createMigration({
+        directory: tempDir,
+        irreversible: false,
+        name: "CreatePerson",
+      });
     }, /Invalid migration name: CreatePerson/);
     await assert.rejects(async (): Promise<void> => {
-      await createMigration({ directory: tempDir, name: "../create_person" });
+      await createMigration({
+        directory: tempDir,
+        irreversible: false,
+        name: "../create_person",
+      });
     }, /Invalid migration name: \.\.\/create_person/);
   });
 
@@ -91,6 +121,7 @@ describe("create", (): void => {
     const filePath = await createMigration({
       clock: (): Date => fixedDate,
       directory: missingDirectory,
+      irreversible: false,
       name: "create_person",
     });
 
@@ -109,6 +140,7 @@ describe("create", (): void => {
       async (): Promise<void> => {
         await createMigration({
           directory: filePath,
+          irreversible: false,
           name: "create_person",
         });
       },
@@ -120,6 +152,7 @@ describe("create", (): void => {
     const options = {
       clock: (): Date => fixedDate,
       directory: tempDir,
+      irreversible: false,
       name: "create_person",
     };
 

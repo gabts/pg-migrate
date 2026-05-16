@@ -8,6 +8,7 @@ import type {
 } from "./types.js";
 
 type MigrationDirection = "up" | "down";
+type MigrationMarkerType = MigrationDirection | "irreversible";
 
 interface ParsedMigrationSql {
   down: string;
@@ -15,15 +16,17 @@ interface ParsedMigrationSql {
 }
 
 interface MigrationMarker {
-  direction: MigrationDirection;
   end: number;
   start: number;
+  type: MigrationMarkerType;
 }
 
 const ignoredSqlPattern =
   /(?<![A-Za-z0-9_$])[eE]'(?:''|\\[\s\S]|[^'\\])*'|\$([A-Za-z_][A-Za-z0-9_]*)\$[\s\S]*?\$\1\$|\$\$[\s\S]*?\$\$|'(?:''|[^'])*'|\/\*[\s\S]*?\*\//g;
 const migrationMarkerLinePattern =
-  /^[^\S\r\n]*--[^\S\r\n]*migrate:(up|down)[^\S\r\n]*(?:\r\n|\r|\n|$)/gm;
+  /^[^\S\r\n]*--[^\S\r\n]*migrate:(up|down|irreversible)[^\S\r\n]*(?:\r\n|\r|\n|$)/gm;
+const forwardOnlyMigrationHint =
+  "Use migrate:irreversible for forward-only migrations.";
 
 async function readFileUtf8Strict(
   filePath: string,
@@ -43,6 +46,19 @@ function hasOnlyCommentsAndWhitespace(sql: string): boolean {
   return commentOrWhitespacePattern.test(sql);
 }
 
+function assertSectionHasSql(
+  section: MigrationMarkerType,
+  sql: string,
+  file: string,
+): void {
+  if (hasOnlyCommentsAndWhitespace(sql)) {
+    const hint = section === "down" ? ` ${forwardOnlyMigrationHint}` : "";
+    throw new Error(
+      `Empty migrate:${section} section in migration file: ${file}.${hint}`,
+    );
+  }
+}
+
 function maskIgnoredSql(sql: string): string {
   return sql.replace(ignoredSqlPattern, (match): string => {
     return match.replace(/[^\r\n]/g, " ");
@@ -55,7 +71,7 @@ function findMigrationMarkers(sql: string): MigrationMarker[] {
   const matches = maskedSql.matchAll(migrationMarkerLinePattern);
 
   for (const markerMatch of matches) {
-    const direction = markerMatch[1] as MigrationDirection;
+    const type = markerMatch[1] as MigrationMarkerType;
     const start = markerMatch.index;
     const text = markerMatch[0];
 
@@ -64,23 +80,44 @@ function findMigrationMarkers(sql: string): MigrationMarker[] {
     }
 
     markers.push({
-      direction,
       end: start + text.length,
       start,
+      type,
     });
   }
 
   return markers;
 }
 
+function markersOfType(
+  markers: MigrationMarker[],
+  type: MigrationMarkerType,
+): MigrationMarker[] {
+  return markers.filter((marker): boolean => marker.type === type);
+}
+
+function assertOnlyCommentsBeforeInitialMarker(
+  markers: MigrationMarker[],
+  sql: string,
+  file: string,
+): void {
+  const initialMarker = markers[0];
+  if (!initialMarker) {
+    return;
+  }
+
+  if (!hasOnlyCommentsAndWhitespace(sql.slice(0, initialMarker.start))) {
+    throw new Error(`Unexpected content before migration marker in: ${file}`);
+  }
+}
+
 function parseMigrationSections(sql: string, file: string): ParsedMigrationSql {
   const markers = findMigrationMarkers(sql);
-  const upMarkers = markers.filter(
-    (marker): boolean => marker.direction === "up",
-  );
-  const downMarkers = markers.filter(
-    (marker): boolean => marker.direction === "down",
-  );
+  assertOnlyCommentsBeforeInitialMarker(markers, sql, file);
+
+  const upMarkers = markersOfType(markers, "up");
+  const downMarkers = markersOfType(markers, "down");
+  const irreversibleMarkers = markersOfType(markers, "irreversible");
 
   if (upMarkers.length > 1) {
     throw new Error(`Duplicate migrate:up marker in migration file: ${file}`);
@@ -90,36 +127,52 @@ function parseMigrationSections(sql: string, file: string): ParsedMigrationSql {
     throw new Error(`Duplicate migrate:down marker in migration file: ${file}`);
   }
 
+  if (irreversibleMarkers.length > 1) {
+    throw new Error(
+      `Duplicate migrate:irreversible marker in migration file: ${file}`,
+    );
+  }
+
+  const irreversibleMarker = irreversibleMarkers[0];
+  if (irreversibleMarker) {
+    if (upMarkers.length || downMarkers.length) {
+      throw new Error(
+        `migrate:irreversible marker cannot be combined with migrate:up or migrate:down markers in migration file: ${file}`,
+      );
+    }
+
+    const irreversibleSql = sql.slice(irreversibleMarker.end).trim();
+
+    assertSectionHasSql("irreversible", irreversibleSql, file);
+
+    return { down: "", up: irreversibleSql };
+  }
+
   const upMarker = upMarkers[0];
   if (!upMarker) {
-    throw new Error(`Invalid migration file contents: ${file}`);
+    throw new Error(
+      `Missing migrate:up or migrate:irreversible marker in migration file: ${file}`,
+    );
   }
 
   const downMarker = downMarkers[0];
-  const firstMarker =
-    downMarker && downMarker.start < upMarker.start ? downMarker : upMarker;
-
-  if (!hasOnlyCommentsAndWhitespace(sql.slice(0, firstMarker.start))) {
-    throw new Error(`Unexpected content before up marker in: ${file}`);
+  if (!downMarker) {
+    throw new Error(
+      `Missing migrate:down marker in migration file: ${file}. ${forwardOnlyMigrationHint}`,
+    );
   }
 
-  const upSectionEnd =
-    downMarker && downMarker.start > upMarker.start
-      ? downMarker.start
-      : sql.length;
-  const upSql = sql.slice(upMarker.end, upSectionEnd).trim();
-  const downSql = !downMarker
-    ? ""
-    : sql
-        .slice(
-          downMarker.end,
-          upMarker.start > downMarker.start ? upMarker.start : sql.length,
-        )
-        .trim();
-
-  if (!upSql) {
-    throw new Error(`Invalid migration file contents: ${file}`);
+  if (downMarker.start < upMarker.start) {
+    throw new Error(
+      `migrate:up marker must appear before migrate:down marker in migration file: ${file}`,
+    );
   }
+
+  const upSql = sql.slice(upMarker.end, downMarker.start).trim();
+  const downSql = sql.slice(downMarker.end).trim();
+
+  assertSectionHasSql("up", upSql, file);
+  assertSectionHasSql("down", downSql, file);
 
   return { down: downSql, up: upSql };
 }

@@ -25,6 +25,7 @@ const createHelpText = `Usage: pg-migrate create --name <name> [options]
 Options:
   -n, --name <name>         Migration name slug
   -d, --directory <dir>     Output directory, defaults to PGM_MIGRATIONS_DIRECTORY (env or .env) or migrations
+  --irreversible            Create a forward-only migration template
   --json                    Emit structured command result and logs
   --quiet                   Suppress non-error logs
   --verbose, -v             Show debug logs
@@ -38,9 +39,12 @@ Notes:
   - File template includes:
       -- migrate:up
       -- migrate:down
+  - --irreversible creates a template with:
+      -- migrate:irreversible
 
 Examples:
   pg-migrate create --name create_users
+  pg-migrate create --name normalize_user_emails --irreversible
   pg-migrate create --directory sql/migrations --name add_user_index
 `;
 

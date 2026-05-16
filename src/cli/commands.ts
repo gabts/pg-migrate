@@ -95,6 +95,7 @@ export async function runCommand(
       events.commandOptions({
         command: "create",
         directory: options.directory,
+        irreversible: options.irreversible,
         name: options.name ?? null,
       }),
     );

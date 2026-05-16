@@ -47,6 +47,7 @@ export async function buildCreateOptions(
   return {
     directory:
       valueFlag(parsed, "--directory") ?? runtimeEnv.migrationsDirectory,
+    irreversible: booleanFlag(parsed, "--irreversible"),
     name: valueFlag(parsed, "--name")?.replace(/\.sql$/, ""),
   };
 }

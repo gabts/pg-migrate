@@ -246,7 +246,7 @@ describe("args", (): void => {
     });
 
     it("accepts command-owned flags on their owning command", (): void => {
-      const parsed = parseTokens(["create", "--name", "x"]);
+      const parsed = parseTokens(["create", "--name", "x", "--irreversible"]);
 
       assert.doesNotThrow((): void => {
         assertValidTokens(parsed);
@@ -311,6 +311,14 @@ describe("args", (): void => {
       assert.throws((): void => {
         assertValidTokens(parsed);
       }, /Unknown argument: --dry-run/);
+    });
+
+    it("rejects --irreversible outside create", (): void => {
+      const parsed = parseTokens(["up", "--irreversible"]);
+
+      assert.throws((): void => {
+        assertValidTokens(parsed);
+      }, /Unknown argument: --irreversible/);
     });
 
     it("rejects --target on validate", (): void => {
