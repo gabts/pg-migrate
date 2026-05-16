@@ -12,6 +12,7 @@ import {
 export interface CreateMigrationOptions {
   clock?: () => Date;
   directory: string;
+  irreversible: boolean;
   name?: string;
 }
 
@@ -38,6 +39,14 @@ async function readExistingMigrationVersions(
   }
 
   return versions;
+}
+
+function migrationFileContent(irreversible: boolean): string {
+  if (irreversible) {
+    return "-- migrate:irreversible\n";
+  }
+
+  return "-- migrate:up\n\n-- migrate:down\n";
 }
 
 /**
@@ -74,7 +83,7 @@ export async function createMigration(
   }
 
   const filePath = path.join(opts.directory, `${version}_${opts.name}.sql`);
-  const fileContent = "-- migrate:up\n\n-- migrate:down\n";
+  const fileContent = migrationFileContent(opts.irreversible);
 
   try {
     await fs.writeFile(filePath, fileContent, { flag: "wx" });

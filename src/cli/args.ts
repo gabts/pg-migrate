@@ -75,6 +75,13 @@ const flagSpecs: readonly FlagSpec[] = [
   },
   {
     aliases: [],
+    canonical: "--irreversible",
+    commands: ["create"],
+    kind: "boolean",
+    label: "Irreversible",
+  },
+  {
+    aliases: [],
     canonical: "--url",
     commands: ["up", "down", "validate", "status"],
     kind: "value",

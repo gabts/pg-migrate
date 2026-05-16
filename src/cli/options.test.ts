@@ -54,6 +54,7 @@ describe("options", (): void => {
 
       assert.deepEqual(options, {
         directory: "sql/migrations",
+        irreversible: false,
         name: "create_person",
       });
     });
@@ -74,7 +75,28 @@ describe("options", (): void => {
 
       assert.deepEqual(options, {
         directory: "explicit",
+        irreversible: false,
         name: "create_person",
+      });
+    });
+
+    it("sets irreversible create mode from --irreversible", async (): Promise<void> => {
+      const parsed = parseTokens([
+        "create",
+        "--name",
+        "purge_old_posts",
+        "--irreversible",
+      ]);
+
+      const options = await withEnvVars(
+        { PGM_MIGRATIONS_DIRECTORY: "sql/migrations" },
+        () => buildCreateOptions(parsed, parsed.extraPositional),
+      );
+
+      assert.deepEqual(options, {
+        directory: "sql/migrations",
+        irreversible: true,
+        name: "purge_old_posts",
       });
     });
 

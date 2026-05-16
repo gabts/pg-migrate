@@ -93,7 +93,9 @@ Rules:
 - Commands that load migrations require the migrations directory to exist.
 - Commands that load migrations fail if the directory contains no migration `.sql` files.
 
-Each migration file must contain exactly one `-- migrate:up` marker and at most one `-- migrate:down` marker:
+Each migration file must be either reversible or irreversible.
+
+A reversible migration must contain exactly one `-- migrate:up` marker and exactly one `-- migrate:down` marker:
 
 ```sql
 -- migrate:up
@@ -103,14 +105,24 @@ ALTER TABLE users ADD COLUMN name text;
 ALTER TABLE users DROP COLUMN name;
 ```
 
+An irreversible migration must contain exactly one `-- migrate:irreversible` marker and no `up` or `down` marker:
+
+```sql
+-- migrate:irreversible
+UPDATE users
+SET email = lower(email)
+WHERE email <> lower(email);
+```
+
 Rules:
 
-- The `up` section is required and must contain SQL.
-- The `down` marker is optional.
-- Empty `down` SQL is allowed.
-- During rollback, an empty or missing `down` section executes no SQL but still removes the migration from history.
-- If that migration is applied again later, its `up` SQL runs again. Irreversible migrations should have idempotent `up` SQL or should not be rolled back.
-- Content before the first marker may only be comments or whitespace.
+- Reversible migrations must include non-empty `up` and `down` sections.
+- The reversible `down` section must appear after the `up` section.
+- Irreversible migrations use `-- migrate:irreversible` and must include non-empty forward SQL.
+- A section containing only comments or whitespace is treated as empty.
+- During rollback, an irreversible migration executes no SQL but still removes the migration from history.
+- If an irreversible migration is applied again later, its forward SQL runs again. Irreversible migrations should have idempotent SQL or should not be rolled back.
+- Content before the initial `migrate:*` marker may only be comments or whitespace.
 
 ## Configuration
 
@@ -176,6 +188,9 @@ If migrations should affect a non-`public` schema, either qualify object names i
 CREATE TABLE app.users (
   id SERIAL PRIMARY KEY
 );
+
+-- migrate:down
+DROP TABLE app.users;
 ```
 
 If you set `search_path` inside a migration, reset it before the migration ends or use a schema-qualified migrations table such as `--table public.schema_migrations`. History writes happen in the same transaction as the migration SQL.
@@ -186,6 +201,11 @@ SET LOCAL search_path TO app;
 CREATE TABLE users (
   id SERIAL PRIMARY KEY
 );
+RESET search_path;
+
+-- migrate:down
+SET LOCAL search_path TO app;
+DROP TABLE app.users;
 RESET search_path;
 ```
 
@@ -220,6 +240,7 @@ pg-migrate create --name <name> [options]
 | ------------------------------- | -------- | ----------------------------------------------------------------------------------------- |
 | `--name <name>`, `-n <name>`    | yes      | Migration slug. Must match `[a-z0-9][a-z0-9_]*`.                                          |
 | `--directory <dir>`, `-d <dir>` | no       | Output directory. Defaults to `PGM_MIGRATIONS_DIRECTORY` (env or `.env`) or `migrations`. |
+| `--irreversible`                | no       | Create a forward-only migration template with `-- migrate:irreversible`.                  |
 | `--json`                        | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.                   |
 | `--quiet`                       | no       | Suppress non-error logs.                                                                  |
 | `--verbose`, `-v`               | no       | Enable debug logs.                                                                        |
@@ -233,6 +254,7 @@ pg-migrate create --name <name> [options]
 - The timestamp is generated from the current UTC time.
 - The output directory is created if it does not exist.
 - The file is created with `-- migrate:up` and `-- migrate:down` markers.
+- `--irreversible` creates the file with a single `-- migrate:irreversible` marker instead.
 - Existing files are not overwritten.
 - Human-readable mode writes the created file path to `stdout`.
 - `--json` writes `{ "command": "create", "file": "<path>" }` to `stdout`.
@@ -242,6 +264,7 @@ pg-migrate create --name <name> [options]
 
 ```sh
 pg-migrate create --name create_users
+pg-migrate create --name normalize_user_emails --irreversible
 pg-migrate create --directory sql/migrations --name add_user_index
 pg-migrate create -d sql/migrations -n add_deleted_at
 ```
@@ -386,7 +409,7 @@ pg-migrate down [options] [<database-url>]
 - Creates the migrations table if it does not exist.
 - Validates files and applied history before running rollback SQL.
 - Runs each rollback in its own transaction when `down` SQL exists.
-- If `down` SQL is empty or missing, no SQL is run and the migration is still removed from history.
+- For irreversible migrations, no SQL is run and the migration is still removed from history.
 - Uses a PostgreSQL advisory lock for the full run.
 - Human-readable mode writes no command result on success.
 - `--json` writes `{ "command": "down", "dryRun": <boolean>, "ok": true, "target": <target|null> }` to `stdout`.

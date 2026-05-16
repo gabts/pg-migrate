@@ -41,6 +41,8 @@ describe("help", (): void => {
 
     assert.equal(writer.jsonValues.length, 0);
     assert.match(writer.textValues[0]!, /Usage: pg-migrate create/);
+    assert.match(writer.textValues[0]!, /--irreversible/);
+    assert.match(writer.textValues[0]!, /-- migrate:irreversible/);
     assert.match(writer.textValues[0]!, /Creates <YYYYMMDDHHMMSS>_<name>\.sql/);
   });
 

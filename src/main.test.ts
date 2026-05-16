@@ -418,11 +418,9 @@ describe("main", (): void => {
   });
 
   it("down migrates past an irreversible migration", async (): Promise<void> => {
-    const irreversibleMigration = `-- migrate:up
+    const irreversibleMigration = `-- migrate:irreversible
 INSERT INTO person (name)
 VALUES ('gabriel'), ('david'), ('frasse');
-
--- migrate:down
 `;
 
     const directory = await createMigrationsDirectory({
@@ -454,7 +452,7 @@ VALUES ('gabriel'), ('david'), ('frasse');
 
     await assert.rejects(
       (): Promise<void> => runUp({ directory }),
-      /Invalid migration file contents: 20260416090200_invalid\.sql/,
+      /Missing migrate:up or migrate:irreversible marker in migration file: 20260416090200_invalid\.sql/,
     );
 
     assert.equal(await queryTableExists(defaultMigrationsTable), false);
@@ -469,7 +467,7 @@ VALUES ('gabriel'), ('david'), ('frasse');
 
     await assert.rejects(
       (): Promise<void> => runDown({ directory }),
-      /Invalid migration file contents: 20260416090200_invalid\.sql/,
+      /Missing migrate:up or migrate:irreversible marker in migration file: 20260416090200_invalid\.sql/,
     );
 
     await assertMigration1();
@@ -861,6 +859,7 @@ DROP TABLE bulk_test;
 INSERT INTO bulk_test_nonexistent (value) VALUES (${i});
 
 -- migrate:down
+DELETE FROM bulk_test WHERE value = ${i};
 `;
         } else {
           files[file] = `-- migrate:up

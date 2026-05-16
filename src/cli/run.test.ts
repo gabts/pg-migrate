@@ -149,6 +149,26 @@ describe("cli run", (): void => {
     assert.equal(result.stderr, "");
   });
 
+  it("creates irreversible migrations from create --irreversible", async (): Promise<void> => {
+    const result = await runCliInProcessRaw([
+      "create",
+      "--directory",
+      tempDir,
+      "--name",
+      "purge_old_posts",
+      "--irreversible",
+      "--json",
+    ]);
+
+    assert.equal(result.status, 0);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(
+      await fs.readFile(parsed.file, "utf8"),
+      "-- migrate:irreversible\n",
+    );
+    assert.equal(result.stderr, "");
+  });
+
   it("creates missing output directories for create", async (): Promise<void> => {
     const directory = path.join(tempDir, "missing", "migrations");
     const result = await runCliInProcessRaw([
@@ -302,6 +322,7 @@ DELETE FROM cli_validate_person;
       tempDir,
       "--name",
       "create_person",
+      "--irreversible",
     ]);
 
     assert.equal(result.status, 0);
@@ -316,7 +337,9 @@ DELETE FROM cli_validate_person;
           line,
         ): {
           event?: { action?: string };
-          fields?: { pg_migrate?: { command?: string } };
+          fields?: {
+            pg_migrate?: { command?: string; irreversible?: boolean };
+          };
           level?: string;
         } => JSON.parse(line),
       );
@@ -325,7 +348,8 @@ DELETE FROM cli_validate_person;
         (log): boolean =>
           log.level === "debug" &&
           log.event?.action === "command.options" &&
-          log.fields?.pg_migrate?.command === "create",
+          log.fields?.pg_migrate?.command === "create" &&
+          log.fields?.pg_migrate?.irreversible === true,
       ),
     );
   });
@@ -363,6 +387,7 @@ DELETE FROM cli_validate_person;
     assert.equal(result.status, 0);
     assert.match(stripAnsi(result.stderr), /Debug: Command options parsed/);
     assert.match(stripAnsi(result.stderr), /command=create/);
+    assert.match(stripAnsi(result.stderr), /irreversible=false/);
     assert.ok(result.stdout.trim().length > 0);
   });
 
