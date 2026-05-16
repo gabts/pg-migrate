@@ -1,6 +1,6 @@
 import * as assert from "node:assert";
 import type * as pg from "pg";
-import type { Logger } from "../logging/logger.js";
+import { createLogger, type Logger } from "../logging/logger.js";
 import { executeDownPlan, executeUpPlan } from "./execution.js";
 import type { MigrationStep } from "./types.js";
 
@@ -163,6 +163,45 @@ describe("execution", (): void => {
           "Migration transaction rolled back",
         ].map(normalizeMs),
       );
+    });
+
+    it("does not let success log sink failures change committed migration outcome", async (): Promise<void> => {
+      const { client, queries } = createFakeClient();
+      const steps: MigrationStep[] = [
+        {
+          file: "20260416090000_create.sql",
+          sql: "CREATE TABLE person (id integer);",
+        },
+      ];
+      const logger = createLogger({
+        sink: {
+          write: (record): void => {
+            if (record.message === "Migration applied") {
+              throw new Error("log sink failed");
+            }
+          },
+        },
+      });
+
+      await executeUpPlan({
+        client,
+        logger,
+        steps,
+        table: "migration_history",
+      });
+
+      assert.deepEqual(queries, [
+        { sql: "BEGIN;", params: undefined },
+        {
+          sql: "CREATE TABLE person (id integer);",
+          params: undefined,
+        },
+        {
+          sql: 'INSERT INTO "migration_history" ( version, applied_at ) VALUES ( $1, clock_timestamp() );',
+          params: ["20260416090000"],
+        },
+        { sql: "COMMIT;", params: undefined },
+      ]);
     });
 
     it("does nothing for an empty up plan", async (): Promise<void> => {

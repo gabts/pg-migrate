@@ -97,13 +97,17 @@ export function createLogger(options: LoggerOptions = {}): Logger {
       ) {
         return;
       }
-      sink.write(
-        enrichLogRecord(record, {
-          clock,
-          correlationId,
-          serviceVersion: options.serviceVersion,
-        }),
-      );
+      try {
+        sink.write(
+          enrichLogRecord(record, {
+            clock,
+            correlationId,
+            serviceVersion: options.serviceVersion,
+          }),
+        );
+      } catch {
+        // Logging must not change migration behavior.
+      }
     },
   };
 }
