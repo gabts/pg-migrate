@@ -176,7 +176,7 @@ describe("session", (): void => {
           table: defaultMigrationsTable,
           run: async (): Promise<void> => undefined,
         }),
-      /Invalid migration history table schema: schema_migrations\. Expected columns version, applied_at: column "version" does not exist/,
+      /Invalid migration history table schema: schema_migrations\. Missing column version/,
     );
   });
 

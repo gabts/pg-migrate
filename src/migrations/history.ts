@@ -4,6 +4,16 @@ import type { Logger } from "../logging/logger.js";
 import type { AppliedRow, AppliedStatusRow } from "./types.js";
 import { validateAppliedHistory } from "./validation.js";
 
+interface HistoryColumn {
+  name: string;
+  type: string;
+}
+
+const requiredHistoryColumns = new Map<string, string>([
+  ["version", "text"],
+  ["applied_at", "timestamp with time zone"],
+]);
+
 /**
  * Returns whether the configured migration history table exists.
  */
@@ -43,7 +53,7 @@ export async function ensureMigrationsTable(args: {
 }
 
 /**
- * Verifies the migration history table exposes required columns.
+ * Verifies the migration history table exposes required columns and types.
  */
 export async function assertMigrationsTableShape(args: {
   client: pg.Client;
@@ -51,22 +61,38 @@ export async function assertMigrationsTableShape(args: {
   table: string;
 }): Promise<void> {
   const { client, qualifiedTableName, table } = args;
-  try {
-    // This verifies the expected column identifiers and resolves. It does not
-    // validate the underlying column data types.
-    await client.query(
-      `SELECT version, applied_at FROM ${qualifiedTableName} LIMIT 0;`,
-    );
-  } catch (error) {
-    const code = (error as { code?: unknown })?.code;
-    if (code === "42703") {
-      const detail = error instanceof Error ? `: ${error.message}` : "";
+
+  const columnsResult = await client.query<HistoryColumn>(
+    `
+      SELECT
+        attname AS name,
+        format_type(atttypid, atttypmod) AS type
+      FROM pg_attribute
+      WHERE attrelid = $1::regclass
+        AND attname IN ('version', 'applied_at')
+        AND NOT attisdropped;
+    `,
+    [qualifiedTableName],
+  );
+  const actualTypes = new Map(
+    columnsResult.rows.map((column): [string, string] => [
+      column.name,
+      column.type,
+    ]),
+  );
+
+  for (const [name, expectedType] of requiredHistoryColumns.entries()) {
+    const actualType = actualTypes.get(name);
+    if (actualType === undefined) {
       throw new Error(
-        `Invalid migration history table schema: ${table}. Expected columns version, applied_at${detail}`,
-        { cause: error },
+        `Invalid migration history table schema: ${table}. Missing column ${name}`,
       );
     }
-    throw error;
+    if (actualType !== expectedType) {
+      throw new Error(
+        `Invalid migration history table schema: ${table}. Column ${name} must be ${expectedType}, got ${actualType}`,
+      );
+    }
   }
 }
 

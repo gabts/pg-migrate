@@ -270,7 +270,12 @@ describe("history", (): void => {
       const client = {
         query: async (sql: string): Promise<{ rows: unknown[] }> => {
           queries.push(sql);
-          return { rows: [] };
+          return {
+            rows: [
+              { name: "version", type: "text" },
+              { name: "applied_at", type: "timestamp with time zone" },
+            ],
+          };
         },
       } as unknown as pg.Client;
 
@@ -282,9 +287,8 @@ describe("history", (): void => {
 
       assert.ok(
         queries.some((sql): boolean =>
-          sql.includes(
-            'SELECT version, applied_at FROM "migration_history" LIMIT 0;',
-          ),
+          sql.includes("FROM pg_attribute") &&
+          sql.includes("attrelid = $1::regclass"),
         ),
       );
     });
@@ -292,9 +296,9 @@ describe("history", (): void => {
     it("throws a clear schema error when expected columns are missing", async (): Promise<void> => {
       const client = {
         query: async (): Promise<{ rows: unknown[] }> => {
-          throw Object.assign(new Error('column "version" does not exist'), {
-            code: "42703",
-          });
+          return {
+            rows: [{ name: "applied_at", type: "timestamp with time zone" }],
+          };
         },
       } as unknown as pg.Client;
 
@@ -305,7 +309,30 @@ describe("history", (): void => {
             qualifiedTableName: '"migration_history"',
             table: "migration_history",
           }),
-        /Invalid migration history table schema: migration_history\. Expected columns version, applied_at: column "version" does not exist/,
+        /Invalid migration history table schema: migration_history\. Missing column version/,
+      );
+    });
+
+    it("throws a clear schema error when expected columns have the wrong type", async (): Promise<void> => {
+      const client = {
+        query: async (): Promise<{ rows: unknown[] }> => {
+          return {
+            rows: [
+              { name: "version", type: "integer" },
+              { name: "applied_at", type: "timestamp with time zone" },
+            ],
+          };
+        },
+      } as unknown as pg.Client;
+
+      await assert.rejects(
+        (): Promise<void> =>
+          assertMigrationsTableShape({
+            client,
+            qualifiedTableName: '"migration_history"',
+            table: "migration_history",
+          }),
+        /Invalid migration history table schema: migration_history\. Column version must be text, got integer/,
       );
     });
 
