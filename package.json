@@ -43,17 +43,15 @@
     "build:watch": "tsc -w",
     "prepare": "npm run build",
     "pretest": "npm run build",
-    "test": "mocha --verbose --spec \"dist/**/*.test.js\"",
+    "test": "node --test \"dist/**/*.test.js\"",
     "format": "prettier --write ."
   },
   "dependencies": {
     "pg": "^8.20.0"
   },
   "devDependencies": {
-    "@types/mocha": "^10.0.10",
     "@types/node": "^22.19.17",
     "@types/pg": "^8.20.0",
-    "mocha": "^11.7.5",
     "prettier": "^3.8.1",
     "prettier-plugin-organize-imports": "^4.3.0",
     "typescript": "^6.0.2"
