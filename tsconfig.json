@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "declaration": true,
-    "declarationMap": true,
+    "inlineSources": true,
     "lib": ["ES2024"],
     "module": "node20",
     "noEmitOnError": true,

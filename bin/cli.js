@@ -1,5 +1,5 @@
 #!/usr/bin/env node
 
-import { runCliProcess } from "../dist/cli.js";
+import { run } from "../dist/cli/run.js";
 
-await runCliProcess();
+run();

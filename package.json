@@ -1,7 +1,7 @@
 {
   "name": "@gabbe/pg-migrate",
   "version": "1.0.0",
-  "description": "A lightweight PostgreSQL schema migration tool. Simple to run, strict about history.",
+  "description": "SQL-first PostgreSQL migration tool",
   "author": "gabts",
   "license": "MIT",
   "type": "module",
@@ -21,29 +21,34 @@
     "url": "https://github.com/gabts/pg-migrate/issues"
   },
   "keywords": [
+    "cli",
     "database",
+    "db",
     "migrate",
     "migration",
     "migrations",
+    "migrator",
     "pg",
     "postgres",
     "postgresql",
-    "schema"
+    "programatic",
+    "sql"
   ],
   "files": [
     "bin/cli.js",
     "dist/**/*",
-    "!dist/**/*.test.*"
+    "!dist/**/*.test.*",
+    "!dist/**/*.d.ts.map"
   ],
   "bin": {
     "pg-migrate": "./bin/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc",
     "build:watch": "tsc -w",
     "prepare": "npm run build",
     "pretest": "npm run build",
-    "test": "node --test \"dist/**/*.test.js\"",
+    "test": "node --env-file-if-exists=.env --test \"dist/**/*.test.js\"",
     "format": "prettier --write ."
   },
   "dependencies": {

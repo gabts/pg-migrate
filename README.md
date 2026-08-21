@@ -1,54 +1,27 @@
 # @gabbe/pg-migrate
 
-A lightweight PostgreSQL schema migration tool. It runs timestamped SQL files in order, records what was applied, and fails when migration history is inconsistent.
+A SQL-first PostgreSQL migration tool with a cli and TypeScript API.
 
-## Requirements
-
-- Node.js `>=22`
-- PostgreSQL
-- ESM projects only
-
-## Installation
+## Install
 
 ```sh
-npm install --save @gabbe/pg-migrate
+npm install @gabbe/pg-migrate
 ```
 
-The package installs the `pg-migrate` CLI binary and exports a typed Node API.
+This installs the `pg-migrate` command and the package API.
 
-## Table of Contents
-
-- [Quick Start](#quick-start)
-- [Migration Files](#migration-files)
-- [Configuration](#configuration)
-  - [Environment Variables](#environment-variables)
-  - [Migrations Table](#migrations-table)
-  - [Schema Scoping](#schema-scoping)
-- [Commands](#commands)
-  - [`pg-migrate create`](#pg-migrate-create)
-  - [`pg-migrate up`](#pg-migrate-up)
-  - [`pg-migrate down`](#pg-migrate-down)
-  - [`pg-migrate status`](#pg-migrate-status)
-  - [`pg-migrate validate`](#pg-migrate-validate)
-- [History Rules](#history-rules)
-- [Locking and Transactions](#locking-and-transactions)
-- [Development](#development)
-- [License](#license)
-
-## Quick Start
-
-Create a migration file:
+## Quick start
 
 ```sh
-pg-migrate create --name create_users
+npx pg-migrate create add_users
 ```
 
-Edit the generated file:
+Edit the new file in `migrations`:
 
 ```sql
 -- migrate:up
 CREATE TABLE users (
-  id SERIAL PRIMARY KEY,
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   email text NOT NULL UNIQUE
 );
 
@@ -56,595 +29,148 @@ CREATE TABLE users (
 DROP TABLE users;
 ```
 
-Apply pending migrations:
+Then apply and validate it:
 
 ```sh
-pg-migrate up --url postgres://localhost:5432/app
+npx pg-migrate up --url postgres://localhost/app
+npx pg-migrate validate --url postgres://localhost/app
 ```
 
-Check migration state:
-
-```sh
-pg-migrate status --url postgres://localhost:5432/app
-```
-
-## Migration Files
-
-Migration files must be UTF-8 `.sql` files in this format:
+## CLI
 
 ```text
-<YYYYMMDDHHMMSS>_<slug>.sql
-```
-
-Example:
-
-```text
-20260414153000_create_users.sql
-```
-
-Rules:
-
-- The timestamp/version is 14 digits.
-- The slug must match `[a-z0-9][a-z0-9_]*`.
-- Files are applied in ascending version order.
-- Non-`.sql` files are ignored.
-- Invalid `.sql` filenames fail validation.
-- Duplicate versions fail validation.
-- Commands that load migrations require the migrations directory to exist.
-- Commands that load migrations fail if the directory contains no migration `.sql` files.
-
-Each migration file must be either reversible or irreversible.
-
-A reversible migration must contain exactly one `-- migrate:up` marker and exactly one `-- migrate:down` marker:
-
-```sql
--- migrate:up
-ALTER TABLE users ADD COLUMN name text;
-
--- migrate:down
-ALTER TABLE users DROP COLUMN name;
-```
-
-An irreversible migration must contain exactly one `-- migrate:irreversible` marker and no `up` or `down` marker:
-
-```sql
--- migrate:irreversible
-UPDATE users
-SET email = lower(email)
-WHERE email <> lower(email);
-```
-
-Rules:
-
-- Reversible migrations must include non-empty `up` and `down` sections.
-- The reversible `down` section must appear after the `up` section.
-- Irreversible migrations use `-- migrate:irreversible` and must include non-empty forward SQL.
-- A section containing only comments or whitespace is treated as empty.
-- During rollback, an irreversible migration executes no SQL but still removes the migration from history.
-- If an irreversible migration is applied again later, its forward SQL runs again. Irreversible migrations should have idempotent SQL or should not be rolled back.
-- Content before the initial `migrate:*` marker may only be comments or whitespace.
-
-## Configuration
-
-Database commands accept a database URL in one of these ways:
-
-```sh
-pg-migrate up postgres://localhost:5432/app
-pg-migrate up --url postgres://localhost:5432/app
-PGM_DATABASE_URL=postgres://localhost:5432/app pg-migrate up
-```
-
-Or put it in a `.env` file in the current working directory:
-
-```sh
-PGM_DATABASE_URL=postgres://localhost:5432/app
-PGM_MIGRATIONS_DIRECTORY=migrations
-```
-
-Then run:
-
-```sh
-pg-migrate up
-```
-
-Precedence:
-
-- Use either positional `<database-url>` or `--url`, not both.
-- Explicit CLI values win over environment variables.
-- Environment variables win over `.env` values.
-- Use `--env-file <path>` to load a different env file.
-
-### Environment Variables
-
-| Variable                   | Used by                            | Default      |
-| -------------------------- | ---------------------------------- | ------------ |
-| `PGM_DATABASE_URL`         | `up`, `down`, `status`, `validate` | none         |
-| `PGM_MIGRATIONS_DIRECTORY` | all commands                       | `migrations` |
-| `PGM_ENV_FILE`             | all commands                       | `.env`       |
-
-`.env` files support simple `KEY=value` lines only. Line continuations, variable interpolation, and multi-line values are not supported. Set `PGM_ENV_FILE` to a custom path or an empty value to disable automatic `.env` loading.
-
-### Migrations Table
-
-The migrations table defaults to `schema_migrations`.
-
-Use `--table <table-name>` for CLI database commands, or `table` in the Node API options.
-
-Valid table names:
-
-- `schema_migrations`
-- `schema_name.schema_migrations`
-
-Table names must be lowercase PostgreSQL-style identifiers. The schema must already exist when a schema-qualified name is used.
-
-### Schema Scoping
-
-A schema-qualified migrations table only changes where migration history is stored. `pg-migrate` does not set `search_path` for migration SQL.
-
-If migrations should affect a non-`public` schema, either qualify object names in the SQL:
-
-```sql
--- migrate:up
-CREATE TABLE app.users (
-  id SERIAL PRIMARY KEY
-);
-
--- migrate:down
-DROP TABLE app.users;
-```
-
-If you set `search_path` inside a migration, reset it before the migration ends or use a schema-qualified migrations table such as `--table public.schema_migrations`. History writes happen in the same transaction as the migration SQL.
-
-```sql
--- migrate:up
-SET LOCAL search_path TO app;
-CREATE TABLE users (
-  id SERIAL PRIMARY KEY
-);
-RESET search_path;
-
--- migrate:down
-SET LOCAL search_path TO app;
-DROP TABLE app.users;
-RESET search_path;
-```
-
-## Commands
-
-```sh
-pg-migrate <command> [options]
+pg-migrate <command> [arguments] [options]
+pg-migrate help [command]
 pg-migrate <command> --help
 ```
 
-Programmatic examples use the exported Node API. API calls accept a PostgreSQL connection string or a `pg.ClientConfig` object.
+| Command         | Action                                             |
+| --------------- | -------------------------------------------------- |
+| `create <name>` | Create a timestamped migration file.               |
+| `status`        | Show applied and pending migrations.               |
+| `validate`      | Validate all migration files and database history. |
+| `up`            | Apply all pending migrations in order.             |
+| `down`          | Revert the latest applied migration.               |
 
-By default, API functions emit newline-delimited structured JSON logs to `stderr`. Pass `logSink` to route structured log records elsewhere.
+Use `--target <version-or-filename>` with `up` to apply through a migration.
+Use it with `down` to revert all migrations after it. A `down` target remains
+applied. A version contains 14 digits, for example `20260811120000`.
 
-`correlationId` adds the same id to every log record for one run, so application logs can be tied back to a specific migration call.
+| Option                   | Use                                               |
+| ------------------------ | ------------------------------------------------- |
+| `-c, --config <path>`    | Environment file.                                 |
+| `-d, --directory <path>` | Migration directory.                              |
+| `-t, --table <name>`     | History table; database commands only.            |
+| `-u, --url <url>`        | PostgreSQL URL; database commands only.           |
+| `--target <target>`      | Target version or filename; `up` and `down` only. |
+| `--no-color`             | Disable color.                                    |
+| `-q, --quiet`            | Show only errors and requested help.              |
+| `-v, --verbose`          | Show detailed progress.                           |
+| `-h, --help`             | Show help.                                        |
 
-CLI commands exit `0` on success and `1` on expected failures. In human-readable mode, errors are logged to `stderr`. With `--json`, failures write `{ "command": <command|null>, "error": "<message>", "ok": false }` to `stdout`; `stderr` still contains logs, rendered as JSON log records.
+Final results and help go to stdout. Progress and errors go to stderr. An
+empty `up` or `down` plan leaves stdout empty. A failure sets exit code `1`.
+Quiet mode takes precedence over verbose mode.
 
-### `pg-migrate create`
+## Configuration
 
-Creates a timestamped migration file.
+Settings use this precedence: command option, process environment,
+environment file, then default.
 
-#### Usage
+| Variable        | Use                 | Default             |
+| --------------- | ------------------- | ------------------- |
+| `PGM_CONFIG`    | Environment file    | `.env`              |
+| `PGM_DIRECTORY` | Migration directory | `migrations`        |
+| `PGM_TABLE`     | History table       | `schema_migrations` |
+| `PGM_URL`       | PostgreSQL URL      | None                |
 
-```sh
-pg-migrate create --name <name> [options]
+The default `.env` file is optional. A file selected with `--config` or
+`PGM_CONFIG` must exist. For example:
+
+```dotenv
+PGM_DIRECTORY=db/migrations
+PGM_TABLE=app.schema_migrations
+PGM_URL=postgres://localhost/app
 ```
 
-#### Flags
+Database commands require `--url` or `PGM_URL`. A history table can include a
+schema. Each table or schema identifier must start with a lowercase letter or
+underscore and contain only lowercase letters, numbers, and underscores.
 
-| Flag                            | Required | Description                                                                               |
-| ------------------------------- | -------- | ----------------------------------------------------------------------------------------- |
-| `--name <name>`, `-n <name>`    | yes      | Migration slug. Must match `[a-z0-9][a-z0-9_]*`.                                          |
-| `--directory <dir>`, `-d <dir>` | no       | Output directory. Defaults to `PGM_MIGRATIONS_DIRECTORY` (env or `.env`) or `migrations`. |
-| `--irreversible`                | no       | Create a forward-only migration template with `-- migrate:irreversible`.                  |
-| `--json`                        | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.                   |
-| `--quiet`                       | no       | Suppress non-error logs.                                                                  |
-| `--verbose`, `-v`               | no       | Enable debug logs.                                                                        |
-| `--env-file <path>`             | no       | Load environment variables from a custom env file.                                        |
-| `--no-color`                    | no       | Disable ANSI color in human-readable logs.                                                |
-| `--help`, `-h`                  | no       | Show command help.                                                                        |
+## Migration files
 
-#### Behavior
-
-- Creates `<YYYYMMDDHHMMSS>_<name>.sql`.
-- The timestamp is generated from the current UTC time.
-- The output directory is created if it does not exist.
-- The file is created with `-- migrate:up` and `-- migrate:down` markers.
-- `--irreversible` creates the file with a single `-- migrate:irreversible` marker instead.
-- Existing files are not overwritten.
-- Human-readable mode writes the created file path to `stdout`.
-- `--json` writes `{ "command": "create", "file": "<path>" }` to `stdout`.
-- Logs are written to `stderr`.
-
-#### Examples
-
-```sh
-pg-migrate create --name create_users
-pg-migrate create --name normalize_user_emails --irreversible
-pg-migrate create --directory sql/migrations --name add_user_index
-pg-migrate create -d sql/migrations -n add_deleted_at
-```
-
-#### Programmatic API
-
-`create` is only exposed through the CLI. The package does not currently export a public function for creating migration files.
-
-### `pg-migrate up`
-
-Applies pending migrations.
-
-#### Usage
-
-```sh
-pg-migrate up [options] [<database-url>]
-```
-
-#### Flags
-
-| Flag                               | Required | Description                                                                                   |
-| ---------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
-| `--url <database-url>`             | no       | Database URL. Alternative to positional `<database-url>`.                                     |
-| `--directory <dir>`, `-d <dir>`    | no       | Migrations directory. Defaults to `PGM_MIGRATIONS_DIRECTORY` (env or `.env`) or `migrations`. |
-| `--target <target>`, `-t <target>` | no       | Apply pending migrations up to and including this target.                                     |
-| `--table <table-name>`             | no       | Migrations table. Defaults to `schema_migrations`.                                            |
-| `--dry-run`                        | no       | Run planned SQL and history writes, then roll back.                                           |
-| `--json`                           | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.                       |
-| `--quiet`                          | no       | Suppress non-error logs.                                                                      |
-| `--verbose`, `-v`                  | no       | Enable debug logs.                                                                            |
-| `--env-file <path>`                | no       | Load environment variables from a custom env file.                                            |
-| `--no-color`                       | no       | Disable ANSI color in human-readable logs.                                                    |
-| `--help`, `-h`                     | no       | Show command help.                                                                            |
-
-#### Target Format
-
-`--target` accepts either:
+`create` makes the directory if necessary and creates this UTC filename:
 
 ```text
-<YYYYMMDDHHMMSS>
-<YYYYMMDDHHMMSS>_<slug>.sql
+<YYYYMMDDHHMMSS>_<name>.sql
 ```
 
-#### Behavior
+Names must match `[a-z0-9][a-z0-9_]*`. Versions must be unique. Each file must
+be valid UTF-8 and have this structure:
 
-- Without `--target`, applies all pending migrations.
-- With `--target`, stops after the target migration has been applied.
-- Creates the migrations table if it does not exist.
-- Validates files and applied history before running migration SQL.
-- Fails if applied history has gaps, duplicates, or versions missing on disk.
-- Fails if the target is behind the latest applied migration.
-- Runs each migration file in its own transaction.
-- Stops at the first failed migration.
-- Uses a PostgreSQL advisory lock for the full run.
-- Human-readable mode writes no command result on success.
-- `--json` writes `{ "command": "up", "dryRun": <boolean>, "ok": true, "target": <target|null> }` to `stdout`.
-- Logs are written to `stderr`.
+```sql
+-- migrate:up
 
-#### Examples
-
-```sh
-pg-migrate up postgres://localhost:5432/app
-pg-migrate up --url postgres://localhost:5432/app
-pg-migrate up --url postgres://localhost:5432/app --target 20260416090000
-pg-migrate up --url postgres://localhost:5432/app --target 20260416090000_create_users.sql
-pg-migrate up --dry-run
+-- migrate:down
 ```
 
-#### Programmatic API
+Only white space can occur before the first marker. Each marker must occur
+exactly once, `migrate:up` must come first, and its section must not be empty.
+The down section can be empty. An exact marker line is reserved, including in
+SQL comments and strings. Every `.sql` entry in the directory must be a regular
+file with a valid migration filename.
 
-```javascript
-import { up } from "@gabbe/pg-migrate";
+The tool sends each section to PostgreSQL without parsing SQL statements. An
+empty down section removes the history record but does not undo schema changes.
 
-await up("postgres://localhost:5432/app", {
+## Safety and history
+
+Applied migrations must be a continuous sequence of the files on disk. The
+tool stops for a missing version, duplicate version, or history gap.
+
+`up`, `down`, and `validate` use an advisory lock for the selected history
+table. Each migration runs in its own transaction with its history change. If
+a migration fails, its transaction rolls back, but earlier migrations from the
+same command stay complete.
+
+`status` checks filenames and history without reading SQL, creating the
+history table, or taking the lock. `validate` checks SQL in all files and does
+not change migration data. `up` and `down` check SQL only in their execution
+plan.
+
+## TypeScript API
+
+```ts
+import {
+  migrate,
+  rollback,
+  status,
+  validate,
+  type DatabaseOptions,
+  type LogEvent,
+} from "@gabbe/pg-migrate";
+
+const options = {
   directory: "migrations",
   table: "schema_migrations",
-});
+  url: "postgres://localhost/app",
+  log(event: LogEvent): void {
+    process.stderr.write(`${event.type}\n`);
+  },
+} satisfies DatabaseOptions;
+
+const migrationStatus = await status(options);
+const validation = await validate(options);
+const applied = await migrate(options);
+const reverted = await rollback({ ...options, target: "20260811120000" });
 ```
 
-With `--target` behavior:
-
-```javascript
-await up("postgres://localhost:5432/app", {
-  directory: "migrations",
-  table: "schema_migrations",
-  target: "20260416090000_create_users.sql",
-});
-```
-
-With `--dry-run` behavior:
-
-```javascript
-await up("postgres://localhost:5432/app", {
-  directory: "migrations",
-  dryRun: true,
-  table: "schema_migrations",
-});
-```
-
-Programmatic options: `directory`, `table`, `target`, `dryRun`, `quiet`, `verbose`, `logSink`, and `correlationId`.
-
-### `pg-migrate down`
-
-Rolls back the latest applied migration, or multiple newer migrations when `--target` is given.
-
-#### Usage
-
-```sh
-pg-migrate down [options] [<database-url>]
-```
-
-#### Flags
-
-| Flag                               | Required | Description                                                                                   |
-| ---------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
-| `--url <database-url>`             | no       | Database URL. Alternative to positional `<database-url>`.                                     |
-| `--directory <dir>`, `-d <dir>`    | no       | Migrations directory. Defaults to `PGM_MIGRATIONS_DIRECTORY` (env or `.env`) or `migrations`. |
-| `--target <target>`, `-t <target>` | no       | Roll back newer migrations while leaving this target applied.                                 |
-| `--table <table-name>`             | no       | Migrations table. Defaults to `schema_migrations`.                                            |
-| `--dry-run`                        | no       | Run planned SQL and history writes, then roll back.                                           |
-| `--json`                           | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.                       |
-| `--quiet`                          | no       | Suppress non-error logs.                                                                      |
-| `--verbose`, `-v`                  | no       | Enable debug logs.                                                                            |
-| `--env-file <path>`                | no       | Load environment variables from a custom env file.                                            |
-| `--no-color`                       | no       | Disable ANSI color in human-readable logs.                                                    |
-| `--help`, `-h`                     | no       | Show command help.                                                                            |
-
-#### Target Format
-
-`--target` accepts either:
-
-```text
-<YYYYMMDDHHMMSS>
-<YYYYMMDDHHMMSS>_<slug>.sql
-```
-
-#### Behavior
-
-- Without `--target`, rolls back exactly one migration: the latest applied migration.
-- With `--target`, rolls back newer migrations and leaves the target migration applied.
-- The target migration must already be applied.
-- Creates the migrations table if it does not exist.
-- Validates files and applied history before running rollback SQL.
-- Runs each rollback in its own transaction when `down` SQL exists.
-- For irreversible migrations, no SQL is run and the migration is still removed from history.
-- Uses a PostgreSQL advisory lock for the full run.
-- Human-readable mode writes no command result on success.
-- `--json` writes `{ "command": "down", "dryRun": <boolean>, "ok": true, "target": <target|null> }` to `stdout`.
-- Logs are written to `stderr`.
-
-#### Examples
-
-```sh
-pg-migrate down postgres://localhost:5432/app
-pg-migrate down --url postgres://localhost:5432/app
-pg-migrate down --url postgres://localhost:5432/app --target 20260416090000
-pg-migrate down --url postgres://localhost:5432/app --target 20260416090000_create_users.sql
-pg-migrate down --dry-run
-```
-
-#### Programmatic API
-
-```javascript
-import { down } from "@gabbe/pg-migrate";
-
-await down("postgres://localhost:5432/app", {
-  directory: "migrations",
-  table: "schema_migrations",
-});
-```
-
-With `--target` behavior:
-
-```javascript
-await down("postgres://localhost:5432/app", {
-  directory: "migrations",
-  table: "schema_migrations",
-  target: "20260416090000_create_users.sql",
-});
-```
-
-With `--dry-run` behavior:
-
-```javascript
-await down("postgres://localhost:5432/app", {
-  directory: "migrations",
-  dryRun: true,
-  table: "schema_migrations",
-});
-```
-
-Programmatic options: `directory`, `table`, `target`, `dryRun`, `quiet`, `verbose`, `logSink`, and `correlationId`.
-
-### `pg-migrate status`
-
-Shows applied and pending migration state.
-
-#### Usage
-
-```sh
-pg-migrate status [options] [<database-url>]
-```
-
-#### Flags
-
-| Flag                            | Required | Description                                                                                   |
-| ------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
-| `--url <database-url>`          | no       | Database URL. Alternative to positional `<database-url>`.                                     |
-| `--directory <dir>`, `-d <dir>` | no       | Migrations directory. Defaults to `PGM_MIGRATIONS_DIRECTORY` (env or `.env`) or `migrations`. |
-| `--table <table-name>`          | no       | Migrations table. Defaults to `schema_migrations`.                                            |
-| `--json`                        | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.                       |
-| `--quiet`                       | no       | Suppress non-error logs.                                                                      |
-| `--verbose`, `-v`               | no       | Enable debug logs.                                                                            |
-| `--env-file <path>`             | no       | Load environment variables from a custom env file.                                            |
-| `--no-color`                    | no       | Disable ANSI color in human-readable logs.                                                    |
-| `--help`, `-h`                  | no       | Show command help.                                                                            |
-
-#### Behavior
-
-- Validates migration files and applied history consistency.
-- Shows the migrations table, migrations directory, initialization state, current migration, next migration, applied count, pending count, total count, and per-file state.
-- `current` is the latest applied migration by file order.
-- `next` is the first pending migration by file order.
-- Does not create a missing migrations table.
-- Reports `initialized: false` when the migrations table does not exist.
-- Uses a PostgreSQL advisory lock for the full run.
-- Human-readable mode writes a status report to `stdout`.
-- `--json` writes `{ "command": "status", "ok": true, ...status }` to `stdout`.
-- Logs are written to `stderr`.
-
-#### Human Output
-
-```text
-Table: schema_migrations
-Directory: migrations
-Initialized: true
-Current: 20260414153000_create_users.sql
-Next: (none)
-Applied: 1
-Pending: 0
-Total: 1
-```
-
-#### Examples
-
-```sh
-pg-migrate status postgres://localhost:5432/app
-pg-migrate status --url postgres://localhost:5432/app
-pg-migrate status --url postgres://localhost:5432/app --table schema_migrations
-pg-migrate status --json
-```
-
-#### Programmatic API
-
-```javascript
-import { status } from "@gabbe/pg-migrate";
-
-const result = await status("postgres://localhost:5432/app", {
-  directory: "migrations",
-  table: "schema_migrations",
-});
-```
-
-`result` contains `current`, `next`, `initialized`, `summary`, and the per-file `migrations` list.
-
-Programmatic options: `directory`, `table`, `quiet`, `verbose`, `logSink`, and `correlationId`.
-
-### `pg-migrate validate`
-
-Checks migration files, database connectivity, and migration history without applying SQL.
-
-#### Usage
-
-```sh
-pg-migrate validate [options] [<database-url>]
-```
-
-#### Flags
-
-| Flag                            | Required | Description                                                                                   |
-| ------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
-| `--url <database-url>`          | no       | Database URL. Alternative to positional `<database-url>`.                                     |
-| `--directory <dir>`, `-d <dir>` | no       | Migrations directory. Defaults to `PGM_MIGRATIONS_DIRECTORY` (env or `.env`) or `migrations`. |
-| `--table <table-name>`          | no       | Migrations table. Defaults to `schema_migrations`.                                            |
-| `--json`                        | no       | Emit a structured command result to `stdout` and JSON logs to `stderr`.                       |
-| `--quiet`                       | no       | Suppress non-error logs.                                                                      |
-| `--verbose`, `-v`               | no       | Enable debug logs.                                                                            |
-| `--env-file <path>`             | no       | Load environment variables from a custom env file.                                            |
-| `--no-color`                    | no       | Disable ANSI color in human-readable logs.                                                    |
-| `--help`, `-h`                  | no       | Show command help.                                                                            |
-
-#### Behavior
-
-- Validates migration files, ordering, SQL markers, and applied history consistency.
-- Checks database connectivity.
-- Checks the migrations table shape.
-- Does not create a missing migrations table.
-- Fails if the migrations table does not exist.
-- Uses a PostgreSQL advisory lock for the full run.
-- Human-readable mode writes no command result on success.
-- `--json` writes `{ "command": "validate", "ok": true }` to `stdout`.
-- Logs are written to `stderr`.
-
-#### Examples
-
-```sh
-pg-migrate validate postgres://localhost:5432/app
-pg-migrate validate --url postgres://localhost:5432/app
-pg-migrate validate --url postgres://localhost:5432/app --table schema_migrations
-pg-migrate validate --json
-```
-
-#### Programmatic API
-
-```javascript
-import { validate } from "@gabbe/pg-migrate";
-
-await validate("postgres://localhost:5432/app", {
-  directory: "migrations",
-  table: "schema_migrations",
-});
-```
-
-Programmatic options: `directory`, `table`, `quiet`, `verbose`, `logSink`, and `correlationId`.
-
-## History Rules
-
-Before running migration SQL, `pg-migrate` validates that applied migrations still match disk migrations.
-
-It fails when:
-
-- An applied migration version is missing on disk.
-- Applied history contains duplicate versions.
-- Applied migrations do not form a contiguous prefix of the ordered migration files.
-- A target migration cannot be found.
-- An `up --target` migration is older than the latest applied migration.
-
-The migration slug is not part of applied identity. Renaming `20260414153000_create_users.sql` to `20260414153000_create_accounts.sql` keeps the migration applied because the `20260414153000` timestamp is unchanged.
-
-`up` is append-only by version order. If you add an older migration after a newer migration has already been applied, `up` fails instead of applying it out of order.
-
-## Locking and Transactions
-
-Migration database commands use a PostgreSQL advisory lock for the full run. The lock key is based on the unqualified migrations table name.
-
-Examples:
-
-- `schema_migrations`
-- `public.schema_migrations`
-
-Both use the same lock key, so they serialize with each other. Use different table names if that matters.
-
-Warning: separate services that share one PostgreSQL database and use the same unqualified migrations table name will block each other, even when their migrations tables are in different schemas.
-
-Transaction behavior:
-
-- `up` runs each migration file in its own transaction.
-- `down` runs each rollback in its own transaction when `down` SQL exists.
-- `--dry-run` wraps the planned run in a transaction and always rolls it back.
-- Earlier successful migrations stay committed when a later migration fails.
-- If one statement inside an `up` migration file fails, that file's transaction is rolled back and no history row is inserted.
-- If one statement inside a `down` migration file fails, that file's transaction is rolled back and the existing history row remains.
-- `pg-migrate` does not store failed or dirty migration rows.
-- PostgreSQL commands that cannot run inside a transaction block, such as `CREATE INDEX CONCURRENTLY`, are not supported in normal migration files.
-
-## Development
-
-```sh
-git clone https://github.com/gabts/pg-migrate
-cd pg-migrate
-npm install
-npm run build:watch
-```
-
-Run tests with a PostgreSQL database:
-
-```sh
-PGM_DATABASE_URL="postgres://localhost:5432/database" npm run test
-```
+All options are explicit. The API does not read CLI options or environment
+variables, and file creation is available through the CLI only. `status`
+returns ordered migration state and counts. `validate` returns counts.
+`migrate` and `rollback` return executed filenames. The optional `log` callback
+receives typed progress events. Failures throw an `Error`.
 
 ## License
 
-[MIT](./LICENSE)
+MIT
