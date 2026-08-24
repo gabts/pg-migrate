@@ -143,7 +143,7 @@ Behavior:
   Without --target, the command applies all pending migrations.
   A target can be a 14-digit version or a complete migration file name.
   The command validates SQL only in migrations that it will apply.
-  The command creates the history table when it does not exist.
+  The command creates a missing history table before the first migration.
   Each migration uses its own transaction.
   The command waits for the migration advisory lock.
 

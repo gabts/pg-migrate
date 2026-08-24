@@ -77,6 +77,7 @@ describe("help", (): void => {
     assert.match(help, /including the target/);
     assert.match(help, /applies all pending migrations/);
     assert.match(help, /validates SQL only in migrations that it will apply/i);
+    assert.match(help, /creates a missing history table before the first migration/i);
     assert.match(help, /migration count goes to stdout/i);
     assert.match(help, /empty plan leaves stdout empty/i);
     assert.match(help, /command header, completion messages, and errors/i);
