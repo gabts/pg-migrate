@@ -6,7 +6,6 @@ import {
   lockMigrations,
   readAppliedMigrations,
   readValidatedHistoryDefinition,
-  requireHistoryTable,
   resolveHistoryTable,
   validateHistoryTableName,
 } from "./migration/history.js";
@@ -184,13 +183,14 @@ export async function validate(
       options.table,
       options.log,
     );
-    requireHistoryTable(history, options.table);
-    const applied = await readAppliedMigrations(
-      client,
-      historyTable.qualifiedName,
-      options.table,
-      options.log,
-    );
+    const applied = history.initialized
+      ? await readAppliedMigrations(
+          client,
+          historyTable.qualifiedName,
+          options.table,
+          options.log,
+        )
+      : [];
 
     validateMigrationConsistency(migrationIndex, applied, options.log);
     return {

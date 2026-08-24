@@ -57,7 +57,8 @@ describe("help", (): void => {
 
     assert.match(help, /pg-migrate validate \[options\]/);
     assert.match(help, /validates SQL in all migration files/i);
-    assert.match(help, /history table must exist/i);
+    assert.match(help, /missing history table is treated as empty history/i);
+    assert.match(help, /is not created/i);
     assert.match(help, /continuous sequence/);
     assert.match(help, /acquires the migration advisory lock/);
     assert.match(help, /Validation confirmation and migration counts/);

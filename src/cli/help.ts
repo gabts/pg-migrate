@@ -109,7 +109,7 @@ Options:
 
 Behavior:
   The command validates SQL in all migration files.
-  The history table must exist and have the required columns.
+  A missing history table is treated as empty history and is not created.
   Applied migrations must exist on disk and form a continuous sequence.
   The command acquires the migration advisory lock.
   The command does not change migration data.

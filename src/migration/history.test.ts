@@ -8,7 +8,6 @@ import {
   readHistoryDefinition,
   recordAppliedMigration,
   removeAppliedMigration,
-  requireHistoryTable,
   resolveHistoryTable,
   validateHistoryDefinition,
   validateHistoryTableName,
@@ -201,17 +200,6 @@ describe("history", (): void => {
         { columns: [], initialized: false },
         "schema_migrations",
       ),
-    );
-  });
-
-  it("requires an initialized history table separately", (): void => {
-    assert.throws(
-      () =>
-        requireHistoryTable(
-          { columns: [], initialized: false },
-          "schema_migrations",
-        ),
-      new Error("Migration history table 'schema_migrations' does not exist."),
     );
   });
 

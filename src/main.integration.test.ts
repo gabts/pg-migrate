@@ -113,7 +113,7 @@ describe(
       }
     });
 
-    it("reports missing history without creating it", async (): Promise<void> => {
+    it("handles missing history without creating it", async (): Promise<void> => {
       const file = await writeMigration(
         firstVersion,
         "add_users",
@@ -132,10 +132,11 @@ describe(
       assert.deepEqual(await rollback(commandOptions()), { files: [] });
       assert.equal(await relationExists("schema_migrations"), false);
 
-      await assert.rejects(
-        validate(commandOptions()),
-        new Error(`Migration history table '${table}' does not exist.`),
-      );
+      assert.deepEqual(await validate(commandOptions()), {
+        applied: 0,
+        pending: 1,
+        total: 1,
+      });
       assert.equal(await relationExists("schema_migrations"), false);
     });
 

@@ -142,16 +142,6 @@ export async function readHistoryDefinition(
   return { columns: columnsResult.rows, initialized: true };
 }
 
-/** Requires the migration history table to exist. */
-export function requireHistoryTable(
-  definition: HistoryDefinition,
-  table: string,
-): void {
-  if (!definition.initialized) {
-    throw new Error(`Migration history table '${table}' does not exist.`);
-  }
-}
-
 /** Validates the migration history table definition. */
 export function validateHistoryDefinition(
   definition: HistoryDefinition,
