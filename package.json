@@ -44,7 +44,7 @@
     "!dist/**/*.d.ts.map"
   ],
   "bin": {
-    "pg-migrate": "./bin/cli.js"
+    "pg-migrate": "bin/cli.js"
   },
   "scripts": {
     "build": "npm run clean && tsc",
