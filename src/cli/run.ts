@@ -19,25 +19,12 @@ import { createProgressOutput } from "./progress.js";
 import { resolveInvocation } from "./resolve.js";
 import { validateInvocation } from "./validate.js";
 
-// GNU rules give a help request priority over all errors. Read the flag
-// before parsing to include parse errors. Arguments after '--' cannot
-// request help. Use the first non-option argument as the help topic.
-function findHelpFlag(args: string[]): Command | "help" | null {
-  const end = args.indexOf("--");
-  const scanned = end === -1 ? args : args.slice(0, end);
-  if (!scanned.includes("--help") && !scanned.includes("-h")) {
-    return null;
-  }
-  const topic = scanned.find((arg) => !arg.startsWith("-"));
-  return isCommand(topic) ? topic : "help";
-}
-
 // Use colors only when stderr supports them and the flag permits them.
 // hasColors also uses NO_COLOR and FORCE_COLOR. Read the flag before
 // parsing so it also applies to parse errors.
-function useColors(argv: string[]): boolean {
+function useColors(args: string[]): boolean {
   return (
-    !argv.includes("--no-color") &&
+    !args.includes("--no-color") &&
     process.stderr.isTTY === true &&
     process.stderr.hasColors()
   );
@@ -73,23 +60,24 @@ export async function run(
   argv = process.argv,
   env = process.env,
 ): Promise<void> {
-  const colors = useColors(argv);
+  const args = argv.slice(2);
+  const colors = useColors(args);
   const progress = createProgressOutput(process.stderr, colors);
   let migrationFailed = false;
   let quiet = false;
   let verbose = false;
-  const first = argv[2];
+  const first = args[0];
   let helpCommand: Command | "help" | undefined = isCommand(first)
     ? first
     : "help";
   try {
-    const helpFlag = findHelpFlag(argv.slice(2));
-    if (helpFlag) {
-      process.stdout.write(getHelpText(helpFlag) + "\n");
+    const parsedResult = parseArgs(args);
+    if ("help" in parsedResult) {
+      process.stdout.write(getHelpText(parsedResult.help) + "\n");
       return;
     }
 
-    const parsed = parseArgs(argv.slice(2));
+    const parsed = parsedResult.invocation;
     const [command, ...commandPositionals] = parsed.positionals;
     quiet = parsed.values.quiet === true;
 

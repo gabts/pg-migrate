@@ -119,6 +119,18 @@ describe("run", (): void => {
     assert.ok(stdout.includes("up"));
   });
 
+  it("does not use an option value as the help topic", async (): Promise<void> => {
+    const { code, stdout, stderr } = await runCli([
+      "--directory",
+      "up",
+      "status",
+      "--help",
+    ]);
+    assert.equal(code, 0);
+    assert.equal(stderr, "");
+    assert.match(stdout, /pg-migrate status \[options\]/);
+  });
+
   it("prefers help over an invocation that would fail to parse", async (): Promise<void> => {
     const { code, stdout, stderr } = await runCli(["up", "--help", "--bogus"]);
     assert.equal(code, 0);
