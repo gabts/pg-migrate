@@ -4,6 +4,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { setTimeout } from "node:timers/promises";
 import * as pg from "pg";
 import {
   migrate,
@@ -433,8 +434,8 @@ describe(
       assert.deepEqual(await readHistoryVersions(), [firstVersion]);
     });
 
-    it("fails when another connection holds the migration lock", async (): Promise<void> => {
-      await writeMigration(
+    it("waits when another connection holds the migration lock", async (): Promise<void> => {
+      const file = await writeMigration(
         firstVersion,
         "add_users",
         `CREATE TABLE ${qualifiedRelation("users")} (id integer);`,
@@ -449,16 +450,33 @@ describe(
           [schema, "schema_migrations"],
         );
 
-        await assert.rejects(
-          migrate(commandOptions()),
-          new Error(`Migration lock for table '${table}' is already held.`),
+        let reportLockStart = (): void => {};
+        const lockStarted = new Promise<void>((resolve) => {
+          reportLockStart = resolve;
+        });
+        const migration = migrate({
+          ...commandOptions(),
+          log(event): void {
+            if (event.type === "lock-acquire-start") {
+              reportLockStart();
+            }
+          },
+        });
+        await lockStarted;
+        // Give PostgreSQL time to put the migration session in the wait queue.
+        await setTimeout(50);
+        await lockClient.query(
+          "SELECT pg_advisory_unlock(hashtext($1), hashtext($2));",
+          [schema, "schema_migrations"],
         );
+
+        assert.deepEqual(await migration, { files: [file] });
       } finally {
         await lockClient.end();
       }
 
-      assert.equal(await relationExists("schema_migrations"), false);
-      assert.equal(await relationExists("users"), false);
+      assert.equal(await relationExists("schema_migrations"), true);
+      assert.equal(await relationExists("users"), true);
     });
 
     it("uses independent locks for tables in different schemas", async (): Promise<void> => {

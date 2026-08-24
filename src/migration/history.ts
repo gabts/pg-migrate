@@ -101,15 +101,10 @@ export async function lockMigrations(
 ): Promise<void> {
   log({ table: table.name, type: "lock-acquire-start" });
   // The session lock is released when the caller closes this client.
-  const result = await client.query<{ acquired: boolean }>(
-    "SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) AS acquired;",
-    [table.schema, table.table],
-  );
-  if (!result.rows[0]?.acquired) {
-    throw new Error(
-      `Migration lock for table '${table.name}' is already held.`,
-    );
-  }
+  await client.query("SELECT pg_advisory_lock(hashtext($1), hashtext($2));", [
+    table.schema,
+    table.table,
+  ]);
   log({ table: table.name, type: "lock-acquire-done" });
 }
 

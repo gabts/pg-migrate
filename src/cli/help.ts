@@ -111,7 +111,7 @@ Behavior:
   The command validates SQL in all migration files.
   A missing history table is treated as empty history and is not created.
   Applied migrations must exist on disk and form a continuous sequence.
-  The command acquires the migration advisory lock.
+  The command waits for the migration advisory lock.
   The command does not change migration data.
 
 Output:
@@ -145,7 +145,7 @@ Behavior:
   The command validates SQL only in migrations that it will apply.
   The command creates the history table when it does not exist.
   Each migration uses its own transaction.
-  The command acquires the migration advisory lock.
+  The command waits for the migration advisory lock.
 
 Output:
   The command header, completion messages, and errors go to stderr.
@@ -181,7 +181,7 @@ Behavior:
   The command validates SQL only in migrations that it will revert.
   An empty migrate:down section only removes the migration history row.
   Each migration uses its own transaction.
-  The command acquires the migration advisory lock.
+  The command waits for the migration advisory lock.
 
 Output:
   The command header, completion messages, and errors go to stderr.

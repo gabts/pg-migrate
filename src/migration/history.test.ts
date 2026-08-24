@@ -38,10 +38,7 @@ function createClient(results: unknown[][] = []): {
 describe("history", (): void => {
   describe("lock", (): void => {
     it("resolves the schema of an unqualified table", async (): Promise<void> => {
-      const { client, queries } = createClient([
-        [{ schema: "app" }],
-        [{ acquired: true }],
-      ]);
+      const { client, queries } = createClient([[{ schema: "app" }]]);
 
       const table = await resolveHistoryTable(client, "schema_migrations");
       await lockMigrations(client, table);
@@ -57,14 +54,12 @@ describe("history", (): void => {
       assert.match(queries[0]!.sql, /current_schema\(\)/);
       assert.deepEqual(queries[1], {
         parameters: ["app", "schema_migrations"],
-        sql:
-          "SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) " +
-          "AS acquired;",
+        sql: "SELECT pg_advisory_lock(hashtext($1), hashtext($2));",
       });
     });
 
     it("uses the schema and table as the lock identity", async (): Promise<void> => {
-      const { client, queries } = createClient([[{ acquired: true }]]);
+      const { client, queries } = createClient();
 
       const table = await resolveHistoryTable(client, "app.schema_migrations");
       await lockMigrations(client, table);
@@ -78,9 +73,7 @@ describe("history", (): void => {
       assert.deepEqual(queries, [
         {
           parameters: ["app", "schema_migrations"],
-          sql:
-            "SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) " +
-            "AS acquired;",
+          sql: "SELECT pg_advisory_lock(hashtext($1), hashtext($2));",
         },
       ]);
     });
@@ -92,33 +85,6 @@ describe("history", (): void => {
         resolveHistoryTable(client, "schema_migrations"),
         new Error(
           "Cannot resolve schema for migration table 'schema_migrations'.",
-        ),
-      );
-    });
-
-    it("rejects a lock held by another connection", async (): Promise<void> => {
-      const { client } = createClient([
-        [{ schema: "public" }],
-        [{ acquired: false }],
-      ]);
-      const table = await resolveHistoryTable(client, "schema_migrations");
-
-      await assert.rejects(
-        lockMigrations(client, table),
-        new Error(
-          "Migration lock for table 'schema_migrations' is already held.",
-        ),
-      );
-    });
-
-    it("rejects a missing lock result", async (): Promise<void> => {
-      const { client } = createClient([[{ schema: "public" }], []]);
-      const table = await resolveHistoryTable(client, "schema_migrations");
-
-      await assert.rejects(
-        lockMigrations(client, table),
-        new Error(
-          "Migration lock for table 'schema_migrations' is already held.",
         ),
       );
     });

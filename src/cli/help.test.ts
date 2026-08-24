@@ -60,7 +60,7 @@ describe("help", (): void => {
     assert.match(help, /missing history table is treated as empty history/i);
     assert.match(help, /is not created/i);
     assert.match(help, /continuous sequence/);
-    assert.match(help, /acquires the migration advisory lock/);
+    assert.match(help, /waits for the migration advisory lock/);
     assert.match(help, /Validation confirmation and migration counts/);
     assert.match(help, /command header and errors go to stderr/i);
     assert.match(help, /--verbose also shows phase progress/i);
