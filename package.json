@@ -20,6 +20,9 @@
   "bugs": {
     "url": "https://github.com/gabts/pg-migrate/issues"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "cli",
     "database",
@@ -44,9 +47,11 @@
     "pg-migrate": "./bin/cli.js"
   },
   "scripts": {
-    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc",
+    "build": "npm run clean && tsc",
     "build:watch": "tsc -w",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "prepare": "npm run build",
+    "prepublishOnly": "npm test",
     "pretest": "npm run build",
     "test": "node --env-file-if-exists=.env --test \"dist/**/*.test.js\"",
     "format": "prettier --write ."
