@@ -53,7 +53,7 @@
     "prepare": "npm run build",
     "prepublishOnly": "npm test",
     "pretest": "npm run build",
-    "test": "node --env-file-if-exists=.env --test \"dist/**/*.test.js\"",
+    "test": "node --test \"dist/**/*.test.js\"",
     "format": "prettier --write ."
   },
   "dependencies": {

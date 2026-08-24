@@ -1,5 +1,6 @@
 import * as assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -14,6 +15,10 @@ import {
   type DatabaseOptions,
   type LogEvent,
 } from "./main.js";
+
+if (existsSync(".env")) {
+  process.loadEnvFile();
+}
 
 const testUrl = process.env.PGM_TEST_URL ?? "";
 const firstVersion = "20260811120000";
