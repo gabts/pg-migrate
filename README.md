@@ -118,7 +118,7 @@ Only white space can occur before the first marker. Each marker must occur
 exactly once, `migrate:up` must come first, and its section must not be empty.
 The down section can be empty. An exact marker line is reserved, including in
 SQL comments and strings. Every `.sql` entry in the directory must be a regular
-file with a valid migration filename.
+file with a valid migration filename. The tool does not scan subdirectories.
 
 The tool sends each section to PostgreSQL without parsing SQL statements. An
 empty down section removes the history record but does not undo schema changes.
@@ -128,7 +128,7 @@ empty down section removes the history record but does not undo schema changes.
 Applied migrations must be a continuous sequence of the files on disk. The
 tool stops for a missing version, duplicate version, or history gap.
 
-`up`, `down`, and `validate` use an advisory lock for the selected history
+`up`, `down`, and `validate` wait for an advisory lock for the selected history
 table. Each migration runs in its own transaction with its history change. If
 a migration fails, its transaction rolls back, but earlier migrations from the
 same command stay complete.
@@ -137,6 +137,20 @@ same command stay complete.
 history table, or taking the lock. `validate` checks SQL in all files and does
 not change migration data. `up` and `down` check SQL only in their execution
 plan.
+
+## Limitations
+
+- Each migration runs in a transaction. Migration SQL must not contain
+  transaction-control commands or statements that cannot run in a transaction.
+  The tool does not detect transaction-control commands.
+- `psql` meta-commands, variable substitution, and `COPY FROM STDIN` are not
+  supported.
+- `validate` checks file structure and history, not PostgreSQL SQL syntax.
+- The history table stores no file checksums. Do not edit or rename applied
+  migrations.
+- The tool does not create schemas or set `search_path`. Create the history
+  table schema first. Set the required `search_path` or use schema-qualified
+  names in migration SQL.
 
 ## TypeScript API
 
