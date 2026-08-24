@@ -96,10 +96,6 @@ export function validateMigrationFilenames(
   entries: MigrationDirectoryEntry[],
 ): void {
   const migrations = migrationEntries(entries);
-  if (migrations.length === 0) {
-    throw new Error(`No migration files found in '${directory}'.`);
-  }
-
   const fileByVersion = new Map<string, string>();
   for (const entry of migrations) {
     if (!entry.isFile) {

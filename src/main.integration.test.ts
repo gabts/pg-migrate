@@ -140,6 +140,24 @@ describe(
       assert.equal(await relationExists("schema_migrations"), false);
     });
 
+    it("accepts an empty migration directory", async (): Promise<void> => {
+      const migrationStatus = await status(commandOptions());
+
+      assert.deepEqual(migrationStatus.summary, {
+        applied: 0,
+        pending: 0,
+        total: 0,
+      });
+      assert.deepEqual(await validate(commandOptions()), {
+        applied: 0,
+        pending: 0,
+        total: 0,
+      });
+      assert.deepEqual(await migrate(commandOptions()), { files: [] });
+      assert.deepEqual(await rollback(commandOptions()), { files: [] });
+      assert.equal(await relationExists("schema_migrations"), false);
+    });
+
     it("does not use the global timestamp parser for status", async (): Promise<void> => {
       const file = await writeMigration(
         firstVersion,

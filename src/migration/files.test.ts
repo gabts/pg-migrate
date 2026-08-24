@@ -115,13 +115,11 @@ describe("files", (): void => {
     ]);
   });
 
-  it("rejects a directory without migration files during validation", (): void => {
-    assert.throws(
-      () =>
-        validateMigrationFilenames(tempDir, [
-          { isFile: true, name: "notes.txt" },
-        ]),
-      new Error(`No migration files found in '${tempDir}'.`),
+  it("accepts a directory without migration files during validation", (): void => {
+    assert.doesNotThrow(() =>
+      validateMigrationFilenames(tempDir, [
+        { isFile: true, name: "notes.txt" },
+      ]),
     );
   });
 
