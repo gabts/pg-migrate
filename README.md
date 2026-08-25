@@ -158,6 +158,9 @@ check SQL only in their execution plan.
 - The tool does not create schemas or set `search_path`. Create the history
   table schema first. Set the required `search_path` or use schema-qualified
   names in migration SQL.
+- `up`, `down`, and `validate` must use the same PostgreSQL server session
+  for the complete command. Use a direct connection if a pool assigns server
+  connections per transaction or statement.
 
 ## TypeScript API
 
