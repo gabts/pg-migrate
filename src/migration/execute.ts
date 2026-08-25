@@ -104,7 +104,10 @@ export async function executeMigrations(
       if (await rollbackAfterError(client)) {
         options.log?.({ type: "failed-migration-rollback-done" });
       }
-      throw error;
+      const action = options.direction === "up" ? "apply" : "revert";
+      throw new Error(`Failed to ${action} migration '${migration.file}'.`, {
+        cause: error,
+      });
     }
     options.log?.({
       direction: options.direction,

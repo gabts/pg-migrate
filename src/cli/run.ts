@@ -120,10 +120,18 @@ export async function run(
   } catch (error) {
     progress.fail();
     const message = error instanceof Error ? error.message : String(error);
-    const formatted =
-      migrationFailed && !quiet
-        ? formatFailureCause(message, colors)
-        : formatError(message, colors, helpCommand);
+    const causeMessage =
+      error instanceof Error && error.cause !== undefined
+        ? error.cause instanceof Error
+          ? error.cause.message
+          : String(error.cause)
+        : undefined;
+    let formatted = formatError(message, colors, helpCommand);
+    if (migrationFailed && !quiet) {
+      formatted = formatFailureCause(causeMessage ?? message, colors);
+    } else if (migrationFailed && causeMessage !== undefined) {
+      formatted += `\n${formatFailureCause(causeMessage, colors)}`;
+    }
     process.stderr.write(formatted + "\n");
     process.exitCode = 1;
   }

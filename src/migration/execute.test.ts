@@ -44,9 +44,11 @@ const sqlByFile = new Map<string, MigrationSql>([
 
 function createClient(failingSql?: string): {
   client: pg.Client;
+  failure: Error;
   queries: Query[];
 } {
   const queries: Query[] = [];
+  const failure = new Error("Database query failed.");
   const client = {
     query: async (
       sql: string,
@@ -54,12 +56,12 @@ function createClient(failingSql?: string): {
     ): Promise<{ rows: unknown[] }> => {
       queries.push({ parameters, sql });
       if (sql === failingSql) {
-        throw new Error("Database query failed.");
+        throw failure;
       }
       return { rows: [] };
     },
   } as unknown as pg.Client;
-  return { client, queries };
+  return { client, failure, queries };
 }
 
 function compact(sql: string): string {
@@ -240,7 +242,7 @@ describe("execute", (): void => {
 
   it("rolls back a failed migration transaction", async (): Promise<void> => {
     const failingSql = sqlByFile.get(first.file)!.up;
-    const { client, queries } = createClient(failingSql);
+    const { client, failure, queries } = createClient(failingSql);
     const { events, log } = captureEvents();
 
     await assert.rejects(
@@ -251,7 +253,15 @@ describe("execute", (): void => {
         qualifiedTable: '"schema_migrations"',
         table: "schema_migrations",
       }),
-      new Error("Database query failed."),
+      (error: unknown): boolean => {
+        assert.ok(error instanceof Error);
+        assert.equal(
+          error.message,
+          `Failed to apply migration '${first.file}'.`,
+        );
+        assert.equal(error.cause, failure);
+        return true;
+      },
     );
 
     assert.deepEqual(
@@ -269,5 +279,33 @@ describe("execute", (): void => {
       assert.equal(failed.file, first.file);
       assert.ok(failed.durationMs >= 0);
     }
+  });
+
+  it("identifies a failed down migration", async (): Promise<void> => {
+    const failingSql = sqlByFile.get(first.file)!.down;
+    const { client, failure, queries } = createClient(failingSql);
+
+    await assert.rejects(
+      executeMigrations(client, [first], sqlByFile, {
+        direction: "down",
+        initialized: true,
+        qualifiedTable: '"schema_migrations"',
+        table: "schema_migrations",
+      }),
+      (error: unknown): boolean => {
+        assert.ok(error instanceof Error);
+        assert.equal(
+          error.message,
+          `Failed to revert migration '${first.file}'.`,
+        );
+        assert.equal(error.cause, failure);
+        return true;
+      },
+    );
+
+    assert.deepEqual(
+      queries.map((query) => compact(query.sql)),
+      ["BEGIN;", "DROP TABLE users;", "ROLLBACK;"],
+    );
   });
 });

@@ -458,7 +458,7 @@ describe(
         `CREATE TABLE ${qualifiedRelation("users")} (id integer);`,
         `DROP TABLE ${qualifiedRelation("users")};`,
       );
-      await writeMigration(
+      const failedFile = await writeMigration(
         secondVersion,
         "add_posts",
         `CREATE TABLE ${qualifiedRelation("posts")} (id integer);\n` +
@@ -466,7 +466,19 @@ describe(
         `DROP TABLE ${qualifiedRelation("posts")};`,
       );
 
-      await assert.rejects(migrate(commandOptions()));
+      await assert.rejects(
+        migrate(commandOptions()),
+        (error: unknown): boolean => {
+          assert.ok(error instanceof Error);
+          assert.equal(
+            error.message,
+            `Failed to apply migration '${failedFile}'.`,
+          );
+          assert.ok(error.cause instanceof Error);
+          assert.match(error.cause.message, /relation .* does not exist/);
+          return true;
+        },
+      );
 
       assert.equal(await relationExists("users"), true);
       assert.equal(await relationExists("posts"), false);
