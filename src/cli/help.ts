@@ -8,7 +8,7 @@ const generalHelpText = `Usage:
 Commands:
   create <name>  Create a timestamped migration file
   status         Show applied and pending migration state
-  validate       Validate migration files and database history
+  validate       Validate file structure and database history
   up             Apply pending migrations
   down           Revert applied migrations
 
@@ -78,7 +78,7 @@ Options:
 
 Behavior:
   The command validates all migration file names, checksums, and applied history.
-  It does not decode or validate migration SQL.
+  It does not decode or validate migration file contents.
   It does not create a missing history table.
   A missing history table is reported as uninitialized.
   The command does not acquire the migration advisory lock.
@@ -95,7 +95,7 @@ Example:
 const validateHelpText = `Usage:
   pg-migrate validate [options]
 
-Validates migration files and database history.
+Validates migration file structure and database history.
 
 Options:
   -c, --config <path>    Environment file, defaults to PGM_CONFIG or .env
@@ -108,7 +108,8 @@ Options:
   -h, --help             Show this help
 
 Behavior:
-  The command validates SQL in all migration files.
+  The command checks UTF-8 encoding and marker structure in all migration files.
+  It does not ask PostgreSQL to parse or execute migration SQL.
   A missing history table is treated as empty history and is not created.
   Applied migrations must exist on disk and form a continuous sequence.
   Applied filenames and checksums must match the database history.
@@ -144,7 +145,8 @@ Behavior:
   Without --target, the command applies all pending migrations.
   A target can be a 14-digit version or a complete migration file name.
   Applied filenames and checksums must match the database history.
-  The command validates SQL only in migrations that it will apply.
+  The command checks UTF-8 encoding and marker structure only in migrations
+  that it will apply.
   The command creates a missing history table before the first migration.
   Each migration uses its own transaction.
   The command waits for the migration advisory lock.
@@ -181,8 +183,10 @@ Behavior:
   With --target, the target remains applied.
   A target can be a 14-digit version or a complete migration file name.
   Applied filenames and checksums must match the database history.
-  The command validates SQL only in migrations that it will revert.
-  An empty migrate:down section only removes the migration history row.
+  The command checks UTF-8 encoding and marker structure only in migrations
+  that it will revert.
+  An empty migrate:down section removes only the migration history row.
+  It does not reverse database changes, and a later up runs the up section again.
   Each migration uses its own transaction.
   The command waits for the migration advisory lock.
 

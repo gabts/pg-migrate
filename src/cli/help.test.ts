@@ -43,7 +43,7 @@ describe("help", (): void => {
     assert.match(help, /does not create a missing history table/i);
     assert.match(help, /does not acquire the migration advisory lock/i);
     assert.match(help, /validates all migration file names, checksums/i);
-    assert.match(help, /does not decode or validate migration SQL/i);
+    assert.match(help, /does not decode or validate migration file contents/i);
     assert.match(help, /Migration states and counts go to stdout/);
     assert.match(help, /command header and errors go to stderr/i);
     assert.match(help, /--verbose also shows phase progress/i);
@@ -57,7 +57,8 @@ describe("help", (): void => {
     const help = getHelpText("validate");
 
     assert.match(help, /pg-migrate validate \[options\]/);
-    assert.match(help, /validates SQL in all migration files/i);
+    assert.match(help, /checks UTF-8 encoding and marker structure/i);
+    assert.match(help, /does not ask PostgreSQL to parse or execute/i);
     assert.match(help, /missing history table is treated as empty history/i);
     assert.match(help, /is not created/i);
     assert.match(help, /continuous sequence/);
@@ -78,7 +79,7 @@ describe("help", (): void => {
     assert.match(help, /pg-migrate up \[options\]/);
     assert.match(help, /including the target/);
     assert.match(help, /applies all pending migrations/);
-    assert.match(help, /validates SQL only in migrations that it will apply/i);
+    assert.match(help, /checks UTF-8 encoding and marker structure/i);
     assert.match(help, /filenames and checksums must match/i);
     assert.match(
       help,
@@ -100,7 +101,9 @@ describe("help", (): void => {
     assert.match(help, /pg-migrate down \[options\]/);
     assert.match(help, /target remains applied/);
     assert.match(help, /empty migrate:down section/);
-    assert.match(help, /validates SQL only in migrations that it will revert/i);
+    assert.match(help, /checks UTF-8 encoding and marker structure/i);
+    assert.match(help, /does not reverse database changes/i);
+    assert.match(help, /later up runs the up section again/i);
     assert.match(help, /filenames and checksums must match/i);
     assert.match(help, /reverse version order/);
     assert.match(help, /migration count goes to stdout/i);

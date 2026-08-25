@@ -1,6 +1,6 @@
 # @gabbe/pg-migrate
 
-A SQL-first PostgreSQL migration tool with a cli and TypeScript API.
+A SQL-first PostgreSQL migration tool with a CLI and TypeScript API.
 
 ## Install
 
@@ -38,6 +38,8 @@ npx pg-migrate up --url postgres://localhost/app
 npx pg-migrate validate --url postgres://localhost/app
 ```
 
+`validate` checks file structure and history, not PostgreSQL syntax.
+
 ## CLI
 
 ```text
@@ -46,13 +48,13 @@ pg-migrate help [command]
 pg-migrate <command> --help
 ```
 
-| Command         | Action                                             |
-| --------------- | -------------------------------------------------- |
-| `create <name>` | Create a timestamped migration file.               |
-| `status`        | Show applied and pending migrations.               |
-| `validate`      | Validate all migration files and database history. |
-| `up`            | Apply all pending migrations in order.             |
-| `down`          | Revert the latest applied migration.               |
+| Command         | Action                                        |
+| --------------- | --------------------------------------------- |
+| `create <name>` | Create a timestamped migration file.          |
+| `status`        | Show applied and pending migrations.          |
+| `validate`      | Validate file structure and database history. |
+| `up`            | Apply all pending migrations in order.        |
+| `down`          | Revert the latest applied migration.          |
 
 Use `--target <version-or-filename>` with `up` to apply through a migration.
 Use it with `down` to revert all migrations after it. A `down` target remains
@@ -99,6 +101,9 @@ Database commands require `--url` or `PGM_URL`. A history table can include a
 schema. Each table or schema identifier must start with a lowercase letter or
 underscore and contain only lowercase letters, numbers, and underscores.
 
+Connection attempts stop after 10 seconds. Lock and statement waits have no
+default timeout. For deployments, set them in the URL, in milliseconds:
+
 ## Migration files
 
 `create` makes the directory if necessary and creates this UTC filename:
@@ -123,7 +128,8 @@ SQL comments and strings. Every `.sql` entry in the directory must be a regular
 file with a valid migration filename. The tool does not scan subdirectories.
 
 The tool sends each section to PostgreSQL without parsing SQL statements. An
-empty down section removes the history record but does not undo schema changes.
+empty down section removes the history record without undoing schema changes.
+A later `up` command runs the up section again.
 
 ## Safety and history
 
@@ -144,10 +150,10 @@ table. Each migration runs in its own transaction with its history change. If
 a migration fails, its transaction rolls back, but earlier migrations from the
 same command stay complete.
 
-`status` checks filenames, checksums, and history without decoding or
-validating SQL, creating the history table, or taking the lock. `validate`
-checks SQL in all files and does not change migration data. `up` and `down`
-check SQL only in their execution plan.
+`status` checks filenames, checksums, and history without validating migration
+file contents, creating the history table, or taking the lock. `validate`
+checks UTF-8, markers, filenames, checksums, and history, not PostgreSQL syntax.
+`up` and `down` check UTF-8 and markers only in their execution plan.
 
 ## Limitations
 

@@ -91,8 +91,8 @@ export function formatStatus(status: StatusResult): string {
 /** Formats successful validation as terminal text. */
 export function formatValidation(validation: ValidationResult): string {
   return (
-    `✔ Valid: ${validation.applied} applied, ${validation.pending} pending, ` +
-    `${validation.total} total.`
+    `✔ File structure and history are valid: ${validation.applied} applied, ` +
+    `${validation.pending} pending, ${validation.total} total.`
   );
 }
 
@@ -127,10 +127,13 @@ export function formatEvent(event: CliLogEvent, colors: boolean): string {
         `${formatCount(event.count, "migration file")}.`
       );
     case "sql-validation-start":
-      return `Validating SQL in ${formatCount(event.count, "migration file")}...`;
+      return (
+        `Validating structure of ` +
+        `${formatCount(event.count, "migration file")}...`
+      );
     case "sql-validation-done":
       return (
-        `${paint("gray", "›", colors)} Validated SQL in ` +
+        `${paint("gray", "›", colors)} Validated structure of ` +
         `${formatCount(event.count, "migration file")}.`
       );
     case "database-connect-start":

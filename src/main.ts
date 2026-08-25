@@ -198,7 +198,7 @@ export async function status(input: DatabaseOptions): Promise<StatusResult> {
   }
 }
 
-/** Validates migration files and database history. */
+/** Validates migration file structure and database history. */
 export async function validate(
   input: DatabaseOptions,
 ): Promise<ValidationResult> {

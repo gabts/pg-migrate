@@ -169,7 +169,8 @@ describe("format", (): void => {
     it("formats successful validation with migration counts", (): void => {
       assert.equal(
         formatValidation({ applied: 2, pending: 1, total: 3 }),
-        "✔ Valid: 2 applied, 1 pending, 3 total.",
+        "✔ File structure and history are valid: 2 applied, 1 pending, " +
+          "3 total.",
       );
     });
   });
@@ -217,11 +218,11 @@ describe("format", (): void => {
       );
       assert.equal(
         formatEvent({ type: "sql-validation-start", count: 2 }, false),
-        "Validating SQL in 2 migration files...",
+        "Validating structure of 2 migration files...",
       );
       assert.equal(
         formatEvent({ type: "sql-validation-done", count: 2 }, false),
-        "› Validated SQL in 2 migration files.",
+        "› Validated structure of 2 migration files.",
       );
     });
 
