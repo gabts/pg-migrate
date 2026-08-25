@@ -10,6 +10,8 @@ npm install @gabbe/pg-migrate
 
 This installs the `pg-migrate` command and the package API.
 
+Requires Node.js 22+ and PostgreSQL 14+.
+
 ## Quick start
 
 ```sh
