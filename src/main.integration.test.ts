@@ -1,5 +1,5 @@
 import * as assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
@@ -314,6 +314,60 @@ describe(
       assert.equal(await relationExists("users"), false);
     });
 
+    it("stores file identity and rejects content changes", async (): Promise<void> => {
+      const file = await writeMigration(
+        firstVersion,
+        "add_users",
+        `CREATE TABLE ${qualifiedRelation("users")} (id integer);`,
+        `DROP TABLE ${qualifiedRelation("users")};`,
+      );
+      const filePath = path.join(directory, file);
+      const contents = await fs.readFile(filePath);
+      const checksum = createHash("sha256").update(contents).digest("hex");
+
+      await migrate(commandOptions());
+
+      const history = await getAdmin().query<{
+        checksum: string;
+        file: string;
+      }>(
+        `SELECT file, checksum FROM ${qualifiedRelation("schema_migrations")};`,
+      );
+      assert.deepEqual(history.rows, [{ checksum, file }]);
+
+      await fs.appendFile(filePath, "-- changed\n");
+      const error = new Error(
+        `Applied migration file '${file}' does not match its recorded ` +
+          "checksum.",
+      );
+      for (const command of [status, validate, migrate, rollback]) {
+        await assert.rejects(command(commandOptions()), error);
+      }
+    });
+
+    it("rejects a renamed applied migration", async (): Promise<void> => {
+      const file = await writeMigration(
+        firstVersion,
+        "add_users",
+        `CREATE TABLE ${qualifiedRelation("users")} (id integer);`,
+        `DROP TABLE ${qualifiedRelation("users")};`,
+      );
+      await migrate(commandOptions());
+      const renamedFile = `${firstVersion}_create_users.sql`;
+      await fs.rename(
+        path.join(directory, file),
+        path.join(directory, renamedFile),
+      );
+
+      const error = new Error(
+        `Applied migration version '${firstVersion}' was recorded with file ` +
+          `'${file}', not '${renamedFile}'.`,
+      );
+      for (const command of [status, validate, migrate, rollback]) {
+        await assert.rejects(command(commandOptions()), error);
+      }
+    });
+
     it("keeps an unqualified history table in one schema", async (): Promise<void> => {
       const file = await writeMigration(
         firstVersion,
@@ -357,8 +411,6 @@ describe(
         },
       );
 
-      await fs.writeFile(path.join(directory, firstFile), "SELECT 1;\n");
-
       const currentStatus = await status(commandOptions());
       assert.equal(currentStatus.current?.file, firstFile);
       assert.equal(currentStatus.next?.file, secondFile);
@@ -374,11 +426,13 @@ describe(
       });
 
       const sqlError = new Error(
-        `Missing 'migrate:up' marker in '${firstFile}'.`,
+        `Missing 'migrate:up' marker in '${thirdFile}'.`,
       );
       await assert.rejects(validate(commandOptions()), sqlError);
-      await assert.rejects(rollback(commandOptions()), sqlError);
-      assert.deepEqual(await readHistoryVersions(), [firstVersion]);
+      assert.deepEqual(await rollback(commandOptions()), {
+        files: [firstFile],
+      });
+      assert.deepEqual(await readHistoryVersions(), []);
     });
 
     it("reverts a migration with an empty down section", async (): Promise<void> => {
@@ -437,6 +491,66 @@ describe(
       assert.deepEqual(result, { files: [file] });
       assert.equal(await relationExists("users"), true);
       assert.deepEqual(await readHistoryVersions(), [firstVersion]);
+    });
+
+    it("refreshes applied checksums after waiting for the lock", async (): Promise<void> => {
+      const file = await writeMigration(
+        firstVersion,
+        "add_users",
+        `CREATE TABLE ${qualifiedRelation("users")} (id integer);`,
+        `DROP TABLE ${qualifiedRelation("users")};`,
+      );
+      const filePath = path.join(directory, file);
+      const original = await fs.readFile(filePath);
+      await migrate(commandOptions());
+      const lockClient = new pg.Client({ connectionString: testUrl });
+      await lockClient.connect();
+
+      try {
+        for (const command of [migrate, rollback, validate]) {
+          await fs.writeFile(filePath, original);
+          await lockClient.query(
+            "SELECT pg_advisory_lock(hashtext($1), hashtext($2));",
+            [schema, "schema_migrations"],
+          );
+
+          let reportLockStart = (): void => {};
+          const lockStarted = new Promise<void>((resolve) => {
+            reportLockStart = resolve;
+          });
+          const result = command({
+            ...commandOptions(),
+            log(event): void {
+              if (event.type === "lock-acquire-start") {
+                reportLockStart();
+              }
+            },
+          });
+          await lockStarted;
+          await fs.appendFile(filePath, "-- changed\n");
+          await lockClient.query(
+            "SELECT pg_advisory_unlock(hashtext($1), hashtext($2));",
+            [schema, "schema_migrations"],
+          );
+
+          await assert.rejects(
+            result,
+            new Error(
+              `Applied migration file '${file}' does not match its recorded ` +
+                "checksum.",
+            ),
+          );
+        }
+      } finally {
+        await lockClient.query(
+          "SELECT pg_advisory_unlock(hashtext($1), hashtext($2));",
+          [schema, "schema_migrations"],
+        );
+        await lockClient.end();
+      }
+
+      assert.deepEqual(await readHistoryVersions(), [firstVersion]);
+      assert.equal(await relationExists("users"), true);
     });
 
     it("waits when another connection holds the migration lock", async (): Promise<void> => {
@@ -549,13 +663,15 @@ describe(
         CREATE TABLE ${qualifiedRelation("schema_migrations")}
         (
           version text PRIMARY KEY,
+          file text NOT NULL,
+          checksum text NOT NULL,
           applied_at timestamptz
         );
       `);
       await getAdmin().query(
         `INSERT INTO ${qualifiedRelation("schema_migrations")} ` +
-          "(version, applied_at) VALUES ($1, NULL);",
-        [firstVersion],
+          "(version, file, checksum, applied_at) VALUES ($1, $2, $3, NULL);",
+        [firstVersion, `${firstVersion}_add_users.sql`, "checksum"],
       );
 
       await assert.rejects(

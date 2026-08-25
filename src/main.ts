@@ -1,13 +1,19 @@
 import * as pg from "pg";
+import { readMigrationChecksums } from "./migration/checksum.js";
 import { validateMigrationConsistency } from "./migration/consistency.js";
 import { executeMigrations } from "./migration/execute.js";
-import { readMigrationIndex, type DiskMigration } from "./migration/files.js";
+import {
+  readMigrationIndex,
+  type DiskMigration,
+  type MigrationIndex,
+} from "./migration/files.js";
 import {
   lockMigrations,
   readAppliedMigrations,
   readValidatedHistoryDefinition,
   resolveHistoryTable,
   validateHistoryTableName,
+  type AppliedMigration,
 } from "./migration/history.js";
 import type {
   DatabaseOptions,
@@ -22,6 +28,7 @@ import { findMigrationTarget, planDown, planUp } from "./migration/plan.js";
 import {
   parseMigrationSql,
   readValidatedMigrationSql,
+  type MigrationSource,
 } from "./migration/sql.js";
 
 export type {
@@ -75,6 +82,27 @@ function createDatabaseClient(url: string): pg.Client {
   });
 }
 
+function getAppliedDiskMigrations(
+  migrationIndex: MigrationIndex,
+  applied: AppliedMigration[],
+): DiskMigration[] {
+  const appliedVersions = new Set(
+    applied.map((migration) => migration.version),
+  );
+  return migrationIndex.all.filter((migration) =>
+    appliedVersions.has(migration.version),
+  );
+}
+
+function updateMigrationChecksums(
+  checksums: Map<string, string>,
+  sourceByFile: Map<string, MigrationSource>,
+): void {
+  for (const [file, source] of sourceByFile) {
+    checksums.set(file, source.checksum);
+  }
+}
+
 async function connectDatabase(client: pg.Client, log: LogSink): Promise<void> {
   const database = getDatabaseDetails(client);
   log({ database, type: "database-connect-start" });
@@ -119,8 +147,17 @@ export async function status(input: DatabaseOptions): Promise<StatusResult> {
           options.log,
         )
       : [];
+    const checksums = await readMigrationChecksums(
+      getAppliedDiskMigrations(migrationIndex, applied),
+      options.log,
+    );
 
-    validateMigrationConsistency(migrationIndex, applied, options.log);
+    validateMigrationConsistency(
+      migrationIndex,
+      applied,
+      checksums,
+      options.log,
+    );
 
     const appliedByVersion = new Map(
       applied.map((migration) => [migration.version, migration] as const),
@@ -191,8 +228,17 @@ export async function validate(
           options.log,
         )
       : [];
+    const checksums = await readMigrationChecksums(
+      getAppliedDiskMigrations(migrationIndex, applied),
+      options.log,
+    );
 
-    validateMigrationConsistency(migrationIndex, applied, options.log);
+    validateMigrationConsistency(
+      migrationIndex,
+      applied,
+      checksums,
+      options.log,
+    );
     return {
       applied: applied.length,
       pending: migrationIndex.all.length - applied.length,
@@ -217,7 +263,6 @@ export async function migrate(input: MigrateOptions): Promise<MigrateResult> {
   if (options.target !== undefined) {
     target = findMigrationTarget(options.target, migrationIndex, options.log);
   }
-
   await connectDatabase(client, options.log);
   try {
     const historyTable = await resolveHistoryTable(client, options.table);
@@ -236,8 +281,17 @@ export async function migrate(input: MigrateOptions): Promise<MigrateResult> {
           options.log,
         )
       : [];
+    const checksums = await readMigrationChecksums(
+      getAppliedDiskMigrations(migrationIndex, applied),
+      options.log,
+    );
 
-    validateMigrationConsistency(migrationIndex, applied, options.log);
+    validateMigrationConsistency(
+      migrationIndex,
+      applied,
+      checksums,
+      options.log,
+    );
 
     const plan = planUp(migrationIndex, applied, target, options.log);
     if (plan.length === 0) {
@@ -245,8 +299,8 @@ export async function migrate(input: MigrateOptions): Promise<MigrateResult> {
       return { files: [] };
     }
 
-    const rawSqlByFile = await readValidatedMigrationSql(plan, options.log);
-    const sqlByFile = parseMigrationSql(rawSqlByFile);
+    const sourceByFile = await readValidatedMigrationSql(plan, options.log);
+    const sqlByFile = parseMigrationSql(sourceByFile);
     return await executeMigrations(client, plan, sqlByFile, {
       direction: "up",
       initialized: history.initialized,
@@ -273,7 +327,6 @@ export async function rollback(input: MigrateOptions): Promise<MigrateResult> {
   if (options.target !== undefined) {
     target = findMigrationTarget(options.target, migrationIndex, options.log);
   }
-
   await connectDatabase(client, options.log);
   try {
     const historyTable = await resolveHistoryTable(client, options.table);
@@ -292,8 +345,17 @@ export async function rollback(input: MigrateOptions): Promise<MigrateResult> {
           options.log,
         )
       : [];
+    const checksums = await readMigrationChecksums(
+      getAppliedDiskMigrations(migrationIndex, applied),
+      options.log,
+    );
 
-    validateMigrationConsistency(migrationIndex, applied, options.log);
+    validateMigrationConsistency(
+      migrationIndex,
+      applied,
+      checksums,
+      options.log,
+    );
 
     const plan = planDown(migrationIndex, applied, target, options.log);
     if (plan.length === 0) {
@@ -301,8 +363,11 @@ export async function rollback(input: MigrateOptions): Promise<MigrateResult> {
       return { files: [] };
     }
 
-    const rawSqlByFile = await readValidatedMigrationSql(plan, options.log);
-    const sqlByFile = parseMigrationSql(rawSqlByFile);
+    const sourceByFile = await readValidatedMigrationSql(plan, options.log);
+    // Use the bytes that supply rollback SQL for the final checksum check.
+    updateMigrationChecksums(checksums, sourceByFile);
+    validateMigrationConsistency(migrationIndex, applied, checksums);
+    const sqlByFile = parseMigrationSql(sourceByFile);
     return await executeMigrations(client, plan, sqlByFile, {
       direction: "down",
       initialized: history.initialized,

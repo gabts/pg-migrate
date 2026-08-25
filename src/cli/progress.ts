@@ -93,6 +93,7 @@ export function createProgressOutput(
       case "file-create-start":
       case "directory-read-start":
       case "filenames-validation-start":
+      case "checksum-calculation-start":
       case "sql-read-start":
       case "sql-validation-start":
       case "database-connect-start":

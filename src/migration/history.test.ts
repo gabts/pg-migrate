@@ -148,6 +148,8 @@ describe("history", (): void => {
       {
         columns: [
           { name: "version", notNull: true, type: "text" },
+          { name: "file", notNull: true, type: "text" },
+          { name: "checksum", notNull: true, type: "text" },
           {
             name: "applied_at",
             notNull: true,
@@ -176,6 +178,8 @@ describe("history", (): void => {
           {
             columns: [
               { name: "version", notNull: true, type: "integer" },
+              { name: "file", notNull: true, type: "text" },
+              { name: "checksum", notNull: true, type: "text" },
               {
                 name: "applied_at",
                 notNull: true,
@@ -193,9 +197,41 @@ describe("history", (): void => {
     );
   });
 
+  it("rejects a history definition without checksums", (): void => {
+    assert.throws(
+      () =>
+        validateHistoryDefinition(
+          {
+            columns: [
+              { name: "version", notNull: true, type: "text" },
+              { name: "file", notNull: true, type: "text" },
+              {
+                name: "applied_at",
+                notNull: true,
+                type: "timestamp with time zone",
+              },
+            ],
+            initialized: true,
+          },
+          "schema_migrations",
+        ),
+      new Error(
+        "Migration history table 'schema_migrations' is missing column " +
+          "'checksum'.",
+      ),
+    );
+  });
+
   it("reads applied migrations separately", async (): Promise<void> => {
     const appliedAt = "2026-08-11T12:00:00.000Z";
-    const rows = [{ appliedAt, version: "20260811120000" }];
+    const rows = [
+      {
+        appliedAt,
+        checksum: "migration-checksum",
+        file: "20260811120000_add_users.sql",
+        version: "20260811120000",
+      },
+    ];
     const { client, queries } = createClient([rows]);
 
     const result = await readAppliedMigrations(
@@ -204,6 +240,7 @@ describe("history", (): void => {
     );
 
     assert.deepEqual(result, rows);
+    assert.match(queries[0]!.sql, /version,\s+file,\s+checksum,/);
     assert.match(queries[0]!.sql, /applied_at AT TIME ZONE 'UTC'/);
     assert.match(queries[0]!.sql, /'YYYY-MM-DD"T"HH24:MI:SS\.MS"Z"'/);
     assert.match(queries[0]!.sql, /FROM "app"\."schema_migrations";/);
@@ -217,6 +254,8 @@ describe("history", (): void => {
       client,
       '"schema_migrations"',
       "20260811120000",
+      "20260811120000_add_users.sql",
+      "migration-checksum",
     );
     await removeAppliedMigration(
       client,
@@ -226,7 +265,11 @@ describe("history", (): void => {
 
     assert.match(queries[0]!.sql, /CREATE TABLE "schema_migrations"/);
     assert.match(queries[1]!.sql, /INSERT INTO "schema_migrations"/);
-    assert.deepEqual(queries[1]!.parameters, ["20260811120000"]);
+    assert.deepEqual(queries[1]!.parameters, [
+      "20260811120000",
+      "20260811120000_add_users.sql",
+      "migration-checksum",
+    ]);
     assert.match(queries[2]!.sql, /DELETE FROM "schema_migrations"/);
     assert.deepEqual(queries[2]!.parameters, ["20260811120000"]);
   });

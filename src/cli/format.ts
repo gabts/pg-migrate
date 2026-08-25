@@ -112,6 +112,13 @@ export function formatEvent(event: CliLogEvent, colors: boolean): string {
         `${paint("gray", "›", colors)} Validated ` +
         `${formatCount(event.count, "migration filename")}.`
       );
+    case "checksum-calculation-start":
+      return `Calculating ${formatCount(event.count, "migration checksum")}...`;
+    case "checksum-calculation-done":
+      return (
+        `${paint("gray", "›", colors)} Calculated ` +
+        `${formatCount(event.count, "migration checksum")}.`
+      );
     case "sql-read-start":
       return `Reading SQL from ${formatCount(event.count, "migration file")}...`;
     case "sql-read-done":

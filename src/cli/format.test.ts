@@ -200,6 +200,14 @@ describe("format", (): void => {
         "› Validated 2 migration filenames.",
       );
       assert.equal(
+        formatEvent({ type: "checksum-calculation-start", count: 1 }, false),
+        "Calculating 1 migration checksum...",
+      );
+      assert.equal(
+        formatEvent({ type: "checksum-calculation-done", count: 2 }, false),
+        "› Calculated 2 migration checksums.",
+      );
+      assert.equal(
         formatEvent({ type: "sql-read-start", count: 1 }, false),
         "Reading SQL from 1 migration file...",
       );

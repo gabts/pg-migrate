@@ -42,7 +42,8 @@ describe("help", (): void => {
     assert.match(help, /pg-migrate status \[options\]/);
     assert.match(help, /does not create a missing history table/i);
     assert.match(help, /does not acquire the migration advisory lock/i);
-    assert.match(help, /does not read or validate migration SQL/i);
+    assert.match(help, /validates all migration file names, checksums/i);
+    assert.match(help, /does not decode or validate migration SQL/i);
     assert.match(help, /Migration states and counts go to stdout/);
     assert.match(help, /command header and errors go to stderr/i);
     assert.match(help, /--verbose also shows phase progress/i);
@@ -60,6 +61,7 @@ describe("help", (): void => {
     assert.match(help, /missing history table is treated as empty history/i);
     assert.match(help, /is not created/i);
     assert.match(help, /continuous sequence/);
+    assert.match(help, /filenames and checksums must match/i);
     assert.match(help, /waits for the migration advisory lock/);
     assert.match(help, /Validation confirmation and migration counts/);
     assert.match(help, /command header and errors go to stderr/i);
@@ -77,7 +79,11 @@ describe("help", (): void => {
     assert.match(help, /including the target/);
     assert.match(help, /applies all pending migrations/);
     assert.match(help, /validates SQL only in migrations that it will apply/i);
-    assert.match(help, /creates a missing history table before the first migration/i);
+    assert.match(help, /filenames and checksums must match/i);
+    assert.match(
+      help,
+      /creates a missing history table before the first migration/i,
+    );
     assert.match(help, /migration count goes to stdout/i);
     assert.match(help, /empty plan leaves stdout empty/i);
     assert.match(help, /command header, completion messages, and errors/i);
@@ -95,6 +101,7 @@ describe("help", (): void => {
     assert.match(help, /target remains applied/);
     assert.match(help, /empty migrate:down section/);
     assert.match(help, /validates SQL only in migrations that it will revert/i);
+    assert.match(help, /filenames and checksums must match/i);
     assert.match(help, /reverse version order/);
     assert.match(help, /migration count goes to stdout/i);
     assert.match(help, /empty plan leaves stdout empty/i);

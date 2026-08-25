@@ -77,8 +77,8 @@ Options:
   -h, --help             Show this help
 
 Behavior:
-  The command validates all migration file names and applied history.
-  It does not read or validate migration SQL.
+  The command validates all migration file names, checksums, and applied history.
+  It does not decode or validate migration SQL.
   It does not create a missing history table.
   A missing history table is reported as uninitialized.
   The command does not acquire the migration advisory lock.
@@ -111,6 +111,7 @@ Behavior:
   The command validates SQL in all migration files.
   A missing history table is treated as empty history and is not created.
   Applied migrations must exist on disk and form a continuous sequence.
+  Applied filenames and checksums must match the database history.
   The command waits for the migration advisory lock.
   The command does not change migration data.
 
@@ -142,6 +143,7 @@ Options:
 Behavior:
   Without --target, the command applies all pending migrations.
   A target can be a 14-digit version or a complete migration file name.
+  Applied filenames and checksums must match the database history.
   The command validates SQL only in migrations that it will apply.
   The command creates a missing history table before the first migration.
   Each migration uses its own transaction.
@@ -178,6 +180,7 @@ Behavior:
   Without --target, the command reverts the latest applied migration.
   With --target, the target remains applied.
   A target can be a 14-digit version or a complete migration file name.
+  Applied filenames and checksums must match the database history.
   The command validates SQL only in migrations that it will revert.
   An empty migrate:down section only removes the migration history row.
   Each migration uses its own transaction.

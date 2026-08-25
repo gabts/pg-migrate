@@ -24,12 +24,16 @@ const tableNamePattern = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?$/;
 
 const requiredColumns = new Map<string, string>([
   ["version", "text"],
+  ["file", "text"],
+  ["checksum", "text"],
   ["applied_at", "timestamp with time zone"],
 ]);
 
 /** One applied migration read from the history table. */
 export interface AppliedMigration {
   appliedAt: string;
+  checksum: string;
+  file: string;
   version: string;
 }
 
@@ -129,7 +133,7 @@ export async function readHistoryDefinition(
         format_type(atttypid, atttypmod) AS type
       FROM pg_attribute
       WHERE attrelid = $1::regclass
-        AND attname IN ('version', 'applied_at')
+        AND attname IN ('version', 'file', 'checksum', 'applied_at')
         AND NOT attisdropped;
     `,
     [qualifiedTable],
@@ -198,6 +202,8 @@ export async function readAppliedMigrations(
     `
       SELECT
         version,
+        file,
+        checksum,
         to_char(
           applied_at AT TIME ZONE 'UTC',
           'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
@@ -218,6 +224,8 @@ export async function createHistoryTable(
     CREATE TABLE ${qualifiedTable}
     (
       version text PRIMARY KEY,
+      file text NOT NULL,
+      checksum text NOT NULL,
       applied_at timestamptz NOT NULL DEFAULT now()
     );
   `);
@@ -228,12 +236,15 @@ export async function recordAppliedMigration(
   client: pg.Client,
   qualifiedTable: string,
   version: string,
+  file: string,
+  checksum: string,
 ): Promise<void> {
   // Supply database time so existing history tables do not need a default.
   await client.query(
     `INSERT INTO ${qualifiedTable} ` +
-      `(version, applied_at) VALUES ($1, clock_timestamp());`,
-    [version],
+      `(version, file, checksum, applied_at) ` +
+      `VALUES ($1, $2, $3, clock_timestamp());`,
+    [version, file, checksum],
   );
 }
 

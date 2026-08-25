@@ -27,6 +27,7 @@ const sqlByFile = new Map<string, MigrationSql>([
   [
     first.file,
     {
+      checksum: "first-checksum",
       down: "DROP TABLE users;",
       up: "CREATE TABLE users (id integer);",
     },
@@ -34,6 +35,7 @@ const sqlByFile = new Map<string, MigrationSql>([
   [
     second.file,
     {
+      checksum: "second-checksum",
       down: "DROP TABLE posts;",
       up: "CREATE TABLE posts (id integer);",
     },
@@ -96,16 +98,24 @@ describe("execute", (): void => {
       [
         "BEGIN;",
         "CREATE TABLE users (id integer);",
-        'INSERT INTO "schema_migrations" (version, applied_at) VALUES ($1, clock_timestamp());',
+        'INSERT INTO "schema_migrations" (version, file, checksum, applied_at) VALUES ($1, $2, $3, clock_timestamp());',
         "COMMIT;",
         "BEGIN;",
         "CREATE TABLE posts (id integer);",
-        'INSERT INTO "schema_migrations" (version, applied_at) VALUES ($1, clock_timestamp());',
+        'INSERT INTO "schema_migrations" (version, file, checksum, applied_at) VALUES ($1, $2, $3, clock_timestamp());',
         "COMMIT;",
       ],
     );
-    assert.deepEqual(queries[2]?.parameters, [first.version]);
-    assert.deepEqual(queries[6]?.parameters, [second.version]);
+    assert.deepEqual(queries[2]?.parameters, [
+      first.version,
+      first.file,
+      "first-checksum",
+    ]);
+    assert.deepEqual(queries[6]?.parameters, [
+      second.version,
+      second.file,
+      "second-checksum",
+    ]);
     assert.deepEqual(
       events.map((event) => event.type),
       [
@@ -148,7 +158,7 @@ describe("execute", (): void => {
   it("skips an empty down section", async (): Promise<void> => {
     const { client, queries } = createClient();
     const emptyDownSql = new Map<string, MigrationSql>([
-      [first.file, { down: "", up: "SELECT 1;" }],
+      [first.file, { checksum: "first-checksum", down: "", up: "SELECT 1;" }],
     ]);
 
     const result = await executeMigrations(client, [first], emptyDownSql, {
@@ -191,7 +201,7 @@ describe("execute", (): void => {
       queries.map((query) => compact(query.sql)),
       [
         "BEGIN;",
-        'CREATE TABLE "app"."schema_migrations" ( version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now() );',
+        'CREATE TABLE "app"."schema_migrations" ( version text PRIMARY KEY, file text NOT NULL, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now() );',
         "COMMIT;",
       ],
     );

@@ -128,15 +128,24 @@ empty down section removes the history record but does not undo schema changes.
 Applied migrations must be a continuous sequence of the files on disk. The
 tool stops for a missing version, duplicate version, or history gap.
 
+The history table stores the filename and SHA-256 checksum of each applied
+migration. Database commands stop if an applied file is edited or renamed.
+Checksums use the exact file bytes. File metadata and paths do not affect them.
+Use this Git rule to keep SQL line endings stable on all systems:
+
+```gitattributes
+*.sql text eol=lf
+```
+
 `up`, `down`, and `validate` wait for an advisory lock for the selected history
 table. Each migration runs in its own transaction with its history change. If
 a migration fails, its transaction rolls back, but earlier migrations from the
 same command stay complete.
 
-`status` checks filenames and history without reading SQL, creating the
-history table, or taking the lock. `validate` checks SQL in all files and does
-not change migration data. `up` and `down` check SQL only in their execution
-plan.
+`status` checks filenames, checksums, and history without decoding or
+validating SQL, creating the history table, or taking the lock. `validate`
+checks SQL in all files and does not change migration data. `up` and `down`
+check SQL only in their execution plan.
 
 ## Limitations
 
@@ -146,8 +155,6 @@ plan.
 - `psql` meta-commands, variable substitution, and `COPY FROM STDIN` are not
   supported.
 - `validate` checks file structure and history, not PostgreSQL SQL syntax.
-- The history table stores no file checksums. Do not edit or rename applied
-  migrations.
 - The tool does not create schemas or set `search_path`. Create the history
   table schema first. Set the required `search_path` or use schema-qualified
   names in migration SQL.

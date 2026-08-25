@@ -6,16 +6,36 @@ function validateAppliedMigration(
   migration: AppliedMigration,
   seenVersions: Set<string>,
   migrationIndex: MigrationIndex,
+  checksums: Map<string, string>,
 ): void {
   if (seenVersions.has(migration.version)) {
     throw new Error(
       `Applied migration version '${migration.version}' is duplicated.`,
     );
   }
-  if (!migrationIndex.byVersion.has(migration.version)) {
+  const diskMigration = migrationIndex.byVersion.get(migration.version);
+  if (!diskMigration) {
     throw new Error(
       `Applied migration version '${migration.version}' does not exist on ` +
         "disk.",
+    );
+  }
+  if (migration.file !== diskMigration.file) {
+    throw new Error(
+      `Applied migration version '${migration.version}' was recorded with ` +
+        `file '${migration.file}', not '${diskMigration.file}'.`,
+    );
+  }
+  const checksum = checksums.get(diskMigration.file);
+  if (!checksum) {
+    throw new Error(
+      `Checksum for migration file '${diskMigration.file}' is not available.`,
+    );
+  }
+  if (migration.checksum !== checksum) {
+    throw new Error(
+      `Applied migration file '${diskMigration.file}' does not match its ` +
+        "recorded checksum.",
     );
   }
   seenVersions.add(migration.version);
@@ -58,12 +78,18 @@ function validateContinuousHistory(
 export function validateMigrationConsistency(
   migrationIndex: MigrationIndex,
   applied: AppliedMigration[],
+  checksums: Map<string, string>,
   log: LogSink = (): undefined => undefined,
 ): void {
   log({ type: "consistency-validation-start" });
   const appliedVersions = new Set<string>();
   for (const migration of applied) {
-    validateAppliedMigration(migration, appliedVersions, migrationIndex);
+    validateAppliedMigration(
+      migration,
+      appliedVersions,
+      migrationIndex,
+      checksums,
+    );
   }
   validateContinuousHistory(migrationIndex, appliedVersions);
   log({ type: "consistency-validation-done" });

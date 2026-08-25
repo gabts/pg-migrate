@@ -40,6 +40,8 @@ const appliedAt = "2026-08-11T12:00:00.000Z";
 function applied(...migrations: DiskMigration[]): AppliedMigration[] {
   return migrations.map((migration) => ({
     appliedAt,
+    checksum: `${migration.name}-checksum`,
+    file: migration.file,
     version: migration.version,
   }));
 }

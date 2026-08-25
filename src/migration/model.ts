@@ -46,6 +46,8 @@ export type LogEvent =
   | { type: "directory-read-done"; directory: string }
   | { type: "filenames-validation-start" }
   | { type: "filenames-validation-done"; count: number }
+  | { type: "checksum-calculation-start"; count: number }
+  | { type: "checksum-calculation-done"; count: number }
   | { type: "sql-read-start"; count: number }
   | { type: "sql-read-done"; count: number }
   | { type: "sql-validation-start"; count: number }

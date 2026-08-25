@@ -3,17 +3,20 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { calculateMigrationChecksum } from "./checksum.js";
 import type { DiskMigration } from "./files.js";
 import {
   parseMigrationSql,
   readMigrationSql,
   validateMigrationSql,
+  type MigrationSource,
 } from "./sql.js";
 
 const file = "20260811120000_add_users.sql";
+const checksum = "checksum";
 
-function sql(content: string): Map<string, string> {
-  return new Map([[file, content]]);
+function sql(content: string): Map<string, MigrationSource> {
+  return new Map([[file, { checksum, sql: content }]]);
 }
 
 describe("sql", (): void => {
@@ -29,7 +32,8 @@ describe("sql", (): void => {
 
   it("reads SQL without validating its structure", async (): Promise<void> => {
     const filePath = path.join(tempDir, file);
-    await fs.writeFile(filePath, "SELECT 1;\n");
+    const contents = Buffer.from("SELECT 1;\n");
+    await fs.writeFile(filePath, contents);
     const migrations: DiskMigration[] = [
       {
         file,
@@ -41,7 +45,15 @@ describe("sql", (): void => {
 
     assert.deepEqual(
       await readMigrationSql(migrations),
-      new Map([[file, "SELECT 1;\n"]]),
+      new Map([
+        [
+          file,
+          {
+            checksum: calculateMigrationChecksum(contents),
+            sql: "SELECT 1;\n",
+          },
+        ],
+      ]),
     );
   });
 
@@ -71,6 +83,7 @@ describe("sql", (): void => {
 
     assert.doesNotThrow(() => validateMigrationSql(contents));
     assert.deepEqual(parseMigrationSql(contents).get(file), {
+      checksum,
       down: "DROP TABLE users;",
       up: "CREATE TABLE users (id integer);",
     });
@@ -84,6 +97,7 @@ describe("sql", (): void => {
 
     validateMigrationSql(contents);
     assert.deepEqual(parseMigrationSql(contents).get(file), {
+      checksum,
       down: "SELECT 2;",
       up: "SELECT 1;",
     });
@@ -99,6 +113,7 @@ describe("sql", (): void => {
 
     validateMigrationSql(contents);
     assert.deepEqual(parseMigrationSql(contents).get(file), {
+      checksum,
       down: "SELECT 'ok';",
       up: "SELECT '-- migrate:down';",
     });

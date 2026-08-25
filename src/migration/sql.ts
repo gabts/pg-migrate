@@ -1,11 +1,19 @@
 import * as fs from "node:fs/promises";
+import { calculateMigrationChecksum } from "./checksum.js";
 import type { DiskMigration } from "./files.js";
 import type { LogSink } from "./model.js";
 
 const markerLinePattern = /^[ \t]*--[ \t]*migrate:(up|down)[ \t]*\r?$/gm;
 
+/** Raw migration SQL and the checksum of its exact file bytes. */
+export interface MigrationSource {
+  checksum: string;
+  sql: string;
+}
+
 /** Executable SQL parsed from one migration file. */
 export interface MigrationSql {
+  checksum: string;
   down: string;
   up: string;
 }
@@ -53,11 +61,13 @@ function validateSql(sql: string, file: string): void {
   }
 }
 
-function parseSql(sql: string): MigrationSql {
+function parseSql(source: MigrationSource): MigrationSql {
+  const { sql } = source;
   const markers = findMarkers(sql);
   const upMarker = markers.find((marker) => marker[1] === "up")!;
   const downMarker = markers.find((marker) => marker[1] === "down")!;
   return {
+    checksum: source.checksum,
     down: sql.slice(downMarker.index! + downMarker[0].length).trim(),
     up: sql
       .slice(upMarker.index! + upMarker[0].length, downMarker.index!)
@@ -65,8 +75,7 @@ function parseSql(sql: string): MigrationSql {
   };
 }
 
-async function readUtf8(filePath: string, file: string): Promise<string> {
-  const bytes = await fs.readFile(filePath);
+function decodeUtf8(bytes: Uint8Array, file: string): string {
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch {
@@ -77,21 +86,24 @@ async function readUtf8(filePath: string, file: string): Promise<string> {
 /** Reads raw SQL text from migration files. */
 export async function readMigrationSql(
   migrations: DiskMigration[],
-): Promise<Map<string, string>> {
-  const sqlByFile = new Map<string, string>();
+): Promise<Map<string, MigrationSource>> {
+  const sourceByFile = new Map<string, MigrationSource>();
   for (const migration of migrations) {
-    sqlByFile.set(
-      migration.file,
-      await readUtf8(migration.path, migration.file),
-    );
+    const contents = await fs.readFile(migration.path);
+    sourceByFile.set(migration.file, {
+      checksum: calculateMigrationChecksum(contents),
+      sql: decodeUtf8(contents, migration.file),
+    });
   }
-  return sqlByFile;
+  return sourceByFile;
 }
 
 /** Checks the structure of raw migration SQL. */
-export function validateMigrationSql(sqlByFile: Map<string, string>): void {
-  for (const [file, sql] of sqlByFile) {
-    validateSql(sql, file);
+export function validateMigrationSql(
+  sourceByFile: Map<string, MigrationSource>,
+): void {
+  for (const [file, source] of sourceByFile) {
+    validateSql(source.sql, file);
   }
 }
 
@@ -99,23 +111,25 @@ export function validateMigrationSql(sqlByFile: Map<string, string>): void {
 export async function readValidatedMigrationSql(
   migrations: DiskMigration[],
   log: LogSink,
-): Promise<Map<string, string>> {
+): Promise<Map<string, MigrationSource>> {
   const count = migrations.length;
   log({ count, type: "sql-read-start" });
-  const sqlByFile = await readMigrationSql(migrations);
+  const sourceByFile = await readMigrationSql(migrations);
   log({ count, type: "sql-read-done" });
 
   log({ count, type: "sql-validation-start" });
-  validateMigrationSql(sqlByFile);
+  validateMigrationSql(sourceByFile);
   log({ count, type: "sql-validation-done" });
-  return sqlByFile;
+  return sourceByFile;
 }
 
 /** Parses validated migration SQL into up and down sections. */
 export function parseMigrationSql(
-  sqlByFile: Map<string, string>,
+  sourceByFile: Map<string, MigrationSource>,
 ): Map<string, MigrationSql> {
   return new Map(
-    [...sqlByFile].map(([file, sql]) => [file, parseSql(sql)] as const),
+    [...sourceByFile].map(
+      ([file, source]) => [file, parseSql(source)] as const,
+    ),
   );
 }

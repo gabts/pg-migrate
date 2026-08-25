@@ -36,17 +36,28 @@ const migrationIndex: MigrationIndex = {
     [third.version, third],
   ]),
 };
+const checksums = new Map([
+  [first.file, "first-checksum"],
+  [second.file, "second-checksum"],
+  [third.file, "third-checksum"],
+]);
 const appliedAt = "2026-08-11T12:00:00.000Z";
 
 function applied(version: string): AppliedMigration {
-  return { appliedAt, version };
+  const migration = migrationIndex.byVersion.get(version);
+  return {
+    appliedAt,
+    checksum: migration ? checksums.get(migration.file)! : "missing-checksum",
+    file: migration?.file ?? `${version}_missing.sql`,
+    version,
+  };
 }
 
 describe("consistency", (): void => {
   it("emits validation events", (): void => {
     const events: LogEvent[] = [];
 
-    validateMigrationConsistency(migrationIndex, [], (event) => {
+    validateMigrationConsistency(migrationIndex, [], checksums, (event) => {
       events.push(event);
     });
 
@@ -58,24 +69,28 @@ describe("consistency", (): void => {
 
   it("accepts continuous applied history", (): void => {
     assert.doesNotThrow(() =>
-      validateMigrationConsistency(migrationIndex, [
-        applied(second.version),
-        applied(first.version),
-      ]),
+      validateMigrationConsistency(
+        migrationIndex,
+        [applied(second.version), applied(first.version)],
+        checksums,
+      ),
     );
   });
 
   it("accepts empty applied history", (): void => {
-    assert.doesNotThrow(() => validateMigrationConsistency(migrationIndex, []));
+    assert.doesNotThrow(() =>
+      validateMigrationConsistency(migrationIndex, [], checksums),
+    );
   });
 
   it("rejects a duplicate applied version", (): void => {
     assert.throws(
       () =>
-        validateMigrationConsistency(migrationIndex, [
-          applied(first.version),
-          applied(first.version),
-        ]),
+        validateMigrationConsistency(
+          migrationIndex,
+          [applied(first.version), applied(first.version)],
+          checksums,
+        ),
       new Error(`Applied migration version '${first.version}' is duplicated.`),
     );
   });
@@ -84,7 +99,12 @@ describe("consistency", (): void => {
     const version = "20260811150000";
 
     assert.throws(
-      () => validateMigrationConsistency(migrationIndex, [applied(version)]),
+      () =>
+        validateMigrationConsistency(
+          migrationIndex,
+          [applied(version)],
+          checksums,
+        ),
       new Error(
         `Applied migration version '${version}' does not exist on disk.`,
       ),
@@ -94,13 +114,48 @@ describe("consistency", (): void => {
   it("rejects a gap in applied history", (): void => {
     assert.throws(
       () =>
-        validateMigrationConsistency(migrationIndex, [
-          applied(first.version),
-          applied(third.version),
-        ]),
+        validateMigrationConsistency(
+          migrationIndex,
+          [applied(first.version), applied(third.version)],
+          checksums,
+        ),
       new Error(
         `Migration history has a gap at '${second.file}' before ` +
           `'${third.file}'.`,
+      ),
+    );
+  });
+
+  it("rejects a renamed applied migration", (): void => {
+    const migration = {
+      ...applied(first.version),
+      file: `${first.version}_renamed.sql`,
+    };
+
+    assert.throws(
+      () =>
+        validateMigrationConsistency(migrationIndex, [migration], checksums),
+      new Error(
+        `Applied migration version '${first.version}' was recorded with ` +
+          `file '${migration.file}', not '${first.file}'.`,
+      ),
+    );
+  });
+
+  it("rejects a changed applied migration", (): void => {
+    const changedChecksums = new Map(checksums);
+    changedChecksums.set(first.file, "changed-checksum");
+
+    assert.throws(
+      () =>
+        validateMigrationConsistency(
+          migrationIndex,
+          [applied(first.version)],
+          changedChecksums,
+        ),
+      new Error(
+        `Applied migration file '${first.file}' does not match its recorded ` +
+          "checksum.",
       ),
     );
   });

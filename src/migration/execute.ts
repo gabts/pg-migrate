@@ -43,16 +43,23 @@ async function initializeHistory(
 async function executeMigration(
   client: pg.Client,
   migration: DiskMigration,
-  sql: string,
+  migrationSql: MigrationSql,
   direction: "down" | "up",
   qualifiedTable: string,
 ): Promise<void> {
+  const sql = migrationSql[direction];
   await client.query("BEGIN;");
   if (sql !== "") {
     await client.query(sql);
   }
   if (direction === "up") {
-    await recordAppliedMigration(client, qualifiedTable, migration.version);
+    await recordAppliedMigration(
+      client,
+      qualifiedTable,
+      migration.version,
+      migration.file,
+      migrationSql.checksum,
+    );
   } else {
     await removeAppliedMigration(client, qualifiedTable, migration.version);
   }
@@ -72,7 +79,7 @@ export async function executeMigrations(
     options.log?.({ table: options.table, type: "history-initialize-done" });
   }
   for (const migration of plan) {
-    const sql = sqlByFile.get(migration.file)![options.direction];
+    const migrationSql = sqlByFile.get(migration.file)!;
     const startedAt = Date.now();
     options.log?.({
       direction: options.direction,
@@ -83,7 +90,7 @@ export async function executeMigrations(
       await executeMigration(
         client,
         migration,
-        sql,
+        migrationSql,
         options.direction,
         options.qualifiedTable,
       );
