@@ -185,8 +185,10 @@ Behavior:
   Applied filenames and checksums must match the database history.
   The command checks UTF-8 encoding and marker structure only in migrations
   that it will revert.
-  An empty migrate:down section removes only the migration history row.
-  It does not reverse database changes, and a later up runs the up section again.
+  An empty migrate:down section runs no migration SQL.
+  The command removes only the migration history row.
+  It does not restore data or reverse schema changes.
+  A later up runs the original up section again.
   Each migration uses its own transaction.
   The command waits for the migration advisory lock.
 

@@ -100,10 +100,11 @@ describe("help", (): void => {
 
     assert.match(help, /pg-migrate down \[options\]/);
     assert.match(help, /target remains applied/);
-    assert.match(help, /empty migrate:down section/);
     assert.match(help, /checks UTF-8 encoding and marker structure/i);
-    assert.match(help, /does not reverse database changes/i);
-    assert.match(help, /later up runs the up section again/i);
+    assert.match(help, /empty migrate:down section runs no migration SQL/i);
+    assert.match(help, /removes only the migration history row/i);
+    assert.match(help, /does not restore data or reverse schema changes/i);
+    assert.match(help, /later up runs the original up section again/i);
     assert.match(help, /filenames and checksums must match/i);
     assert.match(help, /reverse version order/);
     assert.match(help, /migration count goes to stdout/i);

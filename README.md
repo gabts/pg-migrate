@@ -117,8 +117,10 @@ be valid UTF-8 and have this structure:
 
 ```sql
 -- migrate:up
+CREATE TABLE example (id bigint PRIMARY KEY);
 
 -- migrate:down
+DROP TABLE example;
 ```
 
 Only white space can occur before the first marker. Each marker must occur
@@ -127,9 +129,11 @@ The down section can be empty. An exact marker line is reserved, including in
 SQL comments and strings. Every `.sql` entry in the directory must be a regular
 file with a valid migration filename. The tool does not scan subdirectories.
 
-The tool sends each section to PostgreSQL without parsing SQL statements. An
-empty down section removes the history record without undoing schema changes.
-A later `up` command runs the up section again.
+The tool sends each section to PostgreSQL without parsing SQL statements. The
+down section can be empty. In that case, `down` runs no migration SQL and
+removes only the migration history row. It does not restore data or reverse
+schema changes. A later `up` command sends the original up section again. Use
+an empty down section only when this behavior is intentional.
 
 ## Safety and history
 
