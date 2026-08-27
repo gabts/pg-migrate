@@ -8,7 +8,7 @@ A SQL-first PostgreSQL migration tool with a CLI and TypeScript API.
 npm install @gabbe/pg-migrate
 ```
 
-This installs the `pg-migrate` command and the package API.
+This installs the `pg-migrate` command and the package API (ESM only).
 
 Requires Node.js 22+ and PostgreSQL 14+.
 
@@ -103,6 +103,10 @@ underscore and contain only lowercase letters, numbers, and underscores.
 
 Connection attempts stop after 10 seconds. Lock and statement waits have no
 default timeout. For deployments, set them in the URL, in milliseconds:
+
+```text
+postgres://localhost/app?lock_timeout=5000&statement_timeout=60000
+```
 
 ## Migration files
 
