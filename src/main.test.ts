@@ -239,24 +239,31 @@ describe("main", (): void => {
       );
     });
 
+    // Invalid SQL fails after several events and before database work.
     it("ignores log sink failures", async (): Promise<void> => {
-      const table = "Invalid-Table";
+      const file = "20260811120000_add_users.sql";
+      await fs.writeFile(path.join(tempDir, file), "SELECT 1;\n");
+      let calls = 0;
 
       await assert.rejects(
-        status({
+        validate({
           directory: tempDir,
           log(): undefined {
+            calls++;
             throw new Error("Log failure.");
           },
-          table,
+          table: "schema_migrations",
           url: "postgres://localhost/example",
         }),
-        new Error(`Invalid migration table name '${table}'.`),
+        new Error(`Missing 'migrate:up' marker in '${file}'.`),
       );
+      assert.ok(calls > 0);
     });
 
     it("ignores async log sink failures", async (): Promise<void> => {
-      const table = "Invalid-Table";
+      const file = "20260811120000_add_users.sql";
+      await fs.writeFile(path.join(tempDir, file), "SELECT 1;\n");
+      let calls = 0;
       let unhandled: unknown;
 
       function captureUnhandled(error: unknown): void {
@@ -266,18 +273,20 @@ describe("main", (): void => {
       process.on("unhandledRejection", captureUnhandled);
       try {
         await assert.rejects(
-          status({
+          validate({
             directory: tempDir,
             async log(): Promise<void> {
+              calls++;
               throw new Error("Async log failure.");
             },
-            table,
+            table: "schema_migrations",
             url: "postgres://localhost/example",
           }),
-          new Error(`Invalid migration table name '${table}'.`),
+          new Error(`Missing 'migrate:up' marker in '${file}'.`),
         );
         // Node reports unhandled rejections after the promise job is complete.
         await setImmediate();
+        assert.ok(calls > 0);
         assert.equal(unhandled, undefined);
       } finally {
         process.off("unhandledRejection", captureUnhandled);
