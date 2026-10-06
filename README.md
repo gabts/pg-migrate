@@ -231,8 +231,8 @@ PostgreSQL driver still reads `PG*` variables for settings that the URL leaves
 out, as described in [Configuration](#configuration). `status` returns ordered
 migration state and counts. `validate` returns counts. `migrate` and `rollback`
 return executed filenames. The optional `log` callback receives typed progress
-events. Failures throw an `Error`. A database failure keeps the underlying error
-as `cause`.
+events. It is not awaited, and its errors are ignored. Failures throw an
+`Error`. A database failure keeps the underlying error as `cause`.
 
 ## License
 

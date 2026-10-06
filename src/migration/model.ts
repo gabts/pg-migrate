@@ -100,7 +100,7 @@ export type LogEvent =
   | { type: "no-applied" }
   | { type: "target-current" };
 
-/** Receives progress events synchronously and returns no value. */
+/** Receives progress events. Calls are not awaited and errors are ignored. */
 export type LogSink = (event: LogEvent) => void;
 
 /** Options common to all database-connected operations. */
