@@ -526,7 +526,7 @@ describe(
       assert.deepEqual(await readHistoryVersions(), [firstVersion]);
     });
 
-    it("writes a short migration failure unless quiet", async (): Promise<void> => {
+    it("writes a short migration failure only in default output", async (): Promise<void> => {
       const file = await writeMigration(
         firstVersion,
         "add_users",
@@ -559,6 +559,20 @@ describe(
           assert.equal(
             error.stderr,
             `✖ Error: Failed to apply migration '${file}'.\n${cause}\n`,
+          );
+          return true;
+        },
+      );
+      // Verbose output writes rollback and disconnect lines after the
+      // failed migration, so the error line names the file again.
+      await assert.rejects(
+        promisify(execFile)(process.execPath, [...args, "--verbose"]),
+        (error: { code: number; stderr: string }): boolean => {
+          assert.equal(error.code, 1);
+          assert.ok(
+            error.stderr.endsWith(
+              `\n✖ Error: Failed to apply migration '${file}'.\n${cause}\n`,
+            ),
           );
           return true;
         },

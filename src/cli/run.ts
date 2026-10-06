@@ -123,8 +123,10 @@ export async function run(
     const message = error instanceof Error ? error.message : String(error);
     const cause = error instanceof Error ? error.cause : undefined;
     const lines: string[] = [];
-    // The failed migration's progress line already names the file.
-    if (!migrationFailed || quiet || cause === undefined) {
+    // The failed migration's progress line names the file. Only the default
+    // output prints it directly above the cause. Verbose output writes
+    // rollback and disconnect lines in between.
+    if (!migrationFailed || quiet || verbose || cause === undefined) {
       lines.push(formatError(message, colors));
     }
     if (cause !== undefined) {
