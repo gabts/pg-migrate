@@ -68,15 +68,15 @@ function parseHelpAfterError(args: string[]): Command | "help" | null {
   }
 }
 
-// util.parseArgs adds an explanation about '--'. Keep only the first
-// sentence to use the CLI error style.
+// util.parseArgs adds explanations after the first sentence, separated by a
+// space or a line break. Keep only the first sentence to use the CLI style.
 function firstSentenceOf(error: unknown): unknown {
   if (
     error instanceof TypeError &&
     "code" in error &&
     String(error.code).startsWith("ERR_PARSE_ARGS")
   ) {
-    const [sentence = error.message] = error.message.split(". ");
+    const [sentence = error.message] = error.message.split(/\.\s/);
     return new Error(sentence.endsWith(".") ? sentence : `${sentence}.`);
   }
   return error;

@@ -117,6 +117,12 @@ describe("parse", (): void => {
       }, /^Error: Unknown option '--bogus'\.$/);
     });
 
+    it("throws a one-sentence error on an option value that starts with a dash", (): void => {
+      assert.throws((): void => {
+        parseInvocation(["up", "-d", "-v"]);
+      }, /^Error: Option '-d' argument is ambiguous\.$/);
+    });
+
     it("rejects '=' after a short option", (): void => {
       assert.throws((): void => {
         parseInvocation(["create", "add_users", "-d=db"]);
