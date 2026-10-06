@@ -109,6 +109,12 @@ default timeout. For deployments, set them in the URL, in milliseconds:
 postgres://localhost/app?lock_timeout=5000&statement_timeout=60000
 ```
 
+Like `psql`, the PostgreSQL driver fills settings that the URL leaves out from
+the standard `PG*` environment variables, such as `PGUSER`, `PGPASSWORD`,
+`PGPORT`, `PGOPTIONS`, and `PGSSLMODE`. Without a password in the URL or
+`PGPASSWORD`, it reads `~/.pgpass`. Put every setting that a deployment depends
+on in the URL, including `sslmode`.
+
 ## Migration files
 
 `create` makes the directory if necessary and creates this UTC filename:
@@ -219,12 +225,14 @@ const applied = await migrate(options);
 const reverted = await rollback({ ...options, target: "20260811120000" });
 ```
 
-All options are explicit. The API does not read CLI options or environment
-variables, and file creation is available through the CLI only. `status`
-returns ordered migration state and counts. `validate` returns counts.
-`migrate` and `rollback` return executed filenames. The optional `log` callback
-receives typed progress events. Failures throw an `Error`. A database failure
-keeps the underlying error as `cause`.
+All options are explicit. The API does not read CLI options or `PGM_*`
+environment variables, and file creation is available through the CLI only. The
+PostgreSQL driver still reads `PG*` variables for settings that the URL leaves
+out, as described in [Configuration](#configuration). `status` returns ordered
+migration state and counts. `validate` returns counts. `migrate` and `rollback`
+return executed filenames. The optional `log` callback receives typed progress
+events. Failures throw an `Error`. A database failure keeps the underlying error
+as `cause`.
 
 ## License
 
