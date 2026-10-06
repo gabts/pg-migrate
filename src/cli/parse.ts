@@ -89,12 +89,26 @@ export function parseArgs(args: string[]): ParseResult {
       args,
       options: optionsDescriptors,
       allowPositionals: true,
+      tokens: true,
     });
+    // A short option takes the rest of its argument as the value, so '-d=db'
+    // sets '=db'. Reject it rather than guess what was meant.
+    for (const token of result.tokens) {
+      if (
+        token.kind === "option" &&
+        token.inlineValue === true &&
+        !token.rawName.startsWith("--") &&
+        token.value.startsWith("=")
+      ) {
+        throw new Error(`Unexpected '=' after option '${token.rawName}'.`);
+      }
+    }
     const help = getHelpCommand(
       result.positionals,
       result.values.help === true,
     );
-    return help ? { help } : { invocation: result };
+    const { positionals, values } = result;
+    return help ? { help } : { invocation: { positionals, values } };
   } catch (error) {
     const help = parseHelpAfterError(args);
     if (help) {

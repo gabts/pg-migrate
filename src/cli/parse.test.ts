@@ -116,5 +116,28 @@ describe("parse", (): void => {
         parseInvocation(["--bogus"]);
       }, /^Error: Unknown option '--bogus'\.$/);
     });
+
+    it("rejects '=' after a short option", (): void => {
+      assert.throws((): void => {
+        parseInvocation(["create", "add_users", "-d=db"]);
+      }, new Error("Unexpected '=' after option '-d'."));
+      assert.throws((): void => {
+        parseInvocation(["up", "-qu=postgres://localhost/db"]);
+      }, new Error("Unexpected '=' after option '-u'."));
+    });
+
+    it("keeps '=' in a separate or long option value", (): void => {
+      const { values } = parseInvocation([
+        "-d",
+        "=db",
+        "--table==history",
+        "-uabc=def",
+      ]);
+
+      assert.deepEqual(
+        { ...values },
+        { directory: "=db", table: "=history", url: "abc=def" },
+      );
+    });
   });
 });
