@@ -54,6 +54,9 @@ async function executeMigration(
   await client.query("BEGIN;");
   if (sql !== "") {
     await client.query(sql);
+    // A plain SET outlasts the transaction. Restore the connection defaults
+    // for the history write and later migrations. RESET ALL keeps the role.
+    await client.query("RESET SESSION AUTHORIZATION; RESET ALL;");
   }
   if (direction === "up") {
     await recordAppliedMigration(

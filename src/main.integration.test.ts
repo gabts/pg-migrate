@@ -396,6 +396,39 @@ describe(
       assert.equal(await relationExists("users"), false);
     });
 
+    it("resets session settings after each migration", async (): Promise<void> => {
+      // An empty search_path rejects an unqualified CREATE TABLE.
+      const first = await writeMigration(
+        firstVersion,
+        "set_session",
+        "SET search_path TO '';\nSET lock_timeout TO '1min';",
+        "",
+      );
+      const second = await writeMigration(
+        secondVersion,
+        "add_settings",
+        "CREATE TABLE settings AS SELECT " +
+          "current_setting('search_path') AS search_path, " +
+          "current_setting('lock_timeout') AS lock_timeout;",
+        "DROP TABLE settings;",
+      );
+
+      // The admin connection has the same server and role defaults.
+      const defaults = await getAdmin().query<{ lock_timeout: string }>(
+        "SELECT current_setting('lock_timeout') AS lock_timeout;",
+      );
+
+      assert.deepEqual(await migrate(unqualifiedCommandOptions()), {
+        files: [first, second],
+      });
+      const result = await getAdmin().query(
+        `SELECT * FROM ${qualifiedRelation("settings")};`,
+      );
+      assert.deepEqual(result.rows, [
+        { lock_timeout: defaults.rows[0]?.lock_timeout, search_path: schema },
+      ]);
+    });
+
     it("validates SQL only for migrations in the plan", async (): Promise<void> => {
       const firstFile = await writeMigration(
         firstVersion,

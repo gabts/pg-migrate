@@ -158,6 +158,14 @@ table. Each migration runs in its own transaction with its history change. If
 a migration fails, its transaction rolls back, but earlier migrations from the
 same command stay complete.
 
+After the SQL of each migration, the tool resets session settings, including
+`SET ROLE` and `SET SESSION AUTHORIZATION`, to the connection defaults. Each
+migration therefore starts with the same settings whether a command applies one
+migration or several. Set defaults for all migrations in the connection URL,
+for example `?options=-c%20search_path%3Dapp`, or with `ALTER ROLE ... SET`.
+Temporary tables, prepared statements, and session advisory locks are not
+reset.
+
 `status` checks filenames, checksums, and history without validating migration
 file contents, creating the history table, or taking the lock. `validate`
 checks UTF-8, markers, filenames, checksums, and history, not PostgreSQL syntax.

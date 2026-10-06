@@ -100,20 +100,22 @@ describe("execute", (): void => {
       [
         "BEGIN;",
         "CREATE TABLE users (id integer);",
+        "RESET SESSION AUTHORIZATION; RESET ALL;",
         'INSERT INTO "schema_migrations" (version, file, checksum, applied_at) VALUES ($1, $2, $3, clock_timestamp());',
         "COMMIT;",
         "BEGIN;",
         "CREATE TABLE posts (id integer);",
+        "RESET SESSION AUTHORIZATION; RESET ALL;",
         'INSERT INTO "schema_migrations" (version, file, checksum, applied_at) VALUES ($1, $2, $3, clock_timestamp());',
         "COMMIT;",
       ],
     );
-    assert.deepEqual(queries[2]?.parameters, [
+    assert.deepEqual(queries[3]?.parameters, [
       first.version,
       first.file,
       "first-checksum",
     ]);
-    assert.deepEqual(queries[6]?.parameters, [
+    assert.deepEqual(queries[8]?.parameters, [
       second.version,
       second.file,
       "second-checksum",
@@ -145,16 +147,18 @@ describe("execute", (): void => {
       [
         "BEGIN;",
         "DROP TABLE posts;",
+        "RESET SESSION AUTHORIZATION; RESET ALL;",
         'DELETE FROM "schema_migrations" WHERE version = $1;',
         "COMMIT;",
         "BEGIN;",
         "DROP TABLE users;",
+        "RESET SESSION AUTHORIZATION; RESET ALL;",
         'DELETE FROM "schema_migrations" WHERE version = $1;',
         "COMMIT;",
       ],
     );
-    assert.deepEqual(queries[2]?.parameters, [second.version]);
-    assert.deepEqual(queries[6]?.parameters, [first.version]);
+    assert.deepEqual(queries[3]?.parameters, [second.version]);
+    assert.deepEqual(queries[8]?.parameters, [first.version]);
   });
 
   it("skips an empty down section", async (): Promise<void> => {
