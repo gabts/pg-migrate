@@ -17,28 +17,26 @@ const DEFAULT_CONFIG_FILE = ".env";
 const DEFAULT_DIRECTORY = "migrations";
 const DEFAULT_TABLE = "schema_migrations";
 
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
-}
-
 function rejectEmptyValue(name: string, value: string | undefined): void {
   if (value === "") {
     throw new Error(`Invalid value '' for '${name}'.`);
   }
 }
 
-async function readFileIfExists(path: string): Promise<string | undefined> {
+async function readConfigFile(
+  filePath: string,
+  required: boolean,
+): Promise<string | undefined> {
   try {
-    return await fs.readFile(path, { encoding: "utf-8" });
+    return await fs.readFile(filePath, { encoding: "utf-8" });
   } catch (error) {
-    // Ignore an unavailable default file. Reject an unavailable explicit file.
-    if (
-      isNodeError(error) &&
-      (error.code === "ENOENT" || error.code === "EISDIR")
-    ) {
+    // The default file is optional. Ignore any reason it cannot be read.
+    if (!required) {
       return undefined;
     }
-    throw error;
+    throw new Error(`Cannot read config file '${filePath}'.`, {
+      cause: error,
+    });
   }
 }
 
@@ -56,12 +54,10 @@ async function resolveValues(
   const explicitConfig = values.config ?? env[ENV_KEY_CONFIG_FILE];
   rejectEmptyValue("config", explicitConfig);
   const envFilePath = path.resolve(explicitConfig ?? DEFAULT_CONFIG_FILE);
-  const envFileContent = await readFileIfExists(envFilePath);
-
-  if (explicitConfig && envFileContent === undefined) {
-    throw new Error(`Cannot read config file '${envFilePath}'.`);
-  }
-
+  const envFileContent = await readConfigFile(
+    envFilePath,
+    explicitConfig !== undefined,
+  );
   const envFile = envFileContent ? util.parseEnv(envFileContent) : {};
 
   const directory =

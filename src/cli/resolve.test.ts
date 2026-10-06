@@ -301,7 +301,12 @@ PGM_URL=postgres://file/db
 
     await assert.rejects(
       resolveInvocation(status({ config: configPath }), {}),
-      /Cannot read config file/,
+      (error: unknown): boolean => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.message, `Cannot read config file '${configPath}'.`);
+        assert.equal((error.cause as NodeJS.ErrnoException).code, "ENOENT");
+        return true;
+      },
     );
   });
 
@@ -325,6 +330,14 @@ PGM_URL=postgres://file/db
   });
 
   it("ignores a missing default environment file", async (): Promise<void> => {
+    await assert.doesNotReject(
+      resolveInvocation(status({ url: "postgres://args/db" }), {}),
+    );
+  });
+
+  it("ignores an unreadable default environment file", async (): Promise<void> => {
+    await fs.writeFile(path.join(tempDir, ".env"), "", { mode: 0o000 });
+
     await assert.doesNotReject(
       resolveInvocation(status({ url: "postgres://args/db" }), {}),
     );
