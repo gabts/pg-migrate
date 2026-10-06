@@ -11,7 +11,7 @@ const TEMPLATE = "-- migrate:up\n\n-- migrate:down\n";
 
 interface CreateOptions {
   directory: string;
-  log?: CliLogSink;
+  log: CliLogSink;
   name: string;
 }
 
@@ -29,9 +29,9 @@ function formatVersion(date: Date): string {
   return `${year}${month}${day}${hour}${minute}${second}`;
 }
 
-function log(sink: CliLogSink | undefined, event: CliLogEvent): void {
+function log(sink: CliLogSink, event: CliLogEvent): void {
   try {
-    sink?.(event);
+    sink(event);
   } catch {
     // Progress output must not change command behavior.
   }

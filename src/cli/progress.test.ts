@@ -1,6 +1,7 @@
 import * as assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import { describe, it, mock } from "node:test";
+import type { CliLogEvent } from "./model.js";
 import { createProgressOutput } from "./progress.js";
 
 interface CapturedStream {
@@ -21,10 +22,25 @@ function captureStream(isTTY: boolean): CapturedStream {
   return { read: () => text, stream };
 }
 
+// Most tests check verbose output, so their log calls set verbose.
+function createVerboseOutput(stream: CapturedStream["stream"]): {
+  fail(): void;
+  log(event: CliLogEvent): void;
+  stop(): void;
+} {
+  const progress = createProgressOutput(stream, false);
+  return {
+    ...progress,
+    log(event: CliLogEvent): void {
+      progress.log(event, true);
+    },
+  };
+}
+
 describe("progress", (): void => {
   it("replaces each interactive phase with one completed line", (): void => {
     const captured = captureStream(true);
-    const progress = createProgressOutput(captured.stream, false);
+    const progress = createVerboseOutput(captured.stream);
 
     progress.log({ type: "directory-read-start", directory: "demo" });
     progress.log({ type: "directory-read-done", directory: "demo" });
@@ -70,7 +86,7 @@ describe("progress", (): void => {
 
   it("prints stable progress lines for redirected output", (): void => {
     const captured = captureStream(false);
-    const progress = createProgressOutput(captured.stream, false);
+    const progress = createVerboseOutput(captured.stream);
 
     progress.log({ type: "directory-read-start", directory: "demo" });
     progress.log({ type: "directory-read-done", directory: "demo" });
@@ -116,7 +132,7 @@ describe("progress", (): void => {
   it("prints stable lines when a phase is wider than the terminal", (): void => {
     const captured = captureStream(true);
     captured.stream.columns = 40;
-    const progress = createProgressOutput(captured.stream, false);
+    const progress = createVerboseOutput(captured.stream);
 
     progress.log({
       database: {
@@ -150,7 +166,7 @@ describe("progress", (): void => {
     const captured = captureStream(true);
     // The message has 36 characters but needs 41 columns with the spinner.
     captured.stream.columns = 40;
-    const progress = createProgressOutput(captured.stream, false);
+    const progress = createVerboseOutput(captured.stream);
 
     progress.log({ type: "directory-read-start", directory: "日本語" });
 
@@ -162,7 +178,7 @@ describe("progress", (): void => {
     try {
       const captured = captureStream(true);
       captured.stream.columns = 80;
-      const progress = createProgressOutput(captured.stream, false);
+      const progress = createVerboseOutput(captured.stream);
 
       progress.log({ type: "directory-read-start", directory: "demo" });
       captured.stream.columns = 20;
@@ -185,7 +201,7 @@ describe("progress", (): void => {
 
   it("replaces an interactive migration phase with a failure", (): void => {
     const captured = captureStream(true);
-    const progress = createProgressOutput(captured.stream, false);
+    const progress = createVerboseOutput(captured.stream);
 
     progress.log({
       direction: "up",
@@ -206,7 +222,7 @@ describe("progress", (): void => {
 
   it("keeps the active phase when it does not complete", (): void => {
     const captured = captureStream(true);
-    const progress = createProgressOutput(captured.stream, false);
+    const progress = createVerboseOutput(captured.stream);
 
     progress.log({ type: "directory-read-start", directory: "demo" });
     progress.fail();

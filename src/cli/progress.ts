@@ -5,7 +5,7 @@ import type { CliLogEvent } from "./model.js";
 
 interface ProgressOutput {
   fail(): void;
-  log(event: CliLogEvent, verbose?: boolean): void;
+  log(event: CliLogEvent, verbose: boolean): void;
   stop(): void;
 }
 
@@ -103,7 +103,7 @@ export function createProgressOutput(
     }
   }
 
-  function log(event: CliLogEvent, verbose = true): void {
+  function log(event: CliLogEvent, verbose: boolean): void {
     if (!verbose && !isAlwaysVisible(event)) {
       return;
     }

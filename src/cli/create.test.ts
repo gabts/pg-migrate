@@ -6,6 +6,10 @@ import { afterEach, beforeEach, describe, it, mock } from "node:test";
 import { create } from "./create.js";
 import type { CliLogEvent } from "./model.js";
 
+function noLog(): undefined {
+  return undefined;
+}
+
 const version = "20090103181505";
 
 describe("create", (): void => {
@@ -29,6 +33,7 @@ describe("create", (): void => {
   it("writes a timestamped file with the template", async (): Promise<void> => {
     const filePath = await create({
       directory: tempDir,
+      log: noLog,
       name: "add_users",
     });
 
@@ -60,7 +65,7 @@ describe("create", (): void => {
 
   it("rejects an invalid migration name", async (): Promise<void> => {
     await assert.rejects(
-      create({ directory: tempDir, name: "Invalid-Name" }),
+      create({ directory: tempDir, log: noLog, name: "Invalid-Name" }),
       new Error(
         "Invalid migration name 'Invalid-Name', expected lowercase letters, " +
           "numbers, and underscores.",
@@ -72,7 +77,7 @@ describe("create", (): void => {
     const name = "a".repeat(300);
 
     await assert.rejects(
-      create({ directory: tempDir, name }),
+      create({ directory: tempDir, log: noLog, name }),
       new Error(`Migration name '${name}' is too long.`),
     );
   });
@@ -94,7 +99,7 @@ describe("create", (): void => {
 
   it("creates the directory recursively", async (): Promise<void> => {
     const directory = path.join(tempDir, "db", "migrations");
-    await create({ directory, name: "add_users" });
+    await create({ directory, log: noLog, name: "add_users" });
 
     await fs.access(path.join(directory, `${version}_add_users.sql`));
   });
@@ -104,16 +109,16 @@ describe("create", (): void => {
     await fs.writeFile(filePath, "");
 
     await assert.rejects(
-      create({ directory: filePath, name: "add_users" }),
+      create({ directory: filePath, log: noLog, name: "add_users" }),
       new Error(`Migration path '${filePath}' is not a directory.`),
     );
   });
 
   it("rejects when the version already exists", async (): Promise<void> => {
-    await create({ directory: tempDir, name: "first" });
+    await create({ directory: tempDir, log: noLog, name: "first" });
 
     await assert.rejects(
-      create({ directory: tempDir, name: "second" }),
+      create({ directory: tempDir, log: noLog, name: "second" }),
       new Error(`Migration version '${version}' already exists.`),
     );
 
@@ -127,7 +132,7 @@ describe("create", (): void => {
     await fs.writeFile(path.join(tempDir, `${latestVersion}_existing.sql`), "");
 
     await assert.rejects(
-      create({ directory: tempDir, name: "add_users" }),
+      create({ directory: tempDir, log: noLog, name: "add_users" }),
       new Error(
         `Migration version '${version}' must be later than existing version ` +
           `'${latestVersion}'.`,
@@ -143,13 +148,13 @@ describe("create", (): void => {
     await fs.writeFile(path.join(tempDir, `.${version}.lock`), "");
 
     await assert.rejects(
-      create({ directory: tempDir, name: "add_users" }),
+      create({ directory: tempDir, log: noLog, name: "add_users" }),
       new Error(`Migration version '${version}' already exists.`),
     );
   });
 
   it("removes the lock file afterwards", async (): Promise<void> => {
-    await create({ directory: tempDir, name: "add_users" });
+    await create({ directory: tempDir, log: noLog, name: "add_users" });
 
     assert.deepEqual(await fs.readdir(tempDir), [`${version}_add_users.sql`]);
   });

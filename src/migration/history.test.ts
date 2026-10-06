@@ -14,6 +14,10 @@ import {
   validateHistoryTableName,
 } from "./history.js";
 
+function noLog(): undefined {
+  return undefined;
+}
+
 interface Query {
   parameters: unknown[] | undefined;
   sql: string;
@@ -42,7 +46,7 @@ describe("history", (): void => {
       const { client, queries } = createClient([[{ schema: "app" }]]);
 
       const table = await resolveHistoryTable(client, "schema_migrations");
-      await lockMigrations(client, table);
+      await lockMigrations(client, table, noLog);
 
       assert.deepEqual(table, {
         name: "schema_migrations",
@@ -63,7 +67,7 @@ describe("history", (): void => {
       const { client, queries } = createClient();
 
       const table = await resolveHistoryTable(client, "app.schema_migrations");
-      await lockMigrations(client, table);
+      await lockMigrations(client, table, noLog);
 
       assert.deepEqual(table, {
         name: "app.schema_migrations",
@@ -95,7 +99,7 @@ describe("history", (): void => {
           "Failed to look up schema for migration table 'schema_migrations'.",
         ],
         [
-          () => lockMigrations(client, table),
+          () => lockMigrations(client, table, noLog),
           "Failed to acquire migration lock for 'app.schema_migrations'.",
         ],
         [
@@ -109,7 +113,13 @@ describe("history", (): void => {
           "Failed to read migration history table 'app.schema_migrations'.",
         ],
         [
-          () => readAppliedMigrations(client, table.qualifiedName, table.name),
+          () =>
+            readAppliedMigrations(
+              client,
+              table.qualifiedName,
+              table.name,
+              noLog,
+            ),
           "Failed to read migration history table 'app.schema_migrations'.",
         ],
       ] as const) {
@@ -279,6 +289,8 @@ describe("history", (): void => {
     const result = await readAppliedMigrations(
       client,
       '"app"."schema_migrations"',
+      "app.schema_migrations",
+      noLog,
     );
 
     assert.deepEqual(result, rows);

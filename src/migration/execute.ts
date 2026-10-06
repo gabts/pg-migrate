@@ -11,7 +11,7 @@ import type { MigrationSql } from "./sql.js";
 interface ExecuteOptions {
   direction: "down" | "up";
   initialized: boolean;
-  log?: LogSink;
+  log: LogSink;
   qualifiedTable: string;
   table: string;
 }
@@ -80,14 +80,14 @@ export async function executeMigrations(
   options: ExecuteOptions,
 ): Promise<MigrateResult> {
   if (options.direction === "up" && !options.initialized) {
-    options.log?.({ table: options.table, type: "history-initialize-start" });
+    options.log({ table: options.table, type: "history-initialize-start" });
     await initializeHistory(client, options.qualifiedTable, options.table);
-    options.log?.({ table: options.table, type: "history-initialize-done" });
+    options.log({ table: options.table, type: "history-initialize-done" });
   }
   for (const migration of plan) {
     const migrationSql = sqlByFile.get(migration.file)!;
     const startedAt = Date.now();
-    options.log?.({
+    options.log({
       direction: options.direction,
       file: migration.file,
       type: "migration-start",
@@ -101,21 +101,21 @@ export async function executeMigrations(
         options.qualifiedTable,
       );
     } catch (error) {
-      options.log?.({
+      options.log({
         direction: options.direction,
         durationMs: Date.now() - startedAt,
         file: migration.file,
         type: "migration-failed",
       });
       if (await rollbackAfterError(client)) {
-        options.log?.({ type: "failed-migration-rollback-done" });
+        options.log({ type: "failed-migration-rollback-done" });
       }
       const action = options.direction === "up" ? "apply" : "revert";
       throw new Error(`Failed to ${action} migration '${migration.file}'.`, {
         cause: error,
       });
     }
-    options.log?.({
+    options.log({
       direction: options.direction,
       durationMs: Date.now() - startedAt,
       file: migration.file,

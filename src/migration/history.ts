@@ -109,7 +109,7 @@ export async function resolveHistoryTable(
 export async function lockMigrations(
   client: pg.Client,
   table: ResolvedHistoryTable,
-  log: LogSink = (): undefined => undefined,
+  log: LogSink,
 ): Promise<void> {
   log({ table: table.name, type: "lock-acquire-start" });
   try {
@@ -214,8 +214,8 @@ export async function readValidatedHistoryDefinition(
 export async function readAppliedMigrations(
   client: pg.Client,
   qualifiedTable: string,
-  table: string = qualifiedTable,
-  log: LogSink = (): undefined => undefined,
+  table: string,
+  log: LogSink,
 ): Promise<AppliedMigration[]> {
   log({ table, type: "applied-read-start" });
   let result: pg.QueryResult<AppliedMigration>;

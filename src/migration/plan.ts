@@ -32,7 +32,7 @@ function validateMigrationTarget(target: string): void {
 export function findMigrationTarget(
   target: string,
   migrationIndex: MigrationIndex,
-  log: LogSink = (): undefined => undefined,
+  log: LogSink,
 ): DiskMigration {
   log({ target, type: "target-resolve-start" });
   validateMigrationTarget(target);
@@ -89,7 +89,7 @@ export function planUp(
   migrationIndex: MigrationIndex,
   applied: AppliedMigration[],
   target: DiskMigration | null,
-  log: LogSink = (): undefined => undefined,
+  log: LogSink,
 ): DiskMigration[] {
   log({ direction: "up", type: "plan-start" });
   validateUpPlan(migrationIndex, applied, target);
@@ -112,7 +112,7 @@ export function planDown(
   migrationIndex: MigrationIndex,
   appliedHistory: AppliedMigration[],
   target: DiskMigration | null,
-  log: LogSink = (): undefined => undefined,
+  log: LogSink,
 ): DiskMigration[] {
   log({ direction: "down", type: "plan-start" });
   validateDownPlan(appliedHistory, target);

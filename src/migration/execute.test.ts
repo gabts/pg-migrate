@@ -6,6 +6,10 @@ import type { DiskMigration } from "./files.js";
 import type { LogEvent } from "./model.js";
 import type { MigrationSql } from "./sql.js";
 
+function noLog(): undefined {
+  return undefined;
+}
+
 interface Query {
   parameters: unknown[] | undefined;
   sql: string;
@@ -137,6 +141,7 @@ describe("execute", (): void => {
     const result = await executeMigrations(client, [second, first], sqlByFile, {
       direction: "down",
       initialized: true,
+      log: noLog,
       qualifiedTable: '"schema_migrations"',
       table: "schema_migrations",
     });
@@ -170,6 +175,7 @@ describe("execute", (): void => {
     const result = await executeMigrations(client, [first], emptyDownSql, {
       direction: "down",
       initialized: true,
+      log: noLog,
       qualifiedTable: '"schema_migrations"',
       table: "schema_migrations",
     });
@@ -220,6 +226,7 @@ describe("execute", (): void => {
       executeMigrations(client, [first], sqlByFile, {
         direction: "up",
         initialized: false,
+        log: noLog,
         qualifiedTable: '"app"."schema_migrations"',
         table: "app.schema_migrations",
       }),
@@ -263,6 +270,7 @@ describe("execute", (): void => {
     const result = await executeMigrations(client, [], sqlByFile, {
       direction: "down",
       initialized: false,
+      log: noLog,
       qualifiedTable: '"schema_migrations"',
       table: "schema_migrations",
     });
@@ -320,6 +328,7 @@ describe("execute", (): void => {
       executeMigrations(client, [first], sqlByFile, {
         direction: "down",
         initialized: true,
+        log: noLog,
         qualifiedTable: '"schema_migrations"',
         table: "schema_migrations",
       }),

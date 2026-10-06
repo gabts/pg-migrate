@@ -4,6 +4,10 @@ import type { DiskMigration, MigrationIndex } from "./files.js";
 import type { AppliedMigration } from "./history.js";
 import { findMigrationTarget, planDown, planUp } from "./plan.js";
 
+function noLog(): undefined {
+  return undefined;
+}
+
 const first: DiskMigration = {
   file: "20260811120000_add_users.sql",
   name: "add_users",
@@ -49,17 +53,23 @@ function applied(...migrations: DiskMigration[]): AppliedMigration[] {
 describe("plan", (): void => {
   describe("target", (): void => {
     it("resolves a target by version", (): void => {
-      assert.equal(findMigrationTarget(second.version, migrationIndex), second);
+      assert.equal(
+        findMigrationTarget(second.version, migrationIndex, noLog),
+        second,
+      );
     });
 
     it("resolves a target by filename", (): void => {
-      assert.equal(findMigrationTarget(first.file, migrationIndex), first);
+      assert.equal(
+        findMigrationTarget(first.file, migrationIndex, noLog),
+        first,
+      );
     });
 
     it("rejects an invalid target", (): void => {
       for (const target of ["", "latest", "20260811", "add_users.sql"]) {
         assert.throws(
-          () => findMigrationTarget(target, migrationIndex),
+          () => findMigrationTarget(target, migrationIndex, noLog),
           new Error(
             `Invalid migration target '${target}', expected a version or ` +
               "filename.",
@@ -71,7 +81,7 @@ describe("plan", (): void => {
     it("rejects a target that does not exist", (): void => {
       for (const target of ["20260811150000", "20260811150000_add_tags.sql"]) {
         assert.throws(
-          () => findMigrationTarget(target, migrationIndex),
+          () => findMigrationTarget(target, migrationIndex, noLog),
           new Error(`Migration target '${target}' does not exist.`),
         );
       }
@@ -81,34 +91,34 @@ describe("plan", (): void => {
   describe("up", (): void => {
     it("plans every migration when none are applied", (): void => {
       assert.deepEqual(
-        planUp(migrationIndex, applied(), null),
+        planUp(migrationIndex, applied(), null, noLog),
         migrationIndex.all,
       );
     });
 
     it("plans migrations after the latest applied migration", (): void => {
-      assert.deepEqual(planUp(migrationIndex, applied(first), null), [
+      assert.deepEqual(planUp(migrationIndex, applied(first), null, noLog), [
         second,
         third,
       ]);
     });
 
     it("includes the target migration", (): void => {
-      assert.deepEqual(planUp(migrationIndex, applied(first), second), [
+      assert.deepEqual(planUp(migrationIndex, applied(first), second, noLog), [
         second,
       ]);
     });
 
     it("plans nothing when the target is the latest applied", (): void => {
       assert.deepEqual(
-        planUp(migrationIndex, applied(first, second), second),
+        planUp(migrationIndex, applied(first, second), second, noLog),
         [],
       );
     });
 
     it("rejects a target behind the latest applied migration", (): void => {
       assert.throws(
-        () => planUp(migrationIndex, applied(first, second), first),
+        () => planUp(migrationIndex, applied(first, second), first, noLog),
         new Error(
           `Migration target '${first.file}' is behind the latest applied ` +
             `migration '${second.file}'.`,
@@ -119,32 +129,33 @@ describe("plan", (): void => {
 
   describe("down", (): void => {
     it("plans the latest applied migration without a target", (): void => {
-      assert.deepEqual(planDown(migrationIndex, applied(first, second), null), [
-        second,
-      ]);
+      assert.deepEqual(
+        planDown(migrationIndex, applied(first, second), null, noLog),
+        [second],
+      );
     });
 
     it("plans nothing when no migrations are applied", (): void => {
-      assert.deepEqual(planDown(migrationIndex, applied(), null), []);
+      assert.deepEqual(planDown(migrationIndex, applied(), null, noLog), []);
     });
 
     it("reverts newer migrations and keeps the target applied", (): void => {
       assert.deepEqual(
-        planDown(migrationIndex, applied(first, second, third), first),
+        planDown(migrationIndex, applied(first, second, third), first, noLog),
         [third, second],
       );
     });
 
     it("plans nothing when the target is the latest applied", (): void => {
       assert.deepEqual(
-        planDown(migrationIndex, applied(first, second), second),
+        planDown(migrationIndex, applied(first, second), second, noLog),
         [],
       );
     });
 
     it("rejects a target that is not applied", (): void => {
       assert.throws(
-        () => planDown(migrationIndex, applied(first), second),
+        () => planDown(migrationIndex, applied(first), second, noLog),
         new Error(`Migration target '${second.file}' is not applied.`),
       );
     });

@@ -11,7 +11,7 @@ export function calculateMigrationChecksum(contents: Uint8Array): string {
 /** Reads migration files and returns their SHA-256 checksums. */
 export async function readMigrationChecksums(
   migrations: DiskMigration[],
-  log: LogSink = (): undefined => undefined,
+  log: LogSink,
 ): Promise<Map<string, string>> {
   log({ count: migrations.length, type: "checksum-calculation-start" });
   const checksums = new Map<string, string>();
