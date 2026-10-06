@@ -76,10 +76,17 @@ function getDatabaseDetails(
 
 function createDatabaseClient(url: string): pg.Client {
   validateDatabaseUrl(url);
-  const client = new pg.Client({
-    connectionString: url,
-    connectionTimeoutMillis: 10_000,
-  });
+  let client: pg.Client;
+  // pg parses the URL here and throws a bare 'Invalid URL' TypeError. The
+  // message omits the URL because it can contain a password.
+  try {
+    client = new pg.Client({
+      connectionString: url,
+      connectionTimeoutMillis: 10_000,
+    });
+  } catch {
+    throw new Error("Database URL is not a valid URL.");
+  }
   // A dropped connection also rejects the query. Without a listener, the
   // 'error' event would crash the process.
   client.on("error", (): undefined => undefined);

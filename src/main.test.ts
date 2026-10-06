@@ -216,6 +216,25 @@ describe("main", (): void => {
       }
     });
 
+    it("rejects a malformed database URL before database work", async (): Promise<void> => {
+      for (const command of [status, validate, migrate, rollback]) {
+        const events: LogEvent[] = [];
+
+        await assert.rejects(
+          command({
+            directory: tempDir,
+            log(event): undefined {
+              events.push(event);
+            },
+            table: "schema_migrations",
+            url: "postgres://user:secret@[localhost/app",
+          }),
+          new Error("Database URL is not a valid URL."),
+        );
+        assert.deepEqual(events, []);
+      }
+    });
+
     it("identifies the database in connection errors", async (): Promise<void> => {
       // Nothing listens on port 1, so the connection is refused at once.
       await assert.rejects(
