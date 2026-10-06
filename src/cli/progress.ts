@@ -1,4 +1,5 @@
 import * as readline from "node:readline";
+import { stripVTControlCharacters } from "node:util";
 import { formatEvent } from "./format.js";
 import type { CliLogEvent } from "./model.js";
 
@@ -14,6 +15,20 @@ interface TerminalStream extends NodeJS.WritableStream {
 }
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+// A line wider than the terminal wraps, and each frame then adds a row.
+// Characters outside printable ASCII count as two columns. Thus, a wide
+// character can only disable the spinner, not cause a wrap.
+function fitsTerminal(stream: TerminalStream, message: string): boolean {
+  if (stream.columns === undefined) {
+    return true;
+  }
+  let width = 2;
+  for (const char of stripVTControlCharacters(message)) {
+    width += char >= " " && char <= "~" ? 1 : 2;
+  }
+  return width < stream.columns;
+}
 
 function isAlwaysVisible(event: CliLogEvent): boolean {
   switch (event.type) {
@@ -55,10 +70,7 @@ export function createProgressOutput(
 
   function start(message: string): void {
     stop();
-    const spinnerWidth = message.length + 2;
-    const fitsTerminal =
-      stream.columns === undefined || spinnerWidth < stream.columns;
-    if (!stream.isTTY || !fitsTerminal) {
+    if (!stream.isTTY || !fitsTerminal(stream, message)) {
       stream.write(message + "\n");
       return;
     }
@@ -67,6 +79,12 @@ export function createProgressOutput(
     frameIndex = 0;
 
     function render(): void {
+      // The terminal can shrink while the spinner runs.
+      if (!fitsTerminal(stream, message)) {
+        stop();
+        stream.write(message + "\n");
+        return;
+      }
       readline.cursorTo(stream, 0);
       stream.write(`${SPINNER_FRAMES[frameIndex]} ${message}`);
       frameIndex = (frameIndex + 1) % SPINNER_FRAMES.length;

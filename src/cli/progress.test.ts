@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
-import { describe, it } from "node:test";
+import { describe, it, mock } from "node:test";
 import { createProgressOutput } from "./progress.js";
 
 interface CapturedStream {
@@ -144,6 +144,43 @@ describe("progress", (): void => {
         "› Connected to 'pg_migrate_test' at 'localhost:5432' as " +
         "'gabrieltollstalbom'.\n",
     );
+  });
+
+  it("counts wide characters when it checks the terminal width", (): void => {
+    const captured = captureStream(true);
+    // The message has 36 characters but needs 41 columns with the spinner.
+    captured.stream.columns = 40;
+    const progress = createProgressOutput(captured.stream, false);
+
+    progress.log({ type: "directory-read-start", directory: "日本語" });
+
+    assert.equal(captured.read(), "Reading migration directory '日本語'...\n");
+  });
+
+  it("stops the spinner when the terminal becomes too narrow", (): void => {
+    mock.timers.enable({ apis: ["setInterval"] });
+    try {
+      const captured = captureStream(true);
+      captured.stream.columns = 80;
+      const progress = createProgressOutput(captured.stream, false);
+
+      progress.log({ type: "directory-read-start", directory: "demo" });
+      captured.stream.columns = 20;
+      mock.timers.tick(80);
+      mock.timers.tick(80);
+      progress.log({ type: "directory-read-done", directory: "demo" });
+
+      const output = captured.read();
+      assert.ok(
+        output.endsWith(
+          "Reading migration directory 'demo'...\n" +
+            "› Read migration directory 'demo'.\n",
+        ),
+      );
+      assert.equal(output.match(/⠙/g), null);
+    } finally {
+      mock.timers.reset();
+    }
   });
 
   it("replaces an interactive migration phase with a failure", (): void => {
