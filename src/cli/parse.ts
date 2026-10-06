@@ -1,7 +1,5 @@
 import * as util from "node:util";
-import { isCommand, type Command, type ParsedArgs } from "./model.js";
-
-type ParseResult = { help: Command | "help" } | { invocation: ParsedArgs };
+import type { ParsedArgs } from "./model.js";
 
 const optionsDescriptors = {
   config: {
@@ -40,34 +38,6 @@ const optionsDescriptors = {
   },
 } as const satisfies util.ParseArgsConfig["options"];
 
-function getHelpCommand(
-  positionals: string[],
-  requested: boolean,
-): Command | "help" | null {
-  if (!requested) {
-    return null;
-  }
-  const topic = positionals[0];
-  return isCommand(topic) ? topic : "help";
-}
-
-function parseHelpAfterError(args: string[]): Command | "help" | null {
-  const terminator = args.indexOf("--");
-  const insertion = terminator === -1 ? args.length : terminator;
-  try {
-    // The empty value lets parsing finish after an incomplete string option.
-    const result = util.parseArgs({
-      args: args.toSpliced(insertion, 0, ""),
-      options: optionsDescriptors,
-      allowPositionals: true,
-      strict: false,
-    });
-    return getHelpCommand(result.positionals, result.values.help === true);
-  } catch {
-    return null;
-  }
-}
-
 // util.parseArgs adds explanations after the first sentence, separated by a
 // space or a line break. Keep only the first sentence to use the CLI style.
 function firstSentenceOf(error: unknown): unknown {
@@ -82,8 +52,8 @@ function firstSentenceOf(error: unknown): unknown {
   return error;
 }
 
-/** Parses raw CLI arguments into an invocation or explicit help request. */
-export function parseArgs(args: string[]): ParseResult {
+/** Parses raw CLI arguments into positionals and option values. */
+export function parseArgs(args: string[]): ParsedArgs {
   try {
     const result = util.parseArgs({
       args,
@@ -103,17 +73,9 @@ export function parseArgs(args: string[]): ParseResult {
         throw new Error(`Unexpected '=' after option '${token.rawName}'.`);
       }
     }
-    const help = getHelpCommand(
-      result.positionals,
-      result.values.help === true,
-    );
     const { positionals, values } = result;
-    return help ? { help } : { invocation: { positionals, values } };
+    return { positionals, values };
   } catch (error) {
-    const help = parseHelpAfterError(args);
-    if (help) {
-      return { help };
-    }
     throw firstSentenceOf(error);
   }
 }

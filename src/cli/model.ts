@@ -11,6 +11,7 @@ export type Command = (typeof COMMANDS)[number];
 export interface Args {
   config?: string;
   directory?: string;
+  help?: boolean;
   "no-color"?: boolean;
   quiet?: boolean;
   table?: string;

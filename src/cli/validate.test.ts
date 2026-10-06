@@ -1,6 +1,12 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { Args } from "./model.js";
 import { validateInvocation } from "./validate.js";
+
+function helpTopic(positionals: string[], values: Args): string | undefined {
+  const result = validateInvocation({ positionals, values });
+  return result.command === "help" ? result.topic : undefined;
+}
 
 describe("validate", (): void => {
   it("returns a valid create invocation", (): void => {
@@ -106,6 +112,56 @@ describe("validate", (): void => {
           values: { target: "x" },
         }),
       new Error("Unknown option '--target'."),
+    );
+  });
+
+  it("returns the help topic for a help request", (): void => {
+    assert.equal(helpTopic([], {}), "help");
+    assert.equal(helpTopic(["help", "up"], {}), "up");
+    assert.equal(
+      helpTopic(["up"], { help: true, url: "postgres://x/db" }),
+      "up",
+    );
+    // Help for create does not require the name.
+    assert.equal(helpTopic(["create"], { help: true }), "create");
+  });
+
+  it("rejects an unknown help topic before its options", (): void => {
+    assert.throws(
+      () =>
+        validateInvocation({
+          positionals: ["help", "bogus"],
+          values: { url: "postgres://x/db" },
+        }),
+      new Error("Unknown command 'bogus'."),
+    );
+    assert.throws(
+      () =>
+        validateInvocation({ positionals: ["bogus"], values: { help: true } }),
+      new Error("Unknown command 'bogus'."),
+    );
+  });
+
+  it("rejects arguments the help topic does not accept", (): void => {
+    assert.throws(
+      () =>
+        validateInvocation({
+          positionals: ["help", "up", "extra"],
+          values: {},
+        }),
+      new Error("Unexpected positional 'extra'."),
+    );
+    assert.throws(
+      () =>
+        validateInvocation({
+          positionals: ["status", "extra"],
+          values: { help: true },
+        }),
+      new Error("Unexpected positional 'extra'."),
+    );
+    assert.throws(
+      () => validateInvocation({ positionals: [], values: { url: "x" } }),
+      new Error("Unknown option '--url'."),
     );
   });
 });

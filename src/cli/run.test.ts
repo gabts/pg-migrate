@@ -88,11 +88,11 @@ describe("run", (): void => {
     assert.ok(stdout.length > 0);
   });
 
-  it("writes general help for an unknown help topic", async (): Promise<void> => {
+  it("rejects an unknown help topic", async (): Promise<void> => {
     const { code, stdout, stderr } = await runCli(["help", "bogus"]);
-    assert.equal(code, 0);
-    assert.equal(stderr, "");
-    assert.ok(stdout.length > 0);
+    assert.equal(code, 1);
+    assert.equal(stdout, "");
+    assert.ok(stderr.includes("Unknown command 'bogus'."));
   });
 
   it("does not read an option value as the help command", async (): Promise<void> => {
@@ -131,11 +131,12 @@ describe("run", (): void => {
     assert.match(stdout, /pg-migrate status \[options\]/);
   });
 
-  it("prefers help over an invocation that would fail to parse", async (): Promise<void> => {
+  it("rejects invalid input when help is requested", async (): Promise<void> => {
     const { code, stdout, stderr } = await runCli(["up", "--help", "--bogus"]);
-    assert.equal(code, 0);
-    assert.equal(stderr, "");
-    assert.ok(stdout.includes("up"));
+    assert.equal(code, 1);
+    assert.equal(stdout, "");
+    assert.ok(stderr.includes("Unknown option '--bogus'."));
+    assert.ok(stderr.includes("Run `pg-migrate up --help` for usage."));
   });
 
   it("treats '--help' after '--' as a positional, not a help request", async (): Promise<void> => {

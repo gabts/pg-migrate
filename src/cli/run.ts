@@ -72,32 +72,20 @@ export async function run(
     ? first
     : "help";
   try {
-    const parsedResult = parseArgs(args);
-    if ("help" in parsedResult) {
-      process.stdout.write(getHelpText(parsedResult.help) + "\n");
-      return;
-    }
-
-    const parsed = parsedResult.invocation;
-    const [command, ...commandPositionals] = parsed.positionals;
+    const parsed = parseArgs(args);
     quiet = parsed.values.quiet === true;
-
-    if (command === undefined) {
-      if (!quiet) {
-        process.stdout.write(getHelpText("help") + "\n");
+    const validated = validateInvocation(parsed);
+    if (validated.command === "help") {
+      // A bare invocation shows help that was not requested. Quiet mode
+      // suppresses it.
+      const requested =
+        parsed.positionals[0] === "help" || parsed.values.help === true;
+      if (requested || !quiet) {
+        process.stdout.write(getHelpText(validated.topic) + "\n");
       }
       return;
     }
 
-    if (command === "help") {
-      const topic = isCommand(commandPositionals[0])
-        ? commandPositionals[0]
-        : "help";
-      process.stdout.write(getHelpText(topic) + "\n");
-      return;
-    }
-
-    const validated = validateInvocation(parsed);
     helpCommand = validated.command;
     verbose = !quiet && validated.values.verbose === true;
     if (!quiet) {

@@ -1,6 +1,7 @@
 import {
   isCommand,
   type Args,
+  type Command,
   type ParsedArgs,
   type ValidatedInvocation,
 } from "./model.js";
@@ -8,6 +9,7 @@ import {
 const GLOBAL_OPTIONS = [
   "config",
   "directory",
+  "help",
   "no-color",
   "quiet",
   "verbose",
@@ -42,16 +44,41 @@ function assertOptions(values: Args, allowed: readonly string[]): void {
   }
 }
 
-/** Validates a parsed command, its positionals, and its options. */
-export function validateInvocation(parsed: ParsedArgs): ValidatedInvocation {
+function validateHelpTopic(positionals: string[]): Command | "help" {
+  const [topic, ...extra] = positionals;
+  if (topic === undefined) {
+    return "help";
+  }
+  if (!isCommand(topic)) {
+    throw new Error(`Unknown command '${topic}'.`);
+  }
+  assertNoPositionals(extra);
+  return topic;
+}
+
+/** Validates a parsed command or help request and its arguments. */
+export function validateInvocation(
+  parsed: ParsedArgs,
+): ValidatedInvocation | { command: "help"; topic: Command | "help" } {
   const [command, ...positionals] = parsed.positionals;
+  if (command === undefined || command === "help") {
+    const topic = validateHelpTopic(positionals);
+    assertOptions(parsed.values, GLOBAL_OPTIONS);
+    return { command: "help", topic };
+  }
   if (!isCommand(command)) {
     throw new Error(`Unknown command '${command}'.`);
   }
 
+  const help = parsed.values.help === true;
   switch (command) {
     case "create":
       assertOptions(parsed.values, GLOBAL_OPTIONS);
+      if (help) {
+        // Help for create does not require the name.
+        assertNoPositionals(positionals.slice(1));
+        return { command: "help", topic: command };
+      }
       return {
         command,
         name: requireName(positionals),
@@ -61,11 +88,15 @@ export function validateInvocation(parsed: ParsedArgs): ValidatedInvocation {
     case "validate":
       assertNoPositionals(positionals);
       assertOptions(parsed.values, DATABASE_OPTIONS);
-      return { command, values: parsed.values };
+      return help
+        ? { command: "help", topic: command }
+        : { command, values: parsed.values };
     case "up":
     case "down":
       assertNoPositionals(positionals);
       assertOptions(parsed.values, MIGRATE_OPTIONS);
-      return { command, values: parsed.values };
+      return help
+        ? { command: "help", topic: command }
+        : { command, values: parsed.values };
   }
 }

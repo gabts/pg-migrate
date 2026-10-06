@@ -1,31 +1,11 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { ParsedArgs } from "./model.js";
 import { parseArgs } from "./parse.js";
 
-function parseInvocation(args: string[]): ParsedArgs {
-  const result = parseArgs(args);
-  if (!("invocation" in result)) {
-    throw new Error("Expected an invocation.");
-  }
-  return result.invocation;
-}
-
 describe("parse", (): void => {
-  describe("help", (): void => {
-    it("skips option values when it selects the help command", (): void => {
-      assert.deepEqual(parseArgs(["--directory", "up", "status", "--help"]), {
-        help: "status",
-      });
-      assert.deepEqual(parseArgs(["-qd", "up", "status", "--help"]), {
-        help: "status",
-      });
-    });
-  });
-
   describe("parseArgs", (): void => {
     it("returns empty positionals and values for no args", (): void => {
-      const { positionals, values } = parseInvocation([]);
+      const { positionals, values } = parseArgs([]);
 
       assert.deepEqual(positionals, []);
       // util.parseArgs returns objects with a null prototype. Copy the values
@@ -34,13 +14,13 @@ describe("parse", (): void => {
     });
 
     it("collects positional arguments", (): void => {
-      const { positionals } = parseInvocation(["create", "add_users"]);
+      const { positionals } = parseArgs(["create", "add_users"]);
 
       assert.deepEqual(positionals, ["create", "add_users"]);
     });
 
     it("parses long string options", (): void => {
-      const { values } = parseInvocation([
+      const { values } = parseArgs([
         "--config",
         ".env.local",
         "--directory",
@@ -66,7 +46,7 @@ describe("parse", (): void => {
     });
 
     it("resolves short aliases to their long option names", (): void => {
-      const { values } = parseInvocation([
+      const { values } = parseArgs([
         "-c",
         ".env.local",
         "-d",
@@ -92,48 +72,48 @@ describe("parse", (): void => {
     });
 
     it("parses verbose with its long and short flags", (): void => {
-      assert.equal(parseInvocation(["--verbose"]).values.verbose, true);
-      assert.equal(parseInvocation(["-v"]).values.verbose, true);
+      assert.equal(parseArgs(["--verbose"]).values.verbose, true);
+      assert.equal(parseArgs(["-v"]).values.verbose, true);
     });
 
     it("omits verbose when the flag is absent", (): void => {
-      assert.equal("verbose" in parseInvocation(["up"]).values, false);
+      assert.equal("verbose" in parseArgs(["up"]).values, false);
     });
 
     it("parses quiet with its long and short flags", (): void => {
-      assert.equal(parseInvocation(["--quiet"]).values.quiet, true);
-      assert.equal(parseInvocation(["-q"]).values.quiet, true);
+      assert.equal(parseArgs(["--quiet"]).values.quiet, true);
+      assert.equal(parseArgs(["-q"]).values.quiet, true);
     });
 
     it("omits quiet when the flag is absent", (): void => {
-      assert.equal("quiet" in parseInvocation(["up"]).values, false);
+      assert.equal("quiet" in parseArgs(["up"]).values, false);
     });
 
     // This test checks strict parsing. Node supplies the other parse behavior.
     // The exact match checks removal of the final '--' explanation.
     it("throws a one-sentence error on unknown options", (): void => {
       assert.throws((): void => {
-        parseInvocation(["--bogus"]);
+        parseArgs(["--bogus"]);
       }, /^Error: Unknown option '--bogus'\.$/);
     });
 
     it("throws a one-sentence error on an option value that starts with a dash", (): void => {
       assert.throws((): void => {
-        parseInvocation(["up", "-d", "-v"]);
+        parseArgs(["up", "-d", "-v"]);
       }, /^Error: Option '-d' argument is ambiguous\.$/);
     });
 
     it("rejects '=' after a short option", (): void => {
       assert.throws((): void => {
-        parseInvocation(["create", "add_users", "-d=db"]);
+        parseArgs(["create", "add_users", "-d=db"]);
       }, new Error("Unexpected '=' after option '-d'."));
       assert.throws((): void => {
-        parseInvocation(["up", "-qu=postgres://localhost/db"]);
+        parseArgs(["up", "-qu=postgres://localhost/db"]);
       }, new Error("Unexpected '=' after option '-u'."));
     });
 
     it("keeps '=' in a separate or long option value", (): void => {
-      const { values } = parseInvocation([
+      const { values } = parseArgs([
         "-d",
         "=db",
         "--table==history",
