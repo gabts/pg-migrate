@@ -68,6 +68,15 @@ describe("create", (): void => {
     );
   });
 
+  it("rejects a name too long for a filename", async (): Promise<void> => {
+    const name = "a".repeat(300);
+
+    await assert.rejects(
+      create({ directory: tempDir, name }),
+      new Error(`Migration name '${name}' is too long.`),
+    );
+  });
+
   it("ignores log sink failures", async (): Promise<void> => {
     const filePath = await create({
       directory: tempDir,

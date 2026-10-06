@@ -121,6 +121,10 @@ export async function create(options: CreateOptions): Promise<string> {
       if (isNodeError(error) && error.code === "EEXIST") {
         throw new Error(`Migration file '${filePath}' already exists.`);
       }
+      // The file system sets the limit, usually 255 bytes per filename.
+      if (isNodeError(error) && error.code === "ENAMETOOLONG") {
+        throw new Error(`Migration name '${options.name}' is too long.`);
+      }
       throw error;
     }
 
