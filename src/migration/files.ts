@@ -1,3 +1,4 @@
+import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { LogSink } from "./model.js";
@@ -69,16 +70,22 @@ function migrationEntries(
     .sort((first, second) => first.name.localeCompare(second.name));
 }
 
-/** Reads raw entries from a migration directory. */
+// A broken link is not a file.
+async function isLinkToFile(linkPath: string): Promise<boolean> {
+  try {
+    return (await fs.stat(linkPath)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** Reads raw entries from a migration directory and follows symbolic links. */
 export async function readMigrationDirectory(
   directory: string,
 ): Promise<MigrationDirectoryEntry[]> {
+  let entries: Dirent[];
   try {
-    const entries = await fs.readdir(directory, { withFileTypes: true });
-    return entries.map((entry) => ({
-      isFile: entry.isFile(),
-      name: entry.name,
-    }));
+    entries = await fs.readdir(directory, { withFileTypes: true });
   } catch (error) {
     if (
       isNodeError(error) &&
@@ -88,6 +95,16 @@ export async function readMigrationDirectory(
     }
     throw error;
   }
+
+  const result: MigrationDirectoryEntry[] = [];
+  for (const entry of entries) {
+    let isFile = entry.isFile();
+    if (entry.isSymbolicLink()) {
+      isFile = await isLinkToFile(path.join(directory, entry.name));
+    }
+    result.push({ isFile, name: entry.name });
+  }
+  return result;
 }
 
 /** Checks migration filenames, file types, and version uniqueness. */

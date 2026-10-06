@@ -115,6 +115,27 @@ describe("files", (): void => {
     ]);
   });
 
+  it("reads a symbolic link as the type of its target", async (): Promise<void> => {
+    const directory = path.join(tempDir, "migrations");
+    await fs.mkdir(directory);
+    await fs.writeFile(path.join(tempDir, "shared.sql"), "");
+    await fs.symlink("../shared.sql", path.join(directory, "file.sql"));
+    await fs.symlink("..", path.join(directory, "directory.sql"));
+    await fs.symlink("../missing.sql", path.join(directory, "broken.sql"));
+
+    const entries = await readMigrationDirectory(directory);
+
+    // fs.readdir does not guarantee an order.
+    assert.deepEqual(
+      entries.sort((first, second) => (first.name < second.name ? -1 : 1)),
+      [
+        { isFile: false, name: "broken.sql" },
+        { isFile: false, name: "directory.sql" },
+        { isFile: true, name: "file.sql" },
+      ],
+    );
+  });
+
   it("accepts a directory without migration files during validation", (): void => {
     assert.doesNotThrow(() =>
       validateMigrationFilenames(tempDir, [
