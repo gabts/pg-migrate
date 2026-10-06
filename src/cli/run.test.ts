@@ -235,6 +235,13 @@ describe("run", (): void => {
     );
   });
 
+  it("rejects an empty command", async (): Promise<void> => {
+    const { code, stdout, stderr } = await runCli([""]);
+    assert.equal(code, 1);
+    assert.equal(stdout, "");
+    assert.ok(stderr.includes("Unknown command ''."));
+  });
+
   it("rejects options the command does not accept", async (): Promise<void> => {
     const { code, stderr } = await runCli([
       "create",

@@ -81,7 +81,7 @@ export async function run(
     const [command, ...commandPositionals] = parsed.positionals;
     quiet = parsed.values.quiet === true;
 
-    if (!command) {
+    if (command === undefined) {
       if (!quiet) {
         process.stdout.write(getHelpText("help") + "\n");
       }
