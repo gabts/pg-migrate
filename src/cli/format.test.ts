@@ -5,6 +5,7 @@ import {
   formatError,
   formatEvent,
   formatFailureCause,
+  formatHelpHint,
   formatMigrate,
   formatStatus,
   formatValidation,
@@ -12,26 +13,10 @@ import {
 
 describe("format", (): void => {
   describe("formatError", (): void => {
-    it("formats the message with a mark and a usage hint", (): void => {
-      assert.equal(
-        formatError("Unknown command 'bogus'.", false, "help"),
-        "✖ Error: Unknown command 'bogus'.\n" +
-          "  Run `pg-migrate --help` for usage.",
-      );
-    });
-
-    it("omits the usage hint for execution errors", (): void => {
+    it("formats the message with a mark", (): void => {
       assert.equal(
         formatError("Division by zero.", false),
         "✖ Error: Division by zero.",
-      );
-    });
-
-    it("points the hint at the command's help when given one", (): void => {
-      assert.equal(
-        formatError("Missing required argument 'name'.", false, "create"),
-        "✖ Error: Missing required argument 'name'.\n" +
-          "  Run `pg-migrate create --help` for usage.",
       );
     });
 
@@ -43,11 +28,27 @@ describe("format", (): void => {
     });
   });
 
-  describe("formatFailureCause", (): void => {
-    it("formats a quoted cause without another failure mark", (): void => {
+  describe("formatHelpHint", (): void => {
+    it("points to the general help", (): void => {
       assert.equal(
-        formatFailureCause("division by zero", false),
-        "Error: 'division by zero'",
+        formatHelpHint("help"),
+        "  Run `pg-migrate --help` for usage.",
+      );
+    });
+
+    it("points to the help of a command", (): void => {
+      assert.equal(
+        formatHelpHint("create"),
+        "  Run `pg-migrate create --help` for usage.",
+      );
+    });
+  });
+
+  describe("formatFailureCause", (): void => {
+    it("formats an indented cause without quotes", (): void => {
+      assert.equal(
+        formatFailureCause(new Error('relation "users" does not exist'), false),
+        '  Cause: relation "users" does not exist',
       );
     });
 
@@ -58,7 +59,7 @@ describe("format", (): void => {
       );
       assert.equal(
         formatFailureCause(cause, false),
-        "Error: 'connect ECONNREFUSED ::1:1; refused'",
+        "  Cause: connect ECONNREFUSED ::1:1; refused",
       );
     });
 
@@ -69,18 +70,17 @@ describe("format", (): void => {
 
       assert.equal(
         formatFailureCause(cause, false),
-        "Error: 'division by zero'\n" +
-          "Detail: 'The divisor is zero.'\n" +
-          "Hint: 'Check the divisor.'",
+        "  Cause: division by zero\n" +
+          "  Detail: The divisor is zero.\n" +
+          "  Hint: Check the divisor.",
       );
     });
 
-    it("colors the error label when colors are enabled", (): void => {
-      // "\u001b[31m" and "\u001b[39m" set and reset red foreground.
-      assert.ok(
-        formatFailureCause("division by zero", true).startsWith(
-          "\u001b[31mError\u001b[39m: ",
-        ),
+    it("colors the labels when colors are enabled", (): void => {
+      // "\u001b[90m" and "\u001b[39m" set and reset gray foreground.
+      assert.equal(
+        formatFailureCause("division by zero", true),
+        "  \u001b[90mCause:\u001b[39m division by zero",
       );
     });
   });

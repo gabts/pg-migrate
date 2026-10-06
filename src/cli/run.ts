@@ -3,6 +3,7 @@ import { create } from "./create.js";
 import {
   formatError,
   formatFailureCause,
+  formatHelpHint,
   formatMigrate,
   formatStatus,
   formatValidation,
@@ -121,13 +122,18 @@ export async function run(
     progress.fail();
     const message = error instanceof Error ? error.message : String(error);
     const cause = error instanceof Error ? error.cause : undefined;
-    let formatted = formatError(message, colors, helpCommand);
-    if (migrationFailed && !quiet) {
-      formatted = formatFailureCause(cause ?? message, colors);
-    } else if (cause !== undefined) {
-      formatted += `\n${formatFailureCause(cause, colors)}`;
+    const lines: string[] = [];
+    // The failed migration's progress line already names the file.
+    if (!migrationFailed || quiet || cause === undefined) {
+      lines.push(formatError(message, colors));
     }
-    process.stderr.write(formatted + "\n");
+    if (cause !== undefined) {
+      lines.push(formatFailureCause(cause, colors));
+    }
+    if (helpCommand) {
+      lines.push(formatHelpHint(helpCommand));
+    }
+    process.stderr.write(lines.join("\n") + "\n");
     process.exitCode = 1;
   }
 }

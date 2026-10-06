@@ -504,7 +504,7 @@ describe(
         ...[cliPath, "up", "--url", testUrl],
         ...["--directory", directory, "--table", table],
       ];
-      const cause = `Error: 'syntax error at or near "SELEC"'`;
+      const cause = `  Cause: syntax error at or near "SELEC"`;
 
       // execFile rejects when the exit code is not zero. The error contains
       // the exit code and output streams.

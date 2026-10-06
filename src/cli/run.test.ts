@@ -313,7 +313,27 @@ describe("run", (): void => {
       stderr,
       /^✖ Error: Failed to connect to database 'example' at 'localhost:1'\.\n/,
     );
-    assert.match(stderr, /\nError: 'connect ECONNREFUSED [^']+'\n$/);
+    assert.match(stderr, /\n {2}Cause: connect ECONNREFUSED [^\n]+\n$/);
+  });
+
+  it("writes the usage hint after the cause", async (): Promise<void> => {
+    const configPath = path.join(tempDir, "missing.env");
+
+    const { code, stdout, stderr } = await runCli([
+      "status",
+      "--config",
+      configPath,
+      "--quiet",
+    ]);
+
+    assert.equal(code, 1);
+    assert.equal(stdout, "");
+    assert.equal(
+      stderr,
+      `✖ Error: Cannot read config file '${configPath}'.\n` +
+        `  Cause: ENOENT: no such file or directory, open '${configPath}'\n` +
+        "  Run `pg-migrate status --help` for usage.\n",
+    );
   });
 
   it("keeps errors visible in quiet mode", async (): Promise<void> => {

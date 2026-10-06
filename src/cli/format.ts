@@ -40,23 +40,18 @@ function formatCount(count: number, singular: string): string {
   return `${count} ${singular}${count === 1 ? "" : "s"}`;
 }
 
-/**
- * Formats a failure and an optional command-specific usage hint.
- */
-export function formatError(
-  message: string,
-  colors: boolean,
-  helpCommand?: Command | "help",
-): string {
-  const line = `${paint("red", "✖", colors)} Error: ${message}`;
-  if (!helpCommand) {
-    return line;
-  }
-  const command = helpCommand === "help" ? "" : `${helpCommand} `;
-  return `${line}\n  Run \`pg-migrate ${command}--help\` for usage.`;
+/** Formats a failure message with a failure mark. */
+export function formatError(message: string, colors: boolean): string {
+  return `${paint("red", "✖", colors)} Error: ${message}`;
 }
 
-/** Formats the cause of a failure with any PostgreSQL detail and hint. */
+/** Formats a hint that points to the usage of a command. */
+export function formatHelpHint(command: Command | "help"): string {
+  const topic = command === "help" ? "" : `${command} `;
+  return `  Run \`pg-migrate ${topic}--help\` for usage.`;
+}
+
+/** Formats the indented cause of a failure with any PostgreSQL details. */
 export function formatFailureCause(cause: unknown, colors: boolean): string {
   // Node reports a refused connection to every address of a host name as an
   // AggregateError with an empty message.
@@ -67,12 +62,12 @@ export function formatFailureCause(cause: unknown, colors: boolean): string {
   const message = errors
     .map((error) => (error instanceof Error ? error.message : String(error)))
     .join("; ");
-  let formatted = `${paint("red", "Error", colors)}: '${message}'`;
+  let formatted = `  ${paint("gray", "Cause:", colors)} ${message}`;
   if (cause instanceof pg.DatabaseError && cause.detail) {
-    formatted += `\nDetail: '${cause.detail}'`;
+    formatted += `\n  ${paint("gray", "Detail:", colors)} ${cause.detail}`;
   }
   if (cause instanceof pg.DatabaseError && cause.hint) {
-    formatted += `\nHint: '${cause.hint}'`;
+    formatted += `\n  ${paint("gray", "Hint:", colors)} ${cause.hint}`;
   }
   return formatted;
 }
