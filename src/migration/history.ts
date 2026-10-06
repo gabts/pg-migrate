@@ -231,7 +231,8 @@ export async function readAppliedMigrations(
             applied_at AT TIME ZONE 'UTC',
             'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
           ) AS "appliedAt"
-        FROM ${qualifiedTable};
+        FROM ${qualifiedTable}
+        ORDER BY version;
       `,
     );
   } catch (error) {

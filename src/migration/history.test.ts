@@ -285,7 +285,10 @@ describe("history", (): void => {
     assert.match(queries[0]!.sql, /version,\s+file,\s+checksum,/);
     assert.match(queries[0]!.sql, /applied_at AT TIME ZONE 'UTC'/);
     assert.match(queries[0]!.sql, /'YYYY-MM-DD"T"HH24:MI:SS\.MS"Z"'/);
-    assert.match(queries[0]!.sql, /FROM "app"\."schema_migrations";/);
+    assert.match(
+      queries[0]!.sql,
+      /FROM "app"\."schema_migrations"\s+ORDER BY version;/,
+    );
   });
 
   it("writes history changes", async (): Promise<void> => {
