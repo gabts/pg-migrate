@@ -56,23 +56,31 @@ async function resolveHistoryTableSchema(
   client: pg.Client,
   table: string,
 ): Promise<string> {
-  const result = await client.query<{ schema: string | null }>(
-    `
-      SELECT COALESCE(
-        (
-          SELECT n.nspname
-          FROM pg_class AS c
-          JOIN pg_namespace AS n ON n.oid = c.relnamespace
-          WHERE c.oid = to_regclass($1)
-        ),
-        current_schema()
-      ) AS schema;
-    `,
-    [table],
-  );
+  let result: pg.QueryResult<{ schema: string | null }>;
+  try {
+    result = await client.query<{ schema: string | null }>(
+      `
+        SELECT COALESCE(
+          (
+            SELECT n.nspname
+            FROM pg_class AS c
+            JOIN pg_namespace AS n ON n.oid = c.relnamespace
+            WHERE c.oid = to_regclass($1)
+          ),
+          current_schema()
+        ) AS schema;
+      `,
+      [table],
+    );
+  } catch (error) {
+    throw new Error(
+      `Failed to look up schema for migration table '${table}'.`,
+      { cause: error },
+    );
+  }
   const schema = result.rows[0]?.schema;
   if (!schema) {
-    throw new Error(`Cannot resolve schema for migration table '${table}'.`);
+    throw new Error(`No schema found for migration table '${table}'.`);
   }
   return schema;
 }
@@ -104,11 +112,17 @@ export async function lockMigrations(
   log: LogSink = (): undefined => undefined,
 ): Promise<void> {
   log({ table: table.name, type: "lock-acquire-start" });
-  // The session lock is released when the caller closes this client.
-  await client.query("SELECT pg_advisory_lock(hashtext($1), hashtext($2));", [
-    table.schema,
-    table.table,
-  ]);
+  try {
+    // The session lock is released when the caller closes this client.
+    await client.query("SELECT pg_advisory_lock(hashtext($1), hashtext($2));", [
+      table.schema,
+      table.table,
+    ]);
+  } catch (error) {
+    throw new Error(`Failed to acquire migration lock for '${table.name}'.`, {
+      cause: error,
+    });
+  }
   log({ table: table.name, type: "lock-acquire-done" });
 }
 
@@ -180,7 +194,14 @@ export async function readValidatedHistoryDefinition(
   log: LogSink,
 ): Promise<HistoryDefinition> {
   log({ table, type: "history-definition-read-start" });
-  const definition = await readHistoryDefinition(client, qualifiedTable);
+  let definition: HistoryDefinition;
+  try {
+    definition = await readHistoryDefinition(client, qualifiedTable);
+  } catch (error) {
+    throw new Error(`Failed to read migration history table '${table}'.`, {
+      cause: error,
+    });
+  }
   log({ table, type: "history-definition-read-done" });
 
   log({ table, type: "history-definition-validation-start" });
@@ -197,20 +218,27 @@ export async function readAppliedMigrations(
   log: LogSink = (): undefined => undefined,
 ): Promise<AppliedMigration[]> {
   log({ table, type: "applied-read-start" });
-  // Format in SQL so global pg timestamp parsers cannot change the result.
-  const result = await client.query<AppliedMigration>(
-    `
-      SELECT
-        version,
-        file,
-        checksum,
-        to_char(
-          applied_at AT TIME ZONE 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-        ) AS "appliedAt"
-      FROM ${qualifiedTable};
-    `,
-  );
+  let result: pg.QueryResult<AppliedMigration>;
+  try {
+    // Format in SQL so global pg timestamp parsers cannot change the result.
+    result = await client.query<AppliedMigration>(
+      `
+        SELECT
+          version,
+          file,
+          checksum,
+          to_char(
+            applied_at AT TIME ZONE 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+          ) AS "appliedAt"
+        FROM ${qualifiedTable};
+      `,
+    );
+  } catch (error) {
+    throw new Error(`Failed to read migration history table '${table}'.`, {
+      cause: error,
+    });
+  }
   log({ count: result.rows.length, table, type: "applied-read-done" });
   return result.rows;
 }

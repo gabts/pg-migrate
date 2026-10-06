@@ -1,11 +1,15 @@
 import * as assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import * as fs from "node:fs/promises";
+import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { setTimeout } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import * as pg from "pg";
 import {
   migrate,
@@ -24,6 +28,10 @@ const testUrl = process.env.PGM_TEST_URL ?? "";
 const firstVersion = "20260811120000";
 const secondVersion = "20260811130000";
 const thirdVersion = "20260811140000";
+const cliPath = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../bin/cli.js",
+);
 
 let admin: pg.Client | undefined;
 let directory: string;
@@ -485,6 +493,45 @@ describe(
       assert.deepEqual(await readHistoryVersions(), [firstVersion]);
     });
 
+    it("writes a short migration failure unless quiet", async (): Promise<void> => {
+      const file = await writeMigration(
+        firstVersion,
+        "add_users",
+        `CREATE TABLE ${qualifiedRelation("users")} (id integer);\nSELEC 1;`,
+        `DROP TABLE ${qualifiedRelation("users")};`,
+      );
+      const args = [
+        ...[cliPath, "up", "--url", testUrl],
+        ...["--directory", directory, "--table", table],
+      ];
+      const cause = `Error: 'syntax error at or near "SELEC"'`;
+
+      // execFile rejects when the exit code is not zero. The error contains
+      // the exit code and output streams.
+      await assert.rejects(
+        promisify(execFile)(process.execPath, args),
+        (error: { code: number; stderr: string }): boolean => {
+          assert.equal(error.code, 1);
+          const lines = error.stderr.trimEnd().split("\n");
+          assert.match(lines.at(-2)!, new RegExp(`^✖ Failed '${file}' \\(`));
+          assert.equal(lines.at(-1), cause);
+          assert.doesNotMatch(error.stderr, /Error: Failed to apply/);
+          return true;
+        },
+      );
+      await assert.rejects(
+        promisify(execFile)(process.execPath, [...args, "--quiet"]),
+        (error: { code: number; stderr: string }): boolean => {
+          assert.equal(error.code, 1);
+          assert.equal(
+            error.stderr,
+            `✖ Error: Failed to apply migration '${file}'.\n${cause}\n`,
+          );
+          return true;
+        },
+      );
+    });
+
     it("ignores log sink failures", async (): Promise<void> => {
       const file = await writeMigration(
         firstVersion,
@@ -608,6 +655,83 @@ describe(
 
       assert.equal(await relationExists("schema_migrations"), true);
       assert.equal(await relationExists("users"), true);
+    });
+
+    it("rejects when the database connection is lost", async (): Promise<void> => {
+      await writeMigration(
+        firstVersion,
+        "add_users",
+        `CREATE TABLE ${qualifiedRelation("users")} (id integer);`,
+        `DROP TABLE ${qualifiedRelation("users")};`,
+      );
+      const target = new URL(testUrl);
+      const sockets: net.Socket[] = [];
+      // Proxy the connection so the test can drop it like a server restart.
+      const proxy = net.createServer((socket) => {
+        const upstream = net.connect(
+          Number(target.port || 5432),
+          target.hostname,
+        );
+        sockets.push(socket);
+        socket.on("error", () => {});
+        upstream.on("error", () => {});
+        socket.on("close", () => upstream.destroy());
+        socket.pipe(upstream).pipe(socket);
+      });
+      await new Promise<void>((resolve) => {
+        proxy.listen(0, "127.0.0.1", resolve);
+      });
+      const url = new URL(testUrl);
+      url.hostname = "127.0.0.1";
+      url.port = String((proxy.address() as net.AddressInfo).port);
+      const lockClient = new pg.Client({ connectionString: testUrl });
+      await lockClient.connect();
+
+      try {
+        await lockClient.query(
+          "SELECT pg_advisory_lock(hashtext($1), hashtext($2));",
+          [schema, "schema_migrations"],
+        );
+
+        let reportLockStart = (): void => {};
+        const lockStarted = new Promise<void>((resolve) => {
+          reportLockStart = resolve;
+        });
+        const migration = migrate({
+          ...commandOptions(),
+          url: url.toString(),
+          log(event): void {
+            if (event.type === "lock-acquire-start") {
+              reportLockStart();
+            }
+          },
+        });
+        await lockStarted;
+        // Give PostgreSQL time to put the migration session in the wait queue.
+        await setTimeout(50);
+        for (const socket of sockets) {
+          socket.destroy();
+        }
+
+        await assert.rejects(migration, (error: unknown): boolean => {
+          assert.ok(error instanceof Error);
+          assert.equal(
+            error.message,
+            `Failed to acquire migration lock for '${table}'.`,
+          );
+          assert.ok(error.cause instanceof Error);
+          assert.equal(
+            error.cause.message,
+            "Connection terminated unexpectedly",
+          );
+          return true;
+        });
+      } finally {
+        await lockClient.end();
+        proxy.close();
+      }
+
+      assert.equal(await relationExists("schema_migrations"), false);
     });
 
     it("uses independent locks for tables in different schemas", async (): Promise<void> => {

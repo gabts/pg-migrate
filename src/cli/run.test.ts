@@ -289,6 +289,26 @@ describe("run", (): void => {
     assert.doesNotMatch(stderr, /--help/);
   });
 
+  it("writes the cause of a connection error", async (): Promise<void> => {
+    // Nothing listens on port 1, so the connection is refused at once.
+    const { code, stdout, stderr } = await runCli([
+      "status",
+      "--url",
+      "postgres://localhost:1/example",
+      "--directory",
+      tempDir,
+      "--quiet",
+    ]);
+
+    assert.equal(code, 1);
+    assert.equal(stdout, "");
+    assert.match(
+      stderr,
+      /^✖ Error: Failed to connect to database 'example' at 'localhost:1'\.\n/,
+    );
+    assert.match(stderr, /\nError: 'connect ECONNREFUSED [^']+'\n$/);
+  });
+
   it("keeps errors visible in quiet mode", async (): Promise<void> => {
     const { code, stdout, stderr } = await runCli([
       "create",

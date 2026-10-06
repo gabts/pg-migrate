@@ -1,5 +1,6 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import * as pg from "pg";
 import {
   formatError,
   formatEvent,
@@ -47,6 +48,30 @@ describe("format", (): void => {
       assert.equal(
         formatFailureCause("division by zero", false),
         "Error: 'division by zero'",
+      );
+    });
+
+    it("joins grouped errors when the message is empty", (): void => {
+      const cause = new AggregateError(
+        [new Error("connect ECONNREFUSED ::1:1"), new Error("refused")],
+        "",
+      );
+      assert.equal(
+        formatFailureCause(cause, false),
+        "Error: 'connect ECONNREFUSED ::1:1; refused'",
+      );
+    });
+
+    it("adds the PostgreSQL detail and hint", (): void => {
+      const cause = new pg.DatabaseError("division by zero", 0, "error");
+      cause.detail = "The divisor is zero.";
+      cause.hint = "Check the divisor.";
+
+      assert.equal(
+        formatFailureCause(cause, false),
+        "Error: 'division by zero'\n" +
+          "Detail: 'The divisor is zero.'\n" +
+          "Hint: 'Check the divisor.'",
       );
     });
 

@@ -216,6 +216,29 @@ describe("main", (): void => {
       }
     });
 
+    it("identifies the database in connection errors", async (): Promise<void> => {
+      // Nothing listens on port 1, so the connection is refused at once.
+      await assert.rejects(
+        status({
+          directory: tempDir,
+          table: "schema_migrations",
+          url: "postgres://127.0.0.1:1/example",
+        }),
+        (error: unknown): boolean => {
+          assert.ok(error instanceof Error);
+          assert.equal(
+            error.message,
+            "Failed to connect to database 'example' at '127.0.0.1:1'.",
+          );
+          assert.equal(
+            (error.cause as NodeJS.ErrnoException).code,
+            "ECONNREFUSED",
+          );
+          return true;
+        },
+      );
+    });
+
     it("ignores log sink failures", async (): Promise<void> => {
       const table = "Invalid-Table";
 

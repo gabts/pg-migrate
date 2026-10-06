@@ -29,14 +29,17 @@ async function rollbackAfterError(client: pg.Client): Promise<boolean> {
 async function initializeHistory(
   client: pg.Client,
   qualifiedTable: string,
+  table: string,
 ): Promise<void> {
-  await client.query("BEGIN;");
   try {
+    await client.query("BEGIN;");
     await createHistoryTable(client, qualifiedTable);
     await client.query("COMMIT;");
   } catch (error) {
     await rollbackAfterError(client);
-    throw error;
+    throw new Error(`Failed to create migration history table '${table}'.`, {
+      cause: error,
+    });
   }
 }
 
@@ -75,7 +78,7 @@ export async function executeMigrations(
 ): Promise<MigrateResult> {
   if (options.direction === "up" && !options.initialized) {
     options.log?.({ table: options.table, type: "history-initialize-start" });
-    await initializeHistory(client, options.qualifiedTable);
+    await initializeHistory(client, options.qualifiedTable, options.table);
     options.log?.({ table: options.table, type: "history-initialize-done" });
   }
   for (const migration of plan) {

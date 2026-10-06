@@ -76,10 +76,14 @@ function getDatabaseDetails(
 
 function createDatabaseClient(url: string): pg.Client {
   validateDatabaseUrl(url);
-  return new pg.Client({
+  const client = new pg.Client({
     connectionString: url,
     connectionTimeoutMillis: 10_000,
   });
+  // A dropped connection also rejects the query. Without a listener, the
+  // 'error' event would crash the process.
+  client.on("error", (): undefined => undefined);
+  return client;
 }
 
 function getAppliedDiskMigrations(
@@ -106,7 +110,18 @@ function updateMigrationChecksums(
 async function connectDatabase(client: pg.Client, log: LogSink): Promise<void> {
   const database = getDatabaseDetails(client);
   log({ database, type: "database-connect-start" });
-  await client.connect();
+  try {
+    await client.connect();
+  } catch (error) {
+    const address = database.host.startsWith("/")
+      ? database.host
+      : `${database.host}:${database.port}`;
+    throw new Error(
+      `Failed to connect to database '${database.database}' at ` +
+        `'${address}'.`,
+      { cause: error },
+    );
+  }
   log({ database, type: "database-connect-done" });
 }
 

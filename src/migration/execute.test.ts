@@ -209,6 +209,33 @@ describe("execute", (): void => {
     );
   });
 
+  it("identifies the table when history creation fails", async (): Promise<void> => {
+    const { client, failure, queries } = createClient("COMMIT;");
+
+    await assert.rejects(
+      executeMigrations(client, [first], sqlByFile, {
+        direction: "up",
+        initialized: false,
+        qualifiedTable: '"app"."schema_migrations"',
+        table: "app.schema_migrations",
+      }),
+      (error: unknown): boolean => {
+        assert.ok(error instanceof Error);
+        assert.equal(
+          error.message,
+          "Failed to create migration history table 'app.schema_migrations'.",
+        );
+        assert.equal(error.cause, failure);
+        return true;
+      },
+    );
+
+    assert.deepEqual(queries.map((query) => query.sql).slice(-2), [
+      "COMMIT;",
+      "ROLLBACK;",
+    ]);
+  });
+
   it("does no work for an empty down plan", async (): Promise<void> => {
     const { client, queries } = createClient();
     const { events, log } = captureEvents();

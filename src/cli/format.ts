@@ -1,4 +1,5 @@
 import { styleText } from "node:util";
+import * as pg from "pg";
 import type {
   LogEvent,
   MigrateResult,
@@ -55,9 +56,25 @@ export function formatError(
   return `${line}\n  Run \`pg-migrate ${command}--help\` for usage.`;
 }
 
-/** Formats the error cause after a migration failure line. */
-export function formatFailureCause(message: string, colors: boolean): string {
-  return `${paint("red", "Error", colors)}: '${message}'`;
+/** Formats the cause of a failure with any PostgreSQL detail and hint. */
+export function formatFailureCause(cause: unknown, colors: boolean): string {
+  // Node reports a refused connection to every address of a host name as an
+  // AggregateError with an empty message.
+  const errors =
+    cause instanceof AggregateError && cause.message === ""
+      ? cause.errors
+      : [cause];
+  const message = errors
+    .map((error) => (error instanceof Error ? error.message : String(error)))
+    .join("; ");
+  let formatted = `${paint("red", "Error", colors)}: '${message}'`;
+  if (cause instanceof pg.DatabaseError && cause.detail) {
+    formatted += `\nDetail: '${cause.detail}'`;
+  }
+  if (cause instanceof pg.DatabaseError && cause.hint) {
+    formatted += `\nHint: '${cause.hint}'`;
+  }
+  return formatted;
 }
 
 /** Formats the final result of an up or down command. */

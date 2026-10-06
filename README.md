@@ -209,7 +209,8 @@ All options are explicit. The API does not read CLI options or environment
 variables, and file creation is available through the CLI only. `status`
 returns ordered migration state and counts. `validate` returns counts.
 `migrate` and `rollback` return executed filenames. The optional `log` callback
-receives typed progress events. Failures throw an `Error`.
+receives typed progress events. Failures throw an `Error`. A database failure
+keeps the underlying error as `cause`.
 
 ## License
 

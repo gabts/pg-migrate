@@ -6,6 +6,7 @@ import {
   lockMigrations,
   readAppliedMigrations,
   readHistoryDefinition,
+  readValidatedHistoryDefinition,
   recordAppliedMigration,
   removeAppliedMigration,
   resolveHistoryTable,
@@ -78,14 +79,55 @@ describe("history", (): void => {
       ]);
     });
 
+    it("identifies the table when a history query fails", async (): Promise<void> => {
+      const failure = new Error("permission denied for schema app");
+      const client = {
+        query: async (): Promise<never> => {
+          throw failure;
+        },
+      } as unknown as pg.Client;
+      const table = await resolveHistoryTable(client, "app.schema_migrations");
+      const log = (): undefined => undefined;
+
+      for (const [operation, message] of [
+        [
+          () => resolveHistoryTable(client, "schema_migrations"),
+          "Failed to look up schema for migration table 'schema_migrations'.",
+        ],
+        [
+          () => lockMigrations(client, table),
+          "Failed to acquire migration lock for 'app.schema_migrations'.",
+        ],
+        [
+          () =>
+            readValidatedHistoryDefinition(
+              client,
+              table.qualifiedName,
+              table.name,
+              log,
+            ),
+          "Failed to read migration history table 'app.schema_migrations'.",
+        ],
+        [
+          () => readAppliedMigrations(client, table.qualifiedName, table.name),
+          "Failed to read migration history table 'app.schema_migrations'.",
+        ],
+      ] as const) {
+        await assert.rejects(operation, (error: unknown): boolean => {
+          assert.ok(error instanceof Error);
+          assert.equal(error.message, message);
+          assert.equal(error.cause, failure);
+          return true;
+        });
+      }
+    });
+
     it("rejects an unresolvable schema", async (): Promise<void> => {
       const { client } = createClient([[{ schema: null }]]);
 
       await assert.rejects(
         resolveHistoryTable(client, "schema_migrations"),
-        new Error(
-          "Cannot resolve schema for migration table 'schema_migrations'.",
-        ),
+        new Error("No schema found for migration table 'schema_migrations'."),
       );
     });
   });
