@@ -149,6 +149,7 @@ Behavior:
   that it will apply.
   The command creates a missing history table before the first migration.
   Each migration uses its own transaction.
+  Migration SQL must not commit or roll back the transaction.
   The command waits for the migration advisory lock.
 
 Output:
@@ -190,6 +191,7 @@ Behavior:
   It does not restore data or reverse schema changes.
   A later up runs the original up section again.
   Each migration uses its own transaction.
+  Migration SQL must not commit or roll back the transaction.
   The command waits for the migration advisory lock.
 
 Output:

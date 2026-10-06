@@ -165,9 +165,14 @@ checks UTF-8, markers, filenames, checksums, and history, not PostgreSQL syntax.
 
 ## Limitations
 
-- Each migration runs in a transaction. Migration SQL must not contain
-  transaction-control commands or statements that cannot run in a transaction.
-  The tool does not detect transaction-control commands.
+- Each migration runs in one transaction together with its history row. Do
+  not use `BEGIN`, `COMMIT`, `ROLLBACK`, `END`, or `ABORT` in migration SQL.
+  The tool does not detect them, and they break this guarantee: a migration
+  can be recorded as applied after its changes were rolled back, or be partly
+  applied without a history row. `SAVEPOINT` and `ROLLBACK TO SAVEPOINT` are
+  safe.
+- Statements that cannot run in a transaction, such as
+  `CREATE INDEX CONCURRENTLY` or `VACUUM`, fail and roll back the migration.
 - `psql` meta-commands, variable substitution, and `COPY FROM STDIN` are not
   supported.
 - `validate` checks file structure and history, not PostgreSQL SQL syntax.
