@@ -218,6 +218,17 @@ PGM_URL=postgres://file/db
     assert.equal(databaseUrl(result), "postgres://default/db");
   });
 
+  it("reads the first variable after a byte order mark", async (): Promise<void> => {
+    await fs.writeFile(
+      path.join(tempDir, ".env"),
+      "\uFEFFPGM_URL=postgres://default/db\n",
+    );
+
+    const result = await resolveInvocation(status({}), {});
+
+    assert.equal(databaseUrl(result), "postgres://default/db");
+  });
+
   it("prefers options over environment and file values", async (): Promise<void> => {
     const configPath = path.join(tempDir, ".env");
     await fs.writeFile(configPath, "PGM_URL=postgres://file/db\n");
@@ -348,6 +359,21 @@ PGM_URL=postgres://file/db
 
     await assert.doesNotReject(
       resolveInvocation(status({ url: "postgres://args/db" }), {}),
+    );
+  });
+
+  it("rejects a default environment file that is not UTF-8", async (): Promise<void> => {
+    // The working directory can be a symlink-resolved form of tempDir.
+    const configPath = path.resolve(".env");
+    // 0xE9 is 'é' in Latin-1 and an incomplete sequence in UTF-8.
+    await fs.writeFile(
+      configPath,
+      Buffer.from("PGM_URL=postgres://user:caf\xe9@host/db\n", "latin1"),
+    );
+
+    await assert.rejects(
+      resolveInvocation(status({}), {}),
+      new Error(`Config file '${configPath}' is not valid UTF-8.`),
     );
   });
 });

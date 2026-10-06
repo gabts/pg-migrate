@@ -88,8 +88,9 @@ environment file, then default.
 | `PGM_TABLE`     | History table       | `schema_migrations` |
 | `PGM_URL`       | PostgreSQL URL      | None                |
 
-The default `.env` file is optional. A file selected with `--config` or
-`PGM_CONFIG` must exist. For example:
+The default `.env` file is optional and is skipped if it cannot be read. A
+file selected with `--config` or `PGM_CONFIG` must exist. Every config file,
+including the default `.env`, must be valid UTF-8. For example:
 
 ```dotenv
 PGM_DIRECTORY=db/migrations

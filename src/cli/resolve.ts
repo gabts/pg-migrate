@@ -27,8 +27,9 @@ async function readConfigFile(
   filePath: string,
   required: boolean,
 ): Promise<string | undefined> {
+  let bytes: Uint8Array;
   try {
-    return await fs.readFile(filePath, { encoding: "utf-8" });
+    bytes = await fs.readFile(filePath);
   } catch (error) {
     // The default file is optional. Ignore any reason it cannot be read.
     if (!required) {
@@ -37,6 +38,13 @@ async function readConfigFile(
     throw new Error(`Cannot read config file '${filePath}'.`, {
       cause: error,
     });
+  }
+  // TextDecoder removes a byte order mark, which readFile would keep in the
+  // first variable name.
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error(`Config file '${filePath}' is not valid UTF-8.`);
   }
 }
 
