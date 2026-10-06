@@ -61,17 +61,25 @@ export function parseArgs(args: string[]): ParsedArgs {
       allowPositionals: true,
       tokens: true,
     });
-    // A short option takes the rest of its argument as the value, so '-d=db'
-    // sets '=db'. Reject it rather than guess what was meant.
+    const seen = new Set<string>();
     for (const token of result.tokens) {
+      if (token.kind !== "option") {
+        continue;
+      }
+      // A short option takes the rest of its argument as the value, so '-d=db'
+      // sets '=db'. Reject it rather than guess what was meant.
       if (
-        token.kind === "option" &&
         token.inlineValue === true &&
         !token.rawName.startsWith("--") &&
         token.value.startsWith("=")
       ) {
         throw new Error(`Unexpected '=' after option '${token.rawName}'.`);
       }
+      // util.parseArgs keeps the last value of a repeated option.
+      if (seen.has(token.name)) {
+        throw new Error(`Repeated option '--${token.name}'.`);
+      }
+      seen.add(token.name);
     }
     const { positionals, values } = result;
     return { positionals, values };

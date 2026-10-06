@@ -112,6 +112,21 @@ describe("parse", (): void => {
       }, new Error("Unexpected '=' after option '-u'."));
     });
 
+    it("rejects a repeated option", (): void => {
+      assert.throws((): void => {
+        parseArgs([
+          "status",
+          "--url",
+          "postgres://a/db",
+          "-u",
+          "postgres://b/db",
+        ]);
+      }, new Error("Repeated option '--url'."));
+      assert.throws((): void => {
+        parseArgs(["status", "-vv"]);
+      }, new Error("Repeated option '--verbose'."));
+    });
+
     it("keeps '=' in a separate or long option value", (): void => {
       const { values } = parseArgs([
         "-d",
