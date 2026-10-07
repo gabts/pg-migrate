@@ -120,6 +120,8 @@ async function connectDatabase(client: pg.Client, log: LogSink): Promise<void> {
   try {
     await client.connect();
   } catch (error) {
+    // pg leaves the socket open after a client-side failure
+    await client.end();
     const address = database.host.startsWith("/")
       ? database.host
       : `${database.host}:${database.port}`;

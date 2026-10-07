@@ -1,5 +1,7 @@
 import * as assert from "node:assert/strict";
+import { once } from "node:events";
 import * as fs from "node:fs/promises";
+import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
@@ -256,6 +258,52 @@ describe("main", (): void => {
           return true;
         },
       );
+    });
+
+    it("closes the connection when authentication fails in the client", async (): Promise<void> => {
+      let socketClosed: Promise<unknown> | undefined;
+      let keptOpen = false;
+      // The server offers only an unknown SASL mechanism. pg rejects it on
+      // the client side, which leaves the socket open unless it is ended.
+      const server = net.createServer((socket): void => {
+        socketClosed = once(socket, "close");
+        // Close the socket from this side if the client keeps it open, so
+        // the test fails instead of hanging.
+        const timer = setTimeout((): void => {
+          keptOpen = true;
+          socket.destroy();
+        }, 1000);
+        socket.once("close", (): void => clearTimeout(timer));
+        socket.once("data", (): void => {
+          const mechanisms = Buffer.from("UNKNOWN\0\0");
+          const header = Buffer.alloc(9);
+          header.write("R");
+          header.writeInt32BE(8 + mechanisms.length, 1);
+          header.writeInt32BE(10, 5);
+          socket.write(Buffer.concat([header, mechanisms]));
+        });
+      });
+      server.listen(0, "127.0.0.1");
+      await once(server, "listening");
+      const { port } = server.address() as net.AddressInfo;
+
+      try {
+        await assert.rejects(
+          status({
+            directory: tempDir,
+            table: "schema_migrations",
+            url: `postgres://user:secret@127.0.0.1:${port}/example`,
+          }),
+          {
+            message: `Failed to connect to database 'example' at '127.0.0.1:${port}'.`,
+          },
+        );
+        assert.ok(socketClosed);
+        await socketClosed;
+        assert.equal(keptOpen, false);
+      } finally {
+        server.close();
+      }
     });
 
     // Invalid SQL fails after several events and before database work.
