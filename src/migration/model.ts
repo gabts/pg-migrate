@@ -6,7 +6,8 @@ interface StatusMigration {
   version: string;
 }
 
-interface DatabaseDetails {
+/** Connection details reported by database log events. */
+export interface DatabaseDetails {
   database: string;
   host: string;
   port: number;

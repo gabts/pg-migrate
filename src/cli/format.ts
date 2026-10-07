@@ -1,17 +1,8 @@
 import { styleText } from "node:util";
 import * as pg from "pg";
-import type {
-  LogEvent,
-  MigrateResult,
-  StatusResult,
-  ValidationResult,
-} from "../main.js";
+import type { MigrateResult, StatusResult, ValidationResult } from "../main.js";
+import type { DatabaseDetails } from "../migration/model.js";
 import type { CliLogEvent, Command } from "./model.js";
-
-type DatabaseDetails = Extract<
-  LogEvent,
-  { type: "database-connect-start" }
->["database"];
 
 // The caller determines color support for stderr. Disable the styleText
 // check because it checks stdout.

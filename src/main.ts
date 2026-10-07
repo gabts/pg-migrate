@@ -16,6 +16,7 @@ import {
   type AppliedMigration,
 } from "./migration/history.js";
 import type {
+  DatabaseDetails,
   DatabaseOptions,
   LogEvent,
   LogSink,
@@ -63,9 +64,7 @@ function validateDatabaseUrl(url: string): void {
   }
 }
 
-function getDatabaseDetails(
-  client: pg.Client,
-): Extract<LogEvent, { type: "database-connect-start" }>["database"] {
+function getDatabaseDetails(client: pg.Client): DatabaseDetails {
   return {
     database: client.database ?? "default database",
     host: client.host,
