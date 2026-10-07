@@ -40,8 +40,7 @@
   "files": [
     "bin/cli.js",
     "dist/**/*",
-    "!dist/**/*.test.*",
-    "!dist/**/*.d.ts.map"
+    "!dist/**/*.test.*"
   ],
   "bin": {
     "pg-migrate": "bin/cli.js"
