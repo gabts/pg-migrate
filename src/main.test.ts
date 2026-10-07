@@ -235,6 +235,33 @@ describe("main", (): void => {
         );
         assert.deepEqual(events, []);
       }
+      // pg decodes percent-encoding itself, which throws a URIError.
+      await assert.rejects(
+        status({
+          directory: tempDir,
+          table: "schema_migrations",
+          url: "postgres://user:%C3%28@localhost/app",
+        }),
+        new Error("Database URL is not a valid URL."),
+      );
+    });
+
+    it("keeps the cause when pg cannot apply a database URL setting", async (): Promise<void> => {
+      const certificate = path.join(tempDir, "missing.pem");
+
+      await assert.rejects(
+        status({
+          directory: tempDir,
+          table: "schema_migrations",
+          url: `postgres://localhost/example?sslrootcert=${certificate}`,
+        }),
+        (error: unknown): boolean => {
+          assert.ok(error instanceof Error);
+          assert.equal(error.message, "Failed to apply database URL settings.");
+          assert.equal((error.cause as NodeJS.ErrnoException).code, "ENOENT");
+          return true;
+        },
+      );
     });
 
     it("identifies the database in connection errors", async (): Promise<void> => {

@@ -77,15 +77,26 @@ function getDatabaseDetails(
 function createDatabaseClient(url: string): pg.Client {
   validateDatabaseUrl(url);
   let client: pg.Client;
-  // pg parses the URL here and throws a bare 'Invalid URL' TypeError. The
-  // message omits the URL because it can contain a password.
+  // pg parses the URL here and reads files that its SSL settings name. The
+  // 'Invalid URL' TypeError holds the URL, which can contain a password, so
+  // it is not kept as the cause. Bad percent-encoding throws a URIError.
   try {
     client = new pg.Client({
       connectionString: url,
       connectionTimeoutMillis: 10_000,
     });
-  } catch {
-    throw new Error("Database URL is not a valid URL.");
+  } catch (error) {
+    if (
+      error instanceof URIError ||
+      (error instanceof TypeError &&
+        "code" in error &&
+        error.code === "ERR_INVALID_URL")
+    ) {
+      throw new Error("Database URL is not a valid URL.");
+    }
+    throw new Error("Failed to apply database URL settings.", {
+      cause: error,
+    });
   }
   // A dropped connection also rejects the query. Without a listener, the
   // 'error' event would crash the process.
