@@ -10,7 +10,7 @@ Commands:
   status         Show applied and pending migration state
   validate       Validate file structure and database history
   up             Apply pending migrations
-  down           Revert applied migrations
+  down           Revert the latest applied migration
 
 Global options:
   -c, --config <path>    Environment file, defaults to PGM_CONFIG or .env
@@ -77,7 +77,8 @@ Options:
   -h, --help             Show this help
 
 Behavior:
-  The command validates all migration file names, checksums, and applied history.
+  The command validates all migration file names and the applied history.
+  It checks the checksums of applied migrations only.
   It does not decode or validate migration file contents.
   It does not create a missing history table.
   A missing history table is reported as uninitialized.

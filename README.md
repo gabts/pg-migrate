@@ -147,9 +147,11 @@ DROP TABLE example;
 
 Only white space can occur before the first marker. Each marker must occur
 exactly once, `migrate:up` must come first, and its section must not be empty.
-The down section can be empty. An exact marker line is reserved, including in
-SQL comments and strings. Every `.sql` entry in the directory must be a regular
-file with a valid migration filename. The tool does not scan subdirectories.
+The down section can be empty. A line that holds only a marker counts as a
+marker, even in SQL comments and strings. Spaces and tabs can occur around the
+marker and after `--`, so `  --migrate:down` counts too. Every `.sql` entry in
+the directory must be a regular file with a valid migration filename. The tool
+does not scan subdirectories.
 
 The tool sends each section to PostgreSQL without parsing SQL statements. The
 down section can be empty. In that case, `down` runs no migration SQL and

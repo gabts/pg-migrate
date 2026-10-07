@@ -42,7 +42,7 @@ describe("help", (): void => {
     assert.match(help, /pg-migrate status \[options\]/);
     assert.match(help, /does not create a missing history table/i);
     assert.match(help, /does not acquire the migration advisory lock/i);
-    assert.match(help, /validates all migration file names, checksums/i);
+    assert.match(help, /checksums of applied migrations only/i);
     assert.match(help, /does not decode or validate migration file contents/i);
     assert.match(help, /Migration states and counts go to stdout/);
     assert.match(help, /command header and errors go to stderr/i);
