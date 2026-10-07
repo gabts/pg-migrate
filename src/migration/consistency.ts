@@ -26,13 +26,7 @@ function validateAppliedMigration(
         `file '${migration.file}', not '${diskMigration.file}'.`,
     );
   }
-  const checksum = checksums.get(diskMigration.file);
-  if (!checksum) {
-    throw new Error(
-      `Checksum for migration file '${diskMigration.file}' is not available.`,
-    );
-  }
-  if (migration.checksum !== checksum) {
+  if (migration.checksum !== checksums.get(diskMigration.file)) {
     throw new Error(
       `Applied migration file '${diskMigration.file}' does not match its ` +
         "recorded checksum.",
