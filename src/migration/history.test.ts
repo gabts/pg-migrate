@@ -294,6 +294,32 @@ describe("history", (): void => {
     );
   });
 
+  it("rejects a nullable history column", (): void => {
+    assert.throws(
+      () =>
+        validateHistoryDefinition(
+          {
+            columns: [
+              { name: "version", notNull: true, type: "text" },
+              { name: "file", notNull: true, type: "text" },
+              { name: "checksum", notNull: false, type: "text" },
+              {
+                name: "applied_at",
+                notNull: true,
+                type: "timestamp with time zone",
+              },
+            ],
+            initialized: true,
+          },
+          "schema_migrations",
+        ),
+      new Error(
+        "Migration history table 'schema_migrations' column 'checksum' must " +
+          "be NOT NULL.",
+      ),
+    );
+  });
+
   it("reads applied migrations separately", async (): Promise<void> => {
     const appliedAt = "2026-08-11T12:00:00.000Z";
     const rows = [
