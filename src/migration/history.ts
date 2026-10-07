@@ -85,6 +85,30 @@ async function resolveHistoryTableSchema(
   return schema;
 }
 
+// A missing table counts as uninitialized history, so a typo in the schema
+// would otherwise report every migration as pending.
+async function assertSchemaExists(
+  client: pg.Client,
+  schema: string,
+  table: string,
+): Promise<void> {
+  let result: pg.QueryResult<{ exists: boolean }>;
+  try {
+    result = await client.query<{ exists: boolean }>(
+      "SELECT to_regnamespace($1) IS NOT NULL AS exists;",
+      [schema],
+    );
+  } catch (error) {
+    throw new Error(
+      `Failed to look up schema for migration table '${table}'.`,
+      { cause: error },
+    );
+  }
+  if (!result.rows[0]?.exists) {
+    throw new Error(`Schema '${schema}' does not exist.`);
+  }
+}
+
 /** Validates and resolves a migration history table to one fixed schema. */
 export async function resolveHistoryTable(
   client: pg.Client,
@@ -92,10 +116,13 @@ export async function resolveHistoryTable(
 ): Promise<ResolvedHistoryTable> {
   validateHistoryTableName(name);
   const separator = name.indexOf(".");
-  const schema =
-    separator === -1
-      ? await resolveHistoryTableSchema(client, name)
-      : name.slice(0, separator);
+  let schema: string;
+  if (separator === -1) {
+    schema = await resolveHistoryTableSchema(client, name);
+  } else {
+    schema = name.slice(0, separator);
+    await assertSchemaExists(client, schema, name);
+  }
   const table = name.slice(separator + 1);
   return {
     name,

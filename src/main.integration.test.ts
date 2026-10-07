@@ -154,6 +154,18 @@ describe(
       assert.equal(await relationExists("schema_migrations"), false);
     });
 
+    it("rejects a history table in a missing schema", async (): Promise<void> => {
+      const options = {
+        ...commandOptions(),
+        table: `${schema}_missing.schema_migrations`,
+      };
+
+      await assert.rejects(
+        validate(options),
+        new Error(`Schema '${schema}_missing' does not exist.`),
+      );
+    });
+
     it("accepts an empty migration directory", async (): Promise<void> => {
       const migrationStatus = await status(commandOptions());
 

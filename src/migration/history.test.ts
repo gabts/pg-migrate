@@ -64,7 +64,7 @@ describe("history", (): void => {
     });
 
     it("uses the schema and table as the lock identity", async (): Promise<void> => {
-      const { client, queries } = createClient();
+      const { client, queries } = createClient([[{ exists: true }]]);
 
       const table = await resolveHistoryTable(client, "app.schema_migrations");
       await lockMigrations(client, table, noLog);
@@ -77,10 +77,23 @@ describe("history", (): void => {
       });
       assert.deepEqual(queries, [
         {
+          parameters: ["app"],
+          sql: "SELECT to_regnamespace($1) IS NOT NULL AS exists;",
+        },
+        {
           parameters: ["app", "schema_migrations"],
           sql: "SELECT pg_advisory_lock(hashtext($1), hashtext($2));",
         },
       ]);
+    });
+
+    it("rejects a missing schema of a qualified table", async (): Promise<void> => {
+      const { client } = createClient([[{ exists: false }]]);
+
+      await assert.rejects(
+        resolveHistoryTable(client, "app.schema_migrations"),
+        new Error("Schema 'app' does not exist."),
+      );
     });
 
     it("identifies the table when a history query fails", async (): Promise<void> => {
@@ -90,13 +103,20 @@ describe("history", (): void => {
           throw failure;
         },
       } as unknown as pg.Client;
-      const table = await resolveHistoryTable(client, "app.schema_migrations");
+      const table = await resolveHistoryTable(
+        createClient([[{ exists: true }]]).client,
+        "app.schema_migrations",
+      );
       const log = (): undefined => undefined;
 
       for (const [operation, message] of [
         [
           () => resolveHistoryTable(client, "schema_migrations"),
           "Failed to look up schema for migration table 'schema_migrations'.",
+        ],
+        [
+          () => resolveHistoryTable(client, "app.schema_migrations"),
+          "Failed to look up schema for migration table 'app.schema_migrations'.",
         ],
         [
           () => lockMigrations(client, table, noLog),
