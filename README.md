@@ -121,6 +121,11 @@ the standard `PG*` environment variables, such as `PGUSER`, `PGPASSWORD`,
 `PGPASSWORD`, it reads `~/.pgpass`. Put every setting that a deployment depends
 on in the URL, including `sslmode`.
 
+SSL settings follow node-postgres, not `psql`. Without `sslmode` in the URL or
+`PGSSLMODE`, the connection does not use SSL, and `sslmode=require` verifies
+the certificate. See the
+[node-postgres SSL docs](https://node-postgres.com/features/ssl).
+
 ## Migration files
 
 `create` makes the directory if necessary and creates this UTC filename:
