@@ -66,6 +66,13 @@ export async function run(
   argv = process.argv,
   env = process.env,
 ): Promise<void> {
+  // A reader such as `head` can exit before it reads all of stdout. The rest
+  // of the output is then not needed, but the write error would crash.
+  process.stdout.on("error", (error: NodeJS.ErrnoException): void => {
+    if (error.code !== "EPIPE") {
+      throw error;
+    }
+  });
   const args = argv.slice(2);
   const colors = useColors(args, env);
   const progress = createProgressOutput(process.stderr, colors);

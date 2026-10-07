@@ -1,5 +1,6 @@
 import * as assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { once } from "node:events";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -63,6 +64,19 @@ describe("run", (): void => {
     assert.equal(stderr, "");
     assert.ok(stdout.length > 0);
     assert.ok(stdout.endsWith("\n"));
+  });
+
+  it("exits 0 when the stdout reader closes early", async (): Promise<void> => {
+    const child = spawn(process.execPath, [cliPath, "help"]);
+    // Close the read end before the CLI starts, so its write fails with EPIPE.
+    child.stdout.destroy();
+    let stderr = "";
+    child.stderr.on("data", (chunk: Buffer): void => {
+      stderr += chunk.toString();
+    });
+    const [code] = await once(child, "close");
+    assert.equal(code, 0);
+    assert.equal(stderr, "");
   });
 
   it("writes help for a bare invocation", async (): Promise<void> => {
