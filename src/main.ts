@@ -45,14 +45,13 @@ export type {
 function withSafeLog<T extends { log?: LogSink }>(
   options: T,
 ): T & { log: LogSink } {
-  const { log } = options;
-
   return {
     ...options,
     log(event: LogEvent): undefined {
-      // Progress output must not change command behavior.
+      // Progress output must not change command behavior. Call the sink as a
+      // method so that it can use 'this'.
       try {
-        void Promise.resolve(log?.(event)).catch(() => {});
+        void Promise.resolve(options.log?.(event)).catch(() => {});
       } catch {}
     },
   };

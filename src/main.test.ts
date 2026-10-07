@@ -334,6 +334,26 @@ describe("main", (): void => {
     });
 
     // Invalid SQL fails after several events and before database work.
+    it("calls the log sink as a method of the options", async (): Promise<void> => {
+      const file = "20260811120000_add_users.sql";
+      await fs.writeFile(path.join(tempDir, file), "SELECT 1;\n");
+      const options = {
+        directory: tempDir,
+        events: [] as LogEvent[],
+        log(event: LogEvent): undefined {
+          this.events.push(event);
+        },
+        table: "schema_migrations",
+        url: "postgres://localhost/example",
+      };
+
+      await assert.rejects(
+        validate(options),
+        new Error(`Missing 'migrate:up' marker in '${file}'.`),
+      );
+      assert.ok(options.events.length > 0);
+    });
+
     it("ignores log sink failures", async (): Promise<void> => {
       const file = "20260811120000_add_users.sql";
       await fs.writeFile(path.join(tempDir, file), "SELECT 1;\n");
