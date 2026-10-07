@@ -718,6 +718,28 @@ describe(
       assert.equal(await relationExists("users"), true);
     });
 
+    it("applies a migration once when commands run at the same time", async (): Promise<void> => {
+      // The sleep keeps the first migration running while the others read
+      // history, so a lock taken too late lets them apply it again.
+      const file = await writeMigration(
+        firstVersion,
+        "add_users",
+        `CREATE TABLE ${qualifiedRelation("users")} (id integer);\n` +
+          "SELECT pg_sleep(0.2);",
+        `DROP TABLE ${qualifiedRelation("users")};`,
+      );
+
+      const results = await Promise.all([
+        migrate(commandOptions()),
+        migrate(commandOptions()),
+        migrate(commandOptions()),
+      ]);
+
+      const applied = results.filter((result) => result.files.length > 0);
+      assert.deepEqual(applied, [{ files: [file] }]);
+      assert.deepEqual(await readHistoryVersions(), [firstVersion]);
+    });
+
     it("rejects when the database connection is lost", async (): Promise<void> => {
       await writeMigration(
         firstVersion,
