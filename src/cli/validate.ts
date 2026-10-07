@@ -61,6 +61,15 @@ export function validateInvocation(
   parsed: ParsedArgs,
 ): ValidatedInvocation | { command: "help"; topic: Command | "help" } {
   const [command, ...positionals] = parsed.positionals;
+  // Options without a command suggest a script whose command is empty, such
+  // as an unset variable.
+  if (
+    command === undefined &&
+    parsed.values.help !== true &&
+    Object.keys(parsed.values).length > 0
+  ) {
+    throw new Error("Missing required argument 'command'.");
+  }
   if (command === undefined || command === "help") {
     const topic = validateHelpTopic(positionals);
     assertOptions(parsed.values, GLOBAL_OPTIONS);

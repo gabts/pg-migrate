@@ -88,13 +88,7 @@ export async function run(
     quiet = parsed.values.quiet === true;
     const validated = validateInvocation(parsed);
     if (validated.command === "help") {
-      // A bare invocation shows help that was not requested. Quiet mode
-      // suppresses it.
-      const requested =
-        parsed.positionals[0] === "help" || parsed.values.help === true;
-      if (requested || !quiet) {
-        process.stdout.write(getHelpText(validated.topic) + "\n");
-      }
+      process.stdout.write(getHelpText(validated.topic) + "\n");
       return;
     }
 

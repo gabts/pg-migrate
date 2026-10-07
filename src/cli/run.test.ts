@@ -86,11 +86,11 @@ describe("run", (): void => {
     assert.ok(stdout.length > 0);
   });
 
-  it("suppresses implicit help in quiet mode", async (): Promise<void> => {
+  it("rejects quiet mode without a command", async (): Promise<void> => {
     const { code, stdout, stderr } = await runCli(["--quiet"]);
-    assert.equal(code, 0);
+    assert.equal(code, 1);
     assert.equal(stdout, "");
-    assert.equal(stderr, "");
+    assert.ok(stderr.includes("Missing required argument 'command'."));
   });
 
   it("writes command help when named by the help command", async (): Promise<void> => {

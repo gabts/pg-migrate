@@ -160,8 +160,22 @@ describe("validate", (): void => {
       new Error("Unexpected positional 'extra'."),
     );
     assert.throws(
-      () => validateInvocation({ positionals: [], values: { url: "x" } }),
+      () =>
+        validateInvocation({
+          positionals: [],
+          values: { help: true, url: "x" },
+        }),
       new Error("Unknown option '--url'."),
     );
+  });
+
+  it("rejects options without a command or a help request", (): void => {
+    for (const values of [{ quiet: true }, { url: "x" }]) {
+      assert.throws(
+        () => validateInvocation({ positionals: [], values }),
+        new Error("Missing required argument 'command'."),
+      );
+    }
+    assert.equal(helpTopic([], { help: true, quiet: true }), "help");
   });
 });
