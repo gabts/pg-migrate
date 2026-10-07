@@ -75,6 +75,33 @@ describe("sql", (): void => {
     );
   });
 
+  it("removes a byte order mark from SQL but not from the checksum", async (): Promise<void> => {
+    const filePath = path.join(tempDir, file);
+    const contents = Buffer.from("﻿SELECT 1;\n");
+    await fs.writeFile(filePath, contents);
+    const migrations: DiskMigration[] = [
+      {
+        file,
+        name: "add_users",
+        path: filePath,
+        version: "20260811120000",
+      },
+    ];
+
+    assert.deepEqual(
+      await readMigrationSql(migrations),
+      new Map([
+        [
+          file,
+          {
+            checksum: calculateMigrationChecksum(contents),
+            sql: "SELECT 1;\n",
+          },
+        ],
+      ]),
+    );
+  });
+
   it("validates and parses up and down SQL", (): void => {
     const contents = sql(
       "-- migrate:up\nCREATE TABLE users (id integer);\n" +
