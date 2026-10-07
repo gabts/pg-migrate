@@ -74,7 +74,9 @@ applied. A version contains 14 digits, for example `20260811120000`.
 
 Final results and help go to stdout. Progress and errors go to stderr. An
 empty `up` or `down` plan leaves stdout empty. A failure sets exit code `1`.
-Quiet mode takes precedence over verbose mode.
+Quiet mode takes precedence over verbose mode. Stderr uses colors on a terminal
+unless `NO_COLOR` is set. Set `FORCE_COLOR=1` to use colors elsewhere, such as
+in CI logs.
 
 ## Configuration
 

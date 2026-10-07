@@ -19,7 +19,12 @@ function runCli(
   args: string[],
   env?: NodeJS.ProcessEnv,
 ): Promise<{ code: number | string; stdout: string; stderr: string }> {
-  const childEnv = { ...process.env, ...env };
+  // A FORCE_COLOR from the test environment would add colors to stderr.
+  const childEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    FORCE_COLOR: undefined,
+    ...env,
+  };
   // An explicit undefined removes an inherited variable from the test.
   for (const [key, value] of Object.entries(env ?? {})) {
     if (value === undefined) {
@@ -234,6 +239,23 @@ describe("run", (): void => {
       "✖ Error: Unknown command 'bogus'.\n" +
         "  Run `pg-migrate --help` for usage.\n",
     );
+  });
+
+  it("writes colors to stderr when FORCE_COLOR enables them", async (): Promise<void> => {
+    const { stderr } = await runCli(["bogus"], { FORCE_COLOR: "1" });
+    assert.ok(stderr.startsWith("\u001b["));
+  });
+
+  it("writes no colors when FORCE_COLOR disables them", async (): Promise<void> => {
+    const { stderr } = await runCli(["bogus"], { FORCE_COLOR: "0" });
+    assert.ok(stderr.startsWith("✖ Error:"));
+  });
+
+  it("writes no colors with the flag when FORCE_COLOR enables them", async (): Promise<void> => {
+    const { stderr } = await runCli(["bogus", "--no-color"], {
+      FORCE_COLOR: "1",
+    });
+    assert.ok(stderr.startsWith("✖ Error:"));
   });
 
   it("rejects an empty command", async (): Promise<void> => {

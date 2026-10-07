@@ -538,11 +538,13 @@ describe(
         ...["--directory", directory, "--table", table],
       ];
       const cause = `  Cause: syntax error at or near "SELEC"`;
+      // A FORCE_COLOR from the test environment would add colors to stderr.
+      const options = { env: { ...process.env, FORCE_COLOR: undefined } };
 
       // execFile rejects when the exit code is not zero. The error contains
       // the exit code and output streams.
       await assert.rejects(
-        promisify(execFile)(process.execPath, args),
+        promisify(execFile)(process.execPath, args, options),
         (error: { code: number; stderr: string }): boolean => {
           assert.equal(error.code, 1);
           const lines = error.stderr.trimEnd().split("\n");
@@ -553,7 +555,7 @@ describe(
         },
       );
       await assert.rejects(
-        promisify(execFile)(process.execPath, [...args, "--quiet"]),
+        promisify(execFile)(process.execPath, [...args, "--quiet"], options),
         (error: { code: number; stderr: string }): boolean => {
           assert.equal(error.code, 1);
           assert.equal(
@@ -566,7 +568,7 @@ describe(
       // Verbose output writes rollback and disconnect lines after the
       // failed migration, so the error line names the file again.
       await assert.rejects(
-        promisify(execFile)(process.execPath, [...args, "--verbose"]),
+        promisify(execFile)(process.execPath, [...args, "--verbose"], options),
         (error: { code: number; stderr: string }): boolean => {
           assert.equal(error.code, 1);
           assert.ok(

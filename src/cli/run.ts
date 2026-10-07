@@ -20,15 +20,20 @@ import { createProgressOutput } from "./progress.js";
 import { resolveInvocation } from "./resolve.js";
 import { validateInvocation } from "./validate.js";
 
-// Use colors only when stderr supports them and the flag permits them.
-// hasColors also uses NO_COLOR and FORCE_COLOR. Read the flag before
-// parsing so it also applies to parse errors.
-function useColors(args: string[]): boolean {
-  return (
-    !args.includes("--no-color") &&
-    process.stderr.isTTY === true &&
-    process.stderr.hasColors()
-  );
+// Read the flag before parsing so it also applies to parse errors. A
+// terminal's hasColors uses NO_COLOR and FORCE_COLOR.
+function useColors(args: string[], env: NodeJS.ProcessEnv): boolean {
+  if (args.includes("--no-color")) {
+    return false;
+  }
+  if (process.stderr.isTTY) {
+    return process.stderr.hasColors(env);
+  }
+  // Off a terminal, such as in a CI log, only FORCE_COLOR enables colors.
+  // Node enables them for these values and disables them for any other,
+  // such as '0' or 'false'.
+  const force = env.FORCE_COLOR;
+  return force !== undefined && ["", "1", "2", "3", "true"].includes(force);
 }
 
 async function executeInvocation(
@@ -62,7 +67,7 @@ export async function run(
   env = process.env,
 ): Promise<void> {
   const args = argv.slice(2);
-  const colors = useColors(args);
+  const colors = useColors(args, env);
   const progress = createProgressOutput(process.stderr, colors);
   let migrationFailed = false;
   let quiet = false;
