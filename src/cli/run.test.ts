@@ -79,6 +79,28 @@ describe("run", (): void => {
     assert.equal(stderr, "");
   });
 
+  it("finishes the command when the stderr reader closes early", async (): Promise<void> => {
+    const directory = path.join(tempDir, "migrations");
+    const child = spawn(process.execPath, [
+      cliPath,
+      "create",
+      "add_users",
+      "--directory",
+      directory,
+    ]);
+    // Close the read end before the CLI starts, so its write fails with EPIPE.
+    child.stderr.destroy();
+    let stdout = "";
+    child.stdout.on("data", (chunk: Buffer): void => {
+      stdout += chunk.toString();
+    });
+    const [code] = await once(child, "close");
+    assert.equal(code, 0);
+    assert.deepEqual(await fs.readdir(directory), [
+      path.basename(stdout.trimEnd()),
+    ]);
+  });
+
   it("writes help for a bare invocation", async (): Promise<void> => {
     const { code, stdout, stderr } = await runCli([]);
     assert.equal(code, 0);

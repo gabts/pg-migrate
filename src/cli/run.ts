@@ -36,6 +36,15 @@ function useColors(args: string[], env: NodeJS.ProcessEnv): boolean {
   return force !== undefined && ["", "1", "2", "3", "true"].includes(force);
 }
 
+// A reader such as `head` or `grep -q` can exit before it reads all output.
+// The rest of the output is then not needed, but the write error would crash
+// the process, even partway through a migration.
+function ignoreClosedReader(error: NodeJS.ErrnoException): void {
+  if (error.code !== "EPIPE") {
+    throw error;
+  }
+}
+
 async function executeInvocation(
   invocation: ResolvedInvocation,
   log: CliLogSink,
@@ -66,13 +75,8 @@ export async function run(
   argv = process.argv,
   env = process.env,
 ): Promise<void> {
-  // A reader such as `head` can exit before it reads all of stdout. The rest
-  // of the output is then not needed, but the write error would crash.
-  process.stdout.on("error", (error: NodeJS.ErrnoException): void => {
-    if (error.code !== "EPIPE") {
-      throw error;
-    }
-  });
+  process.stdout.on("error", ignoreClosedReader);
+  process.stderr.on("error", ignoreClosedReader);
   const args = argv.slice(2);
   const colors = useColors(args, env);
   const progress = createProgressOutput(process.stderr, colors);
