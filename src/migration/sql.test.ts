@@ -77,7 +77,7 @@ describe("sql", (): void => {
 
   it("removes a byte order mark from SQL but not from the checksum", async (): Promise<void> => {
     const filePath = path.join(tempDir, file);
-    const contents = Buffer.from("﻿SELECT 1;\n");
+    const contents = Buffer.from("\uFEFFSELECT 1;\n");
     await fs.writeFile(filePath, contents);
     const migrations: DiskMigration[] = [
       {
