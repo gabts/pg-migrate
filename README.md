@@ -100,6 +100,10 @@ PGM_TABLE=app.schema_migrations
 PGM_URL=postgres://localhost/app
 ```
 
+Relative paths resolve from the current directory, not from the config file's
+location. This includes the default `.env` and a `PGM_DIRECTORY` set in a config
+file.
+
 Database commands require `--url` or `PGM_URL`. A history table can include a
 schema. Each table or schema identifier must start with a lowercase letter or
 underscore and contain only lowercase letters, numbers, and underscores.
