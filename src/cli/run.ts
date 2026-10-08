@@ -107,6 +107,11 @@ export async function run(argv = process.argv): Promise<void> {
   try {
     const parsed = parseArgs(args);
     quiet = parsed.values.quiet === true;
+    // Node writes process warnings to stderr, such as the one node-postgres
+    // emits for some sslmode values.
+    if (quiet) {
+      process.removeAllListeners("warning");
+    }
     const validated = validateInvocation(parsed);
     if (validated.command === "help") {
       process.stdout.write(getHelpText(validated.topic) + "\n");

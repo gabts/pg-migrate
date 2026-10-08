@@ -418,6 +418,23 @@ describe("run", (): void => {
     );
   });
 
+  it("suppresses process warnings in quiet mode", async (): Promise<void> => {
+    // node-postgres emits a warning for 'sslmode=require'.
+    const { code, stdout, stderr } = await runCli([
+      "status",
+      "--url",
+      "postgres://localhost:1/example?sslmode=require",
+      "--directory",
+      tempDir,
+      "--quiet",
+    ]);
+
+    assert.equal(code, 1);
+    assert.equal(stdout, "");
+    assert.match(stderr, /^✖ Error: Failed to connect/);
+    assert.doesNotMatch(stderr, /Warning/);
+  });
+
   it("keeps errors visible in quiet mode", async (): Promise<void> => {
     const { code, stdout, stderr } = await runCli([
       "create",
