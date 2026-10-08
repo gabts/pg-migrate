@@ -1,6 +1,4 @@
-import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import * as util from "node:util";
 import type { Args, ResolvedInvocation, ValidatedInvocation } from "./model.js";
 
 interface ResolvedValues extends Args {
@@ -8,13 +6,13 @@ interface ResolvedValues extends Args {
   table: string;
 }
 
-const ENV_KEY_CONFIG_FILE = "PGM_CONFIG";
 const ENV_KEY_DIRECTORY = "PGM_DIRECTORY";
+const ENV_KEY_ENV_FILE = "PGM_ENV_FILE";
 const ENV_KEY_TABLE = "PGM_TABLE";
 const ENV_KEY_URL = "PGM_URL";
 
-const DEFAULT_CONFIG_FILE = ".env";
 const DEFAULT_DIRECTORY = "migrations";
+const DEFAULT_ENV_FILE = ".env";
 const DEFAULT_TABLE = "schema_migrations";
 
 function rejectEmptyValue(name: string, value: string | undefined): void {
@@ -23,28 +21,23 @@ function rejectEmptyValue(name: string, value: string | undefined): void {
   }
 }
 
-async function readConfigFile(
-  filePath: string,
-  required: boolean,
-): Promise<string | undefined> {
-  let bytes: Uint8Array;
+// Loads every variable of the file, as 'node --env-file' does, so that
+// variables such as PGPASSWORD also reach the driver. Variables that are
+// already set keep their values.
+function loadEnvFile(values: Args): void {
+  const explicitEnvFile = values["env-file"] ?? process.env[ENV_KEY_ENV_FILE];
+  rejectEmptyValue("env-file", explicitEnvFile);
+  const envFilePath = path.resolve(explicitEnvFile ?? DEFAULT_ENV_FILE);
   try {
-    bytes = await fs.readFile(filePath);
+    process.loadEnvFile(envFilePath);
   } catch (error) {
     // The default file is optional. Ignore any reason it cannot be read.
-    if (!required) {
-      return undefined;
+    if (explicitEnvFile === undefined) {
+      return;
     }
-    throw new Error(`Cannot read config file '${filePath}'.`, {
+    throw new Error(`Cannot read env file '${envFilePath}'.`, {
       cause: error,
     });
-  }
-  // TextDecoder removes a byte order mark, which readFile would keep in the
-  // first variable name.
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    throw new Error(`Config file '${filePath}' is not valid UTF-8.`);
   }
 }
 
@@ -55,30 +48,14 @@ function requireUrl(config: ResolvedValues): string {
   return config.url;
 }
 
-async function resolveValues(
-  values: Args,
-  env: NodeJS.ProcessEnv,
-): Promise<ResolvedValues> {
-  const explicitConfig = values.config ?? env[ENV_KEY_CONFIG_FILE];
-  rejectEmptyValue("config", explicitConfig);
-  const envFilePath = path.resolve(explicitConfig ?? DEFAULT_CONFIG_FILE);
-  const envFileContent = await readConfigFile(
-    envFilePath,
-    explicitConfig !== undefined,
-  );
-  const envFile = envFileContent ? util.parseEnv(envFileContent) : {};
+function resolveValues(values: Args): ResolvedValues {
+  loadEnvFile(values);
+  const env = process.env;
 
   const directory =
-    values.directory ??
-    env[ENV_KEY_DIRECTORY] ??
-    envFile[ENV_KEY_DIRECTORY] ??
-    DEFAULT_DIRECTORY;
-  const table =
-    values.table ??
-    env[ENV_KEY_TABLE] ??
-    envFile[ENV_KEY_TABLE] ??
-    DEFAULT_TABLE;
-  const url = values.url ?? env[ENV_KEY_URL] ?? envFile[ENV_KEY_URL];
+    values.directory ?? env[ENV_KEY_DIRECTORY] ?? DEFAULT_DIRECTORY;
+  const table = values.table ?? env[ENV_KEY_TABLE] ?? DEFAULT_TABLE;
+  const url = values.url ?? env[ENV_KEY_URL];
 
   rejectEmptyValue("directory", directory);
 
@@ -91,11 +68,10 @@ async function resolveValues(
 }
 
 /** Resolves configuration into complete options. */
-export async function resolveInvocation(
+export function resolveInvocation(
   invocation: ValidatedInvocation,
-  env: NodeJS.ProcessEnv,
-): Promise<ResolvedInvocation> {
-  const config = await resolveValues(invocation.values, env);
+): ResolvedInvocation {
+  const config = resolveValues(invocation.values);
 
   if (invocation.command === "create") {
     return {

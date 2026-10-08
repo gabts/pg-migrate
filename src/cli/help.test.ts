@@ -12,7 +12,7 @@ describe("help", (): void => {
     for (const command of commands) {
       assert.match(help, new RegExp(`\\b${command}\\b`));
     }
-    assert.match(help, /-c, --config <path>/);
+    assert.match(help, /--env-file <path>/);
     assert.match(help, /-d, --directory <path>/);
     assert.match(help, /-q, --quiet/);
     assert.match(help, /-v, --verbose/);

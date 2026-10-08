@@ -7,8 +7,8 @@ import {
 } from "./model.js";
 
 const GLOBAL_OPTIONS = [
-  "config",
   "directory",
+  "env-file",
   "help",
   "no-color",
   "quiet",

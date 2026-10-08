@@ -10,6 +10,16 @@ function status(values: Args): ValidatedInvocation {
   return { command: "status", values };
 }
 
+// process.loadEnvFile writes to the real process environment, so tests set
+// their variables there too. Each test restores the environment afterwards.
+function resolve(
+  invocation: ValidatedInvocation,
+  env: NodeJS.ProcessEnv = {},
+): ResolvedInvocation {
+  Object.assign(process.env, env);
+  return resolveInvocation(invocation);
+}
+
 function databaseUrl(invocation: ResolvedInvocation): string {
   if (invocation.command === "create") {
     throw new Error("Expected a resolved database command.");
@@ -20,41 +30,50 @@ function databaseUrl(invocation: ResolvedInvocation): string {
 describe("resolve", (): void => {
   let tempDir: string;
   let previousCwd: string;
+  let previousEnv: NodeJS.ProcessEnv;
 
   // Each test uses a new temporary working directory. This prevents a .env
-  // file in the repository from changing configuration resolution.
+  // file in the repository from changing configuration resolution. PGM_
+  // variables from the shell running the tests are removed for the same
+  // reason.
   beforeEach(async (): Promise<void> => {
     previousCwd = process.cwd();
+    previousEnv = { ...process.env };
+    for (const key of Object.keys(process.env)) {
+      if (key.startsWith("PGM_")) {
+        delete process.env[key];
+      }
+    }
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pg_migrate-"));
     process.chdir(tempDir);
   });
 
   afterEach(async (): Promise<void> => {
     process.chdir(previousCwd);
+    for (const key of Object.keys(process.env)) {
+      if (!(key in previousEnv)) {
+        delete process.env[key];
+      }
+    }
+    Object.assign(process.env, previousEnv);
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it("applies CLI defaults", async (): Promise<void> => {
-    assert.deepEqual(
-      await resolveInvocation(status({ url: "postgres://args/db" }), {}),
-      {
-        command: "status",
-        failOnPending: false,
-        options: {
-          directory: "migrations",
-          table: "schema_migrations",
-          url: "postgres://args/db",
-        },
+  it("applies CLI defaults", (): void => {
+    assert.deepEqual(resolve(status({ url: "postgres://args/db" })), {
+      command: "status",
+      failOnPending: false,
+      options: {
+        directory: "migrations",
+        table: "schema_migrations",
+        url: "postgres://args/db",
       },
-    );
+    });
   });
 
-  it("resolves the status pending flag", async (): Promise<void> => {
+  it("resolves the status pending flag", (): void => {
     assert.deepEqual(
-      await resolveInvocation(
-        status({ "fail-on-pending": true, url: "postgres://args/db" }),
-        {},
-      ),
+      resolve(status({ "fail-on-pending": true, url: "postgres://args/db" })),
       {
         command: "status",
         failOnPending: true,
@@ -67,12 +86,9 @@ describe("resolve", (): void => {
     );
   });
 
-  it("resolves create options without a database URL", async (): Promise<void> => {
+  it("resolves create options without a database URL", (): void => {
     assert.deepEqual(
-      await resolveInvocation(
-        { command: "create", name: "add_users", values: {} },
-        {},
-      ),
+      resolve({ command: "create", name: "add_users", values: {} }),
       {
         command: "create",
         options: { directory: "migrations", name: "add_users" },
@@ -80,9 +96,9 @@ describe("resolve", (): void => {
     );
   });
 
-  it("ignores empty database values for create", async (): Promise<void> => {
+  it("ignores empty database values for create", (): void => {
     assert.deepEqual(
-      await resolveInvocation(
+      resolve(
         { command: "create", name: "add_users", values: {} },
         { PGM_TABLE: "", PGM_URL: "" },
       ),
@@ -93,16 +109,13 @@ describe("resolve", (): void => {
     );
   });
 
-  it("does not pass verbose to the library options", async (): Promise<void> => {
+  it("does not pass verbose to the library options", (): void => {
     assert.deepEqual(
-      await resolveInvocation(
-        {
-          command: "create",
-          name: "add_users",
-          values: { verbose: true },
-        },
-        {},
-      ),
+      resolve({
+        command: "create",
+        name: "add_users",
+        values: { verbose: true },
+      }),
       {
         command: "create",
         options: { directory: "migrations", name: "add_users" },
@@ -110,16 +123,13 @@ describe("resolve", (): void => {
     );
   });
 
-  it("does not pass quiet to the library options", async (): Promise<void> => {
+  it("does not pass quiet to the library options", (): void => {
     assert.deepEqual(
-      await resolveInvocation(
-        {
-          command: "create",
-          name: "add_users",
-          values: { quiet: true },
-        },
-        {},
-      ),
+      resolve({
+        command: "create",
+        name: "add_users",
+        values: { quiet: true },
+      }),
       {
         command: "create",
         options: { directory: "migrations", name: "add_users" },
@@ -127,17 +137,14 @@ describe("resolve", (): void => {
     );
   });
 
-  it("preserves migration options", async (): Promise<void> => {
-    const result = await resolveInvocation(
-      {
-        command: "up",
-        values: {
-          target: "20240101120000_init.sql",
-          url: "postgres://args/db",
-        },
+  it("preserves migration options", (): void => {
+    const result = resolve({
+      command: "up",
+      values: {
+        target: "20240101120000_init.sql",
+        url: "postgres://args/db",
       },
-      {},
-    );
+    });
 
     assert.deepEqual(result, {
       command: "up",
@@ -150,15 +157,12 @@ describe("resolve", (): void => {
     });
   });
 
-  it("passes the repair target to the library options", async (): Promise<void> => {
-    const result = await resolveInvocation(
-      {
-        command: "repair",
-        target: "20240101120000",
-        values: { url: "postgres://args/db" },
-      },
-      {},
-    );
+  it("passes the repair target to the library options", (): void => {
+    const result = resolve({
+      command: "repair",
+      target: "20240101120000",
+      values: { url: "postgres://args/db" },
+    });
 
     assert.deepEqual(result, {
       command: "repair",
@@ -171,9 +175,9 @@ describe("resolve", (): void => {
     });
   });
 
-  it("fills missing values from environment variables", async (): Promise<void> => {
+  it("fills missing values from environment variables", (): void => {
     assert.deepEqual(
-      await resolveInvocation(status({}), {
+      resolve(status({}), {
         PGM_DIRECTORY: "sql/migrations",
         PGM_TABLE: "migration_history",
         PGM_URL: "postgres://env/db",
@@ -190,20 +194,21 @@ describe("resolve", (): void => {
     );
   });
 
-  it("ignores unprefixed environment variables", async (): Promise<void> => {
-    await assert.rejects(
-      resolveInvocation(status({}), {
-        DIRECTORY: "sql/migrations",
-        URL: "postgres://env/db",
-      }),
+  it("ignores unprefixed environment variables", (): void => {
+    assert.throws(
+      () =>
+        resolve(status({}), {
+          DIRECTORY: "sql/migrations",
+          URL: "postgres://env/db",
+        }),
       new Error("Missing required argument 'url'."),
     );
   });
 
   it("fills missing values from an explicit environment file", async (): Promise<void> => {
-    const configPath = path.join(tempDir, "custom.env");
+    const envFilePath = path.join(tempDir, "custom.env");
     await fs.writeFile(
-      configPath,
+      envFilePath,
       `
 PGM_DIRECTORY=sql/migrations
 PGM_TABLE=migration_history
@@ -211,39 +216,49 @@ PGM_URL=postgres://file/db
 `,
     );
 
-    assert.deepEqual(
-      await resolveInvocation(status({ config: configPath }), {}),
-      {
-        command: "status",
-        failOnPending: false,
-        options: {
-          directory: "sql/migrations",
-          table: "migration_history",
-          url: "postgres://file/db",
-        },
+    assert.deepEqual(resolve(status({ "env-file": envFilePath })), {
+      command: "status",
+      failOnPending: false,
+      options: {
+        directory: "sql/migrations",
+        table: "migration_history",
+        url: "postgres://file/db",
       },
-    );
+    });
   });
 
-  it("reads the environment file path from PGM_CONFIG", async (): Promise<void> => {
-    const configPath = path.join(tempDir, "custom.env");
-    await fs.writeFile(configPath, "PGM_URL=postgres://file/db\n");
+  it("reads the environment file path from PGM_ENV_FILE", async (): Promise<void> => {
+    const envFilePath = path.join(tempDir, "custom.env");
+    await fs.writeFile(envFilePath, "PGM_URL=postgres://file/db\n");
 
-    const result = await resolveInvocation(status({}), {
-      PGM_CONFIG: configPath,
+    const result = resolve(status({}), {
+      PGM_ENV_FILE: envFilePath,
     });
 
     assert.equal(databaseUrl(result), "postgres://file/db");
   });
 
-  it("prefers the config option over PGM_CONFIG", async (): Promise<void> => {
+  it("loads every variable of the environment file", async (): Promise<void> => {
+    await fs.writeFile(
+      path.join(tempDir, ".env"),
+      "PGM_URL=postgres://file/db\nPGPASSWORD=secret\n",
+    );
+    // A shell value would win over the file. afterEach restores it.
+    delete process.env.PGPASSWORD;
+
+    resolve(status({}));
+
+    assert.equal(process.env.PGPASSWORD, "secret");
+  });
+
+  it("prefers the env-file option over PGM_ENV_FILE", async (): Promise<void> => {
     const argPath = path.join(tempDir, "arg.env");
     const envPath = path.join(tempDir, "env.env");
     await fs.writeFile(argPath, "PGM_URL=postgres://arg/db\n");
     await fs.writeFile(envPath, "PGM_URL=postgres://env/db\n");
 
-    const result = await resolveInvocation(status({ config: argPath }), {
-      PGM_CONFIG: envPath,
+    const result = resolve(status({ "env-file": argPath }), {
+      PGM_ENV_FILE: envPath,
     });
 
     assert.equal(databaseUrl(result), "postgres://arg/db");
@@ -255,28 +270,17 @@ PGM_URL=postgres://file/db
       "PGM_URL=postgres://default/db\n",
     );
 
-    const result = await resolveInvocation(status({}), {});
-
-    assert.equal(databaseUrl(result), "postgres://default/db");
-  });
-
-  it("reads the first variable after a byte order mark", async (): Promise<void> => {
-    await fs.writeFile(
-      path.join(tempDir, ".env"),
-      "\uFEFFPGM_URL=postgres://default/db\n",
-    );
-
-    const result = await resolveInvocation(status({}), {});
+    const result = resolve(status({}));
 
     assert.equal(databaseUrl(result), "postgres://default/db");
   });
 
   it("prefers options over environment and file values", async (): Promise<void> => {
-    const configPath = path.join(tempDir, ".env");
-    await fs.writeFile(configPath, "PGM_URL=postgres://file/db\n");
+    const envFilePath = path.join(tempDir, ".env");
+    await fs.writeFile(envFilePath, "PGM_URL=postgres://file/db\n");
 
-    const result = await resolveInvocation(
-      status({ config: configPath, url: "postgres://args/db" }),
+    const result = resolve(
+      status({ "env-file": envFilePath, url: "postgres://args/db" }),
       { PGM_URL: "postgres://env/db" },
     );
 
@@ -284,36 +288,33 @@ PGM_URL=postgres://file/db
   });
 
   it("prefers environment over file values", async (): Promise<void> => {
-    const configPath = path.join(tempDir, ".env");
-    await fs.writeFile(configPath, "PGM_URL=postgres://file/db\n");
+    const envFilePath = path.join(tempDir, ".env");
+    await fs.writeFile(envFilePath, "PGM_URL=postgres://file/db\n");
 
-    const result = await resolveInvocation(status({ config: configPath }), {
+    const result = resolve(status({ "env-file": envFilePath }), {
       PGM_URL: "postgres://env/db",
     });
 
     assert.equal(databaseUrl(result), "postgres://env/db");
   });
 
-  it("rejects empty options instead of using environment values", async (): Promise<void> => {
+  it("rejects empty options instead of using environment values", (): void => {
     const env = {
       PGM_DIRECTORY: "sql/migrations",
       PGM_TABLE: "migration_history",
       PGM_URL: "postgres://env/db",
     };
 
-    await assert.rejects(
-      resolveInvocation(
-        status({ directory: "", url: "postgres://args/db" }),
-        env,
-      ),
+    assert.throws(
+      () => resolve(status({ directory: "", url: "postgres://args/db" }), env),
       new Error("Invalid value '' for 'directory'."),
     );
-    await assert.rejects(
-      resolveInvocation(status({ table: "", url: "postgres://args/db" }), env),
+    assert.throws(
+      () => resolve(status({ table: "", url: "postgres://args/db" }), env),
       new Error("Invalid value '' for 'table'."),
     );
-    await assert.rejects(
-      resolveInvocation(status({ url: "" }), env),
+    assert.throws(
+      () => resolve(status({ url: "" }), env),
       new Error("Invalid value '' for 'url'."),
     );
   });
@@ -324,8 +325,8 @@ PGM_URL=postgres://file/db
       "PGM_URL=postgres://file/db\n",
     );
 
-    await assert.rejects(
-      resolveInvocation(status({}), { PGM_URL: "" }),
+    assert.throws(
+      () => resolve(status({}), { PGM_URL: "" }),
       new Error("Invalid value '' for 'url'."),
     );
   });
@@ -333,89 +334,71 @@ PGM_URL=postgres://file/db
   it("rejects empty environment file values", async (): Promise<void> => {
     await fs.writeFile(path.join(tempDir, ".env"), "PGM_URL=\n");
 
-    await assert.rejects(
-      resolveInvocation(status({}), {}),
+    assert.throws(
+      () => resolve(status({})),
       new Error("Invalid value '' for 'url'."),
     );
   });
 
-  it("rejects an empty config option instead of using PGM_CONFIG", async (): Promise<void> => {
-    const configPath = path.join(tempDir, "custom.env");
-    await fs.writeFile(configPath, "PGM_URL=postgres://file/db\n");
+  it("rejects an empty env-file option instead of using PGM_ENV_FILE", async (): Promise<void> => {
+    const envFilePath = path.join(tempDir, "custom.env");
+    await fs.writeFile(envFilePath, "PGM_URL=postgres://file/db\n");
 
-    await assert.rejects(
-      resolveInvocation(status({ config: "" }), { PGM_CONFIG: configPath }),
-      new Error("Invalid value '' for 'config'."),
+    assert.throws(
+      () =>
+        resolve(status({ "env-file": "" }), {
+          PGM_ENV_FILE: envFilePath,
+        }),
+      new Error("Invalid value '' for 'env-file'."),
     );
   });
 
-  it("rejects a missing explicit config file", async (): Promise<void> => {
-    const configPath = path.join(tempDir, "missing.env");
+  it("rejects a missing explicit env file", (): void => {
+    const envFilePath = path.join(tempDir, "missing.env");
 
-    await assert.rejects(
-      resolveInvocation(status({ config: configPath }), {}),
+    assert.throws(
+      () => resolve(status({ "env-file": envFilePath })),
       (error: unknown): boolean => {
         assert.ok(error instanceof Error);
-        assert.equal(error.message, `Cannot read config file '${configPath}'.`);
+        assert.equal(error.message, `Cannot read env file '${envFilePath}'.`);
         assert.equal((error.cause as NodeJS.ErrnoException).code, "ENOENT");
         return true;
       },
     );
   });
 
-  it("rejects a missing PGM_CONFIG file", async (): Promise<void> => {
-    const configPath = path.join(tempDir, "missing.env");
+  it("rejects a missing PGM_ENV_FILE file", (): void => {
+    const envFilePath = path.join(tempDir, "missing.env");
 
-    await assert.rejects(
-      resolveInvocation(status({}), { PGM_CONFIG: configPath }),
-      /Cannot read config file/,
+    assert.throws(
+      () => resolve(status({}), { PGM_ENV_FILE: envFilePath }),
+      /Cannot read env file/,
     );
   });
 
-  it("rejects an explicit config directory", async (): Promise<void> => {
-    const configPath = path.join(tempDir, "config.d");
-    await fs.mkdir(configPath);
+  it("rejects an explicit env file directory", async (): Promise<void> => {
+    const envFilePath = path.join(tempDir, "env.d");
+    await fs.mkdir(envFilePath);
 
-    await assert.rejects(
-      resolveInvocation(status({ config: configPath }), {}),
-      /Cannot read config file/,
+    assert.throws(
+      () => resolve(status({ "env-file": envFilePath })),
+      /Cannot read env file/,
     );
   });
 
-  it("ignores a missing default environment file", async (): Promise<void> => {
-    await assert.doesNotReject(
-      resolveInvocation(status({ url: "postgres://args/db" }), {}),
-    );
+  it("ignores a missing default environment file", (): void => {
+    assert.doesNotThrow(() => resolve(status({ url: "postgres://args/db" })));
   });
 
   it("ignores an unreadable default environment file", async (): Promise<void> => {
     await fs.writeFile(path.join(tempDir, ".env"), "", { mode: 0o000 });
 
-    await assert.doesNotReject(
-      resolveInvocation(status({ url: "postgres://args/db" }), {}),
-    );
+    assert.doesNotThrow(() => resolve(status({ url: "postgres://args/db" })));
   });
 
   it("ignores a default environment file directory", async (): Promise<void> => {
     await fs.mkdir(path.join(tempDir, ".env"));
 
-    await assert.doesNotReject(
-      resolveInvocation(status({ url: "postgres://args/db" }), {}),
-    );
-  });
-
-  it("rejects a default environment file that is not UTF-8", async (): Promise<void> => {
-    // The working directory can be a symlink-resolved form of tempDir.
-    const configPath = path.resolve(".env");
-    // 0xE9 is 'é' in Latin-1 and an incomplete sequence in UTF-8.
-    await fs.writeFile(
-      configPath,
-      Buffer.from("PGM_URL=postgres://user:caf\xe9@host/db\n", "latin1"),
-    );
-
-    await assert.rejects(
-      resolveInvocation(status({}), {}),
-      new Error(`Config file '${configPath}' is not valid UTF-8.`),
-    );
+    assert.doesNotThrow(() => resolve(status({ url: "postgres://args/db" })));
   });
 });

@@ -21,8 +21,8 @@ export type Command = (typeof COMMANDS)[number];
  * Option values a CLI invocation can carry, all optional at parse time.
  */
 export interface Args {
-  config?: string;
   directory?: string;
+  "env-file"?: string;
   "fail-on-pending"?: boolean;
   help?: boolean;
   "no-color"?: boolean;

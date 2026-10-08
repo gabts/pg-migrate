@@ -24,17 +24,17 @@ import { validateInvocation } from "./validate.js";
 
 // Read the flag before parsing so it also applies to parse errors. A
 // terminal's hasColors uses NO_COLOR and FORCE_COLOR.
-function useColors(args: string[], env: NodeJS.ProcessEnv): boolean {
+function useColors(args: string[]): boolean {
   if (args.includes("--no-color")) {
     return false;
   }
   if (process.stderr.isTTY) {
-    return process.stderr.hasColors(env);
+    return process.stderr.hasColors();
   }
   // Off a terminal, such as in a CI log, only FORCE_COLOR enables colors.
   // Node enables them for these values and disables them for any other,
   // such as '0' or 'false'.
-  const force = env.FORCE_COLOR;
+  const force = process.env.FORCE_COLOR;
   return force !== undefined && ["", "1", "2", "3", "true"].includes(force);
 }
 
@@ -91,14 +91,11 @@ async function executeInvocation(
  * message and exit code 1. `status --fail-on-pending` exits 2 when
  * migrations are pending.
  */
-export async function run(
-  argv = process.argv,
-  env = process.env,
-): Promise<void> {
+export async function run(argv = process.argv): Promise<void> {
   process.stdout.on("error", ignoreClosedReader);
   process.stderr.on("error", ignoreClosedReader);
   const args = argv.slice(2);
-  const colors = useColors(args, env);
+  const colors = useColors(args);
   const progress = createProgressOutput(process.stderr, colors);
   let migrationFailed = false;
   let quiet = false;
@@ -125,7 +122,7 @@ export async function run(
     if (!quiet) {
       process.stderr.write(`Running pg-migrate ${validated.command}...\n`);
     }
-    const resolved = await resolveInvocation(validated, env);
+    const resolved = resolveInvocation(validated);
 
     helpCommand = undefined;
     const result = await executeInvocation(resolved, (event): undefined => {

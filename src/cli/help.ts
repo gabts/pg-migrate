@@ -15,8 +15,8 @@ Commands:
   repair <target>  Record an applied migration's current file and checksum
 
 Global options:
-  -c, --config <path>    Environment file, defaults to PGM_CONFIG or .env
   -d, --directory <path> Migrations directory, defaults to PGM_DIRECTORY or migrations
+  --env-file <path>      Environment file, defaults to PGM_ENV_FILE or .env
   --no-color             Disable color in progress and error output
   -q, --quiet            Suppress output except errors and explicit help
   -v, --verbose          Show progress logs
@@ -39,8 +39,8 @@ const createHelpText = `Usage:
 Creates a timestamped migration file.
 
 Options:
-  -c, --config <path>    Environment file, defaults to PGM_CONFIG or .env
   -d, --directory <path> Output directory, defaults to PGM_DIRECTORY or migrations
+  --env-file <path>      Environment file, defaults to PGM_ENV_FILE or .env
   --no-color             Disable color in progress and error output
   -q, --quiet            Suppress output except errors and explicit help
   -v, --verbose          Show progress logs
@@ -69,8 +69,8 @@ const statusHelpText = `Usage:
 Shows migration file and database history state.
 
 Options:
-  -c, --config <path>    Environment file, defaults to PGM_CONFIG or .env
   -d, --directory <path> Migrations directory, defaults to PGM_DIRECTORY or migrations
+  --env-file <path>      Environment file, defaults to PGM_ENV_FILE or .env
   -t, --table <name>     History table, defaults to PGM_TABLE or schema_migrations
   -u, --url <url>        PostgreSQL URL, or use PGM_URL
   --fail-on-pending      Exit with 2 when migrations are pending
@@ -104,8 +104,8 @@ const validateHelpText = `Usage:
 Validates migration file structure and database history.
 
 Options:
-  -c, --config <path>    Environment file, defaults to PGM_CONFIG or .env
   -d, --directory <path> Migrations directory, defaults to PGM_DIRECTORY or migrations
+  --env-file <path>      Environment file, defaults to PGM_ENV_FILE or .env
   -t, --table <name>     History table, defaults to PGM_TABLE or schema_migrations
   -u, --url <url>        PostgreSQL URL, or use PGM_URL
   --no-color             Disable color in progress and error output
@@ -137,8 +137,8 @@ const upHelpText = `Usage:
 Applies pending migrations in version order.
 
 Options:
-  -c, --config <path>    Environment file, defaults to PGM_CONFIG or .env
   -d, --directory <path> Migrations directory, defaults to PGM_DIRECTORY or migrations
+  --env-file <path>      Environment file, defaults to PGM_ENV_FILE or .env
   -t, --table <name>     History table, defaults to PGM_TABLE or schema_migrations
   -u, --url <url>        PostgreSQL URL, or use PGM_URL
   --target <target>      Apply through this version or file, including the target
@@ -175,8 +175,8 @@ const downHelpText = `Usage:
 Reverts applied migrations in reverse version order.
 
 Options:
-  -c, --config <path>    Environment file, defaults to PGM_CONFIG or .env
   -d, --directory <path> Migrations directory, defaults to PGM_DIRECTORY or migrations
+  --env-file <path>      Environment file, defaults to PGM_ENV_FILE or .env
   -t, --table <name>     History table, defaults to PGM_TABLE or schema_migrations
   -u, --url <url>        PostgreSQL URL, or use PGM_URL
   --target <target>      Revert migrations after this version or file
@@ -217,8 +217,8 @@ const repairHelpText = `Usage:
 Records the current file name and checksum of one applied migration.
 
 Options:
-  -c, --config <path>    Environment file, defaults to PGM_CONFIG or .env
   -d, --directory <path> Migrations directory, defaults to PGM_DIRECTORY or migrations
+  --env-file <path>      Environment file, defaults to PGM_ENV_FILE or .env
   -t, --table <name>     History table, defaults to PGM_TABLE or schema_migrations
   -u, --url <url>        PostgreSQL URL, or use PGM_URL
   --no-color             Disable color in progress and error output

@@ -2,13 +2,12 @@ import * as util from "node:util";
 import type { ParsedArgs } from "./model.js";
 
 const optionsDescriptors = {
-  config: {
-    type: "string",
-    short: "c",
-  },
   directory: {
     type: "string",
     short: "d",
+  },
+  "env-file": {
+    type: "string",
   },
   "fail-on-pending": {
     type: "boolean",

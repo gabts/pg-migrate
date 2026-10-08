@@ -54,8 +54,8 @@ pg-migrate --version
 
 | Option                   | Use                                               |
 | ------------------------ | ------------------------------------------------- |
-| `-c, --config <path>`    | Environment file.                                 |
 | `-d, --directory <path>` | Migration directory.                              |
+| `--env-file <path>`      | Environment file.                                 |
 | `-t, --table <name>`     | History table; database commands only.            |
 | `-u, --url <url>`        | PostgreSQL URL; database commands only.           |
 | `--target <target>`      | Target version or filename; `up` and `down` only. |
@@ -72,7 +72,8 @@ target stays applied.
 
 Results and help go to stdout. Progress and errors go to stderr. A failure
 exits with code `1`, and `status --fail-on-pending` exits with `2` when
-migrations are pending. Colors follow `NO_COLOR` and `FORCE_COLOR`.
+migrations are pending. Colors follow `NO_COLOR` and `FORCE_COLOR` from the
+shell, not from the environment file.
 
 ## Configuration
 
@@ -81,8 +82,8 @@ environment file, then default.
 
 | Variable        | Use                 | Default             |
 | --------------- | ------------------- | ------------------- |
-| `PGM_CONFIG`    | Environment file    | `.env`              |
 | `PGM_DIRECTORY` | Migration directory | `migrations`        |
+| `PGM_ENV_FILE`  | Environment file    | `.env`              |
 | `PGM_TABLE`     | History table       | `schema_migrations` |
 | `PGM_URL`       | PostgreSQL URL      | None                |
 
@@ -92,9 +93,15 @@ PGM_TABLE=app.schema_migrations
 PGM_URL=postgres://localhost/app
 ```
 
-The default `.env` is optional. A file set with `--config` or `PGM_CONFIG`
-must exist. Relative paths resolve from the current directory, even when they
-are set in a file. Table and schema names must match `[a-z_][a-z0-9_]*`.
+The environment file is loaded with Node's `process.loadEnvFile`, which
+parses it like `node --env-file`. Every variable in it is loaded, so `PG*`
+variables reach the driver, and variables that are already set keep their
+values. The default `.env` is optional. A file set with `--env-file` or
+`PGM_ENV_FILE` must exist. Node itself checks a file given with `--env-file`
+before pg-migrate starts, so for a missing or unreadable file Node prints its
+own error and exits with code `9`. Relative paths resolve from the current
+directory, even when they are set in a file. Table and schema names must
+match `[a-z_][a-z0-9_]*`.
 
 Connecting times out after 10 seconds. Lock and statement waits have no
 timeout, so for deployments set them in the URL, in milliseconds:

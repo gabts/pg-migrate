@@ -159,7 +159,7 @@ describe("run", (): void => {
 
   it("does not read an option value as the help command", async (): Promise<void> => {
     const { code, stdout, stderr } = await runCli([
-      "--config",
+      "--directory",
       "help",
       "bogus",
     ]);
@@ -342,12 +342,15 @@ describe("run", (): void => {
   });
 
   it("rejects a missing database URL", async (): Promise<void> => {
-    const configPath = path.join(tempDir, ".env");
-    await fs.writeFile(configPath, "");
+    const envFilePath = path.join(tempDir, ".env");
+    await fs.writeFile(envFilePath, "");
 
-    const { code, stderr } = await runCli(["status", "--config", configPath], {
-      PGM_URL: undefined,
-    });
+    const { code, stderr } = await runCli(
+      ["status", "--env-file", envFilePath],
+      {
+        PGM_URL: undefined,
+      },
+    );
 
     assert.equal(code, 1);
     assert.ok(stderr.includes("Missing required argument 'url'."));
@@ -397,21 +400,20 @@ describe("run", (): void => {
   });
 
   it("writes the usage hint after the cause", async (): Promise<void> => {
-    const configPath = path.join(tempDir, "missing.env");
+    const envFilePath = path.join(tempDir, "missing.env");
 
-    const { code, stdout, stderr } = await runCli([
-      "status",
-      "--config",
-      configPath,
-      "--quiet",
-    ]);
+    // Node itself exits before the CLI runs when an '--env-file' argument
+    // names a missing file, so set the file through the environment.
+    const { code, stdout, stderr } = await runCli(["status", "--quiet"], {
+      PGM_ENV_FILE: envFilePath,
+    });
 
     assert.equal(code, 1);
     assert.equal(stdout, "");
     assert.equal(
       stderr,
-      `✖ Error: Cannot read config file '${configPath}'.\n` +
-        `  Cause: ENOENT: no such file or directory, open '${configPath}'\n` +
+      `✖ Error: Cannot read env file '${envFilePath}'.\n` +
+        `  Cause: ENOENT: no such file or directory, open '${envFilePath}'\n` +
         "  Run `pg-migrate status --help` for usage.\n",
     );
   });
@@ -439,7 +441,7 @@ describe("run", (): void => {
     const write = process.stderr.write;
     process.stderr.write = (): boolean => true;
     try {
-      await assert.doesNotReject(run(["node", "pgm", "bogus"], {}));
+      await assert.doesNotReject(run(["node", "pgm", "bogus"]));
       assert.equal(process.exitCode, 1);
     } finally {
       process.stderr.write = write;

@@ -21,7 +21,7 @@ describe("parse", (): void => {
 
     it("parses long string options", (): void => {
       const { values } = parseArgs([
-        "--config",
+        "--env-file",
         ".env.local",
         "--directory",
         "migrations",
@@ -36,7 +36,7 @@ describe("parse", (): void => {
       assert.deepEqual(
         { ...values },
         {
-          config: ".env.local",
+          "env-file": ".env.local",
           directory: "migrations",
           table: "migration_history",
           target: "20240101120000_init.sql",
@@ -47,8 +47,6 @@ describe("parse", (): void => {
 
     it("resolves short aliases to their long option names", (): void => {
       const { values } = parseArgs([
-        "-c",
-        ".env.local",
         "-d",
         "migrations",
         "-t",
@@ -62,7 +60,6 @@ describe("parse", (): void => {
       assert.deepEqual(
         { ...values },
         {
-          config: ".env.local",
           directory: "migrations",
           table: "migration_history",
           target: "20240101120000_init.sql",
