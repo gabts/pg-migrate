@@ -14,6 +14,7 @@ const GLOBAL_OPTIONS = [
   "quiet",
   "verbose",
 ] as const;
+const TOP_LEVEL_OPTIONS = [...GLOBAL_OPTIONS, "version"] as const;
 const DATABASE_OPTIONS = [...GLOBAL_OPTIONS, "table", "url"] as const;
 const STATUS_OPTIONS = [...DATABASE_OPTIONS, "fail-on-pending"] as const;
 const MIGRATE_OPTIONS = [...DATABASE_OPTIONS, "target"] as const;
@@ -57,11 +58,26 @@ function validateHelpTopic(positionals: string[]): Command | "help" {
   return topic;
 }
 
-/** Validates a parsed command or help request and its arguments. */
+/** Validates a parsed command, help or version request and its arguments. */
 export function validateInvocation(
   parsed: ParsedArgs,
-): ValidatedInvocation | { command: "help"; topic: Command | "help" } {
+):
+  | ValidatedInvocation
+  | { command: "help"; topic: Command | "help" }
+  | { command: "version" } {
   const [command, ...positionals] = parsed.positionals;
+  if (
+    command === undefined &&
+    parsed.values.version === true &&
+    parsed.values.help !== true
+  ) {
+    assertOptions(parsed.values, TOP_LEVEL_OPTIONS);
+    // Quiet would hide the version, which is the only output.
+    if (parsed.values.quiet === true) {
+      throw new Error("Option '--quiet' cannot be used with '--version'.");
+    }
+    return { command: "version" };
+  }
   // Options without a command suggest a script whose command is empty, such
   // as an unset variable.
   if (
@@ -73,7 +89,7 @@ export function validateInvocation(
   }
   if (command === undefined || command === "help") {
     const topic = validateHelpTopic(positionals);
-    assertOptions(parsed.values, GLOBAL_OPTIONS);
+    assertOptions(parsed.values, TOP_LEVEL_OPTIONS);
     return { command: "help", topic };
   }
   if (!isCommand(command)) {

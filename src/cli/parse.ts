@@ -39,6 +39,9 @@ const optionsDescriptors = {
     type: "boolean",
     short: "v",
   },
+  version: {
+    type: "boolean",
+  },
 } as const satisfies util.ParseArgsConfig["options"];
 
 // util.parseArgs adds explanations after the first sentence, separated by a

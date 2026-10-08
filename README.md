@@ -40,6 +40,7 @@ npx pg-migrate up --url postgres://localhost/app
 ```text
 pg-migrate <command> [arguments] [options]
 pg-migrate help [command]
+pg-migrate --version
 ```
 
 | Command           | Action                                                   |
@@ -63,6 +64,7 @@ pg-migrate help [command]
 | `-q, --quiet`            | Show only errors and requested help.              |
 | `-v, --verbose`          | Show detailed progress.                           |
 | `-h, --help`             | Show help.                                        |
+| `--version`              | Show the version; without a command only.         |
 
 A target is a 14-digit version, such as `20260811120000`, or a filename. `up`
 applies through the target. `down` reverts every migration after it, so the

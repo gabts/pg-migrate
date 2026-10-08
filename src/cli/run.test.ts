@@ -115,6 +115,27 @@ describe("run", (): void => {
     assert.ok(stderr.includes("Missing required argument 'command'."));
   });
 
+  it("writes the package version to stdout and exits 0", async (): Promise<void> => {
+    const packageJson = await fs.readFile(
+      path.join(path.dirname(cliPath), "../package.json"),
+      "utf8",
+    );
+    const { version } = JSON.parse(packageJson) as { version: string };
+    const { code, stdout, stderr } = await runCli(["--version"]);
+    assert.equal(code, 0);
+    assert.equal(stderr, "");
+    assert.equal(stdout, `${version}\n`);
+  });
+
+  it("rejects quiet mode with the version flag", async (): Promise<void> => {
+    const { code, stdout, stderr } = await runCli(["--version", "--quiet"]);
+    assert.equal(code, 1);
+    assert.equal(stdout, "");
+    assert.ok(
+      stderr.includes("Option '--quiet' cannot be used with '--version'."),
+    );
+  });
+
   it("writes command help when named by the help command", async (): Promise<void> => {
     const { code, stdout, stderr } = await runCli(["help", "up"]);
     assert.equal(code, 0);

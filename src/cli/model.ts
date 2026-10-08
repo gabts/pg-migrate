@@ -31,6 +31,7 @@ export interface Args {
   target?: string;
   url?: string;
   verbose?: boolean;
+  version?: boolean;
 }
 
 /** Parsed CLI arguments before command validation. */

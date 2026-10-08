@@ -1,3 +1,4 @@
+import * as fs from "node:fs/promises";
 import { migrate, repair, rollback, status, validate } from "../main.js";
 import { create } from "./create.js";
 import {
@@ -44,6 +45,15 @@ function ignoreClosedReader(error: NodeJS.ErrnoException): void {
   if (error.code !== "EPIPE") {
     throw error;
   }
+}
+
+// package.json is two levels up from both src/cli and dist/cli.
+async function readVersion(): Promise<string> {
+  const packageJson = await fs.readFile(
+    new URL("../../package.json", import.meta.url),
+    "utf8",
+  );
+  return (JSON.parse(packageJson) as { version: string }).version;
 }
 
 async function executeInvocation(
@@ -103,6 +113,10 @@ export async function run(
     const validated = validateInvocation(parsed);
     if (validated.command === "help") {
       process.stdout.write(getHelpText(validated.topic) + "\n");
+      return;
+    }
+    if (validated.command === "version") {
+      process.stdout.write((await readVersion()) + "\n");
       return;
     }
 

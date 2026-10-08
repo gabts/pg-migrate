@@ -4,6 +4,7 @@ const generalHelpText = `Usage:
   pg-migrate <command> [arguments] [options]
   pg-migrate help [command]
   pg-migrate <command> --help
+  pg-migrate --version
 
 Commands:
   create <name>    Create a timestamped migration file

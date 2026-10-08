@@ -243,4 +243,28 @@ describe("validate", (): void => {
     }
     assert.equal(helpTopic([], { help: true, quiet: true }), "help");
   });
+
+  it("returns a version request without a command", (): void => {
+    assert.deepEqual(
+      validateInvocation({
+        positionals: [],
+        values: { "no-color": true, version: true },
+      }),
+      { command: "version" },
+    );
+    assert.throws(
+      () =>
+        validateInvocation({
+          positionals: [],
+          values: { quiet: true, version: true },
+        }),
+      new Error("Option '--quiet' cannot be used with '--version'."),
+    );
+    assert.equal(helpTopic([], { help: true, version: true }), "help");
+    assert.throws(
+      () =>
+        validateInvocation({ positionals: ["up"], values: { version: true } }),
+      new Error("Unknown option '--version'."),
+    );
+  });
 });

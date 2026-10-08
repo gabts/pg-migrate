@@ -7,6 +7,7 @@ describe("help", (): void => {
     const help = getHelpText("help");
 
     assert.match(help, /pg-migrate <command> \[arguments\] \[options\]/);
+    assert.match(help, /pg-migrate --version/);
     const commands = ["create", "status", "validate", "up", "down", "repair"];
     for (const command of commands) {
       assert.match(help, new RegExp(`\\b${command}\\b`));
