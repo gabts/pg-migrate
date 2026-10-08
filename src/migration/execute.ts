@@ -48,11 +48,14 @@ async function executeMigration(
 ): Promise<void> {
   const sql = action === "apply" ? migrationSql.up : migrationSql.down;
   await client.query("BEGIN;");
-  if (sql !== "") {
+  if (sql.trim() !== "") {
     await client.query(sql);
     // A plain SET outlasts the transaction. Restore the connection defaults
     // for the history write and later migrations. RESET ALL keeps the role.
-    await client.query("RESET SESSION AUTHORIZATION; RESET ALL;");
+    // Deferred triggers run first, so they still see the migration settings.
+    await client.query(
+      "SET CONSTRAINTS ALL IMMEDIATE; RESET SESSION AUTHORIZATION; RESET ALL;",
+    );
   }
   await recordMigrationEvent(
     client,

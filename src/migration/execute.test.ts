@@ -104,12 +104,12 @@ describe("execute", (): void => {
       [
         "BEGIN;",
         "CREATE TABLE users (id integer);",
-        "RESET SESSION AUTHORIZATION; RESET ALL;",
+        "SET CONSTRAINTS ALL IMMEDIATE; RESET SESSION AUTHORIZATION; RESET ALL;",
         'INSERT INTO "schema_migrations" (version, file, checksum, action, executed_at, executed_by) VALUES ($1, $2, $3, $4, clock_timestamp(), session_user);',
         "COMMIT;",
         "BEGIN;",
         "CREATE TABLE posts (id integer);",
-        "RESET SESSION AUTHORIZATION; RESET ALL;",
+        "SET CONSTRAINTS ALL IMMEDIATE; RESET SESSION AUTHORIZATION; RESET ALL;",
         'INSERT INTO "schema_migrations" (version, file, checksum, action, executed_at, executed_by) VALUES ($1, $2, $3, $4, clock_timestamp(), session_user);',
         "COMMIT;",
       ],
@@ -154,12 +154,12 @@ describe("execute", (): void => {
       [
         "BEGIN;",
         "DROP TABLE posts;",
-        "RESET SESSION AUTHORIZATION; RESET ALL;",
+        "SET CONSTRAINTS ALL IMMEDIATE; RESET SESSION AUTHORIZATION; RESET ALL;",
         'INSERT INTO "schema_migrations" (version, file, checksum, action, executed_at, executed_by) VALUES ($1, $2, $3, $4, clock_timestamp(), session_user);',
         "COMMIT;",
         "BEGIN;",
         "DROP TABLE users;",
-        "RESET SESSION AUTHORIZATION; RESET ALL;",
+        "SET CONSTRAINTS ALL IMMEDIATE; RESET SESSION AUTHORIZATION; RESET ALL;",
         'INSERT INTO "schema_migrations" (version, file, checksum, action, executed_at, executed_by) VALUES ($1, $2, $3, $4, clock_timestamp(), session_user);',
         "COMMIT;",
       ],
@@ -181,7 +181,7 @@ describe("execute", (): void => {
   it("skips an empty down section", async (): Promise<void> => {
     const { client, queries } = createClient();
     const emptyDownSql = new Map<string, MigrationSql>([
-      [first.file, { checksum: "first-checksum", down: "", up: "SELECT 1;" }],
+      [first.file, { checksum: "first-checksum", down: "\n", up: "SELECT 1;" }],
     ]);
 
     const result = await executeMigrations(client, [first], emptyDownSql, {

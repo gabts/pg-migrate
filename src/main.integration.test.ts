@@ -735,6 +735,36 @@ describe(
       ]);
     });
 
+    it("runs deferred triggers with the migration settings", async (): Promise<void> => {
+      // The trigger function finds the audit table only through search_path.
+      await writeMigration(
+        firstVersion,
+        "add_items",
+        `SET search_path TO "${schema}";\n` +
+          "SET LOCAL app.value TO 'migration';\n" +
+          "CREATE TABLE audit (value text);\n" +
+          "CREATE TABLE items (id integer);\n" +
+          "CREATE FUNCTION audit_item() RETURNS trigger LANGUAGE plpgsql AS $$\n" +
+          "BEGIN\n" +
+          "  INSERT INTO audit VALUES (current_setting('app.value', true));\n" +
+          "  RETURN NULL;\n" +
+          "END;\n" +
+          "$$;\n" +
+          "CREATE CONSTRAINT TRIGGER audit_item AFTER INSERT ON items\n" +
+          "  DEFERRABLE INITIALLY DEFERRED\n" +
+          "  FOR EACH ROW EXECUTE FUNCTION audit_item();\n" +
+          "INSERT INTO items VALUES (1);",
+        "",
+      );
+
+      await migrate(commandOptions());
+
+      const result = await getAdmin().query(
+        `SELECT value FROM ${qualifiedRelation("audit")};`,
+      );
+      assert.deepEqual(result.rows, [{ value: "migration" }]);
+    });
+
     it("validates SQL only for migrations in the plan", async (): Promise<void> => {
       const firstFile = await writeMigration(
         firstVersion,

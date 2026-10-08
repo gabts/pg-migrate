@@ -111,8 +111,8 @@ describe("sql", (): void => {
     assert.doesNotThrow(() => validateMigrationSql(contents));
     assert.deepEqual(parseMigrationSql(contents).get(file), {
       checksum,
-      down: "DROP TABLE users;",
-      up: "CREATE TABLE users (id integer);",
+      down: "\nDROP TABLE users;\n",
+      up: "\nCREATE TABLE users (id integer);\n",
     });
   });
 
@@ -125,8 +125,8 @@ describe("sql", (): void => {
     validateMigrationSql(contents);
     assert.deepEqual(parseMigrationSql(contents).get(file), {
       checksum,
-      down: "SELECT 2;",
-      up: "SELECT 1;",
+      down: "\nSELECT 2;\r\n",
+      up: "\nSELECT 1;\r\n",
     });
   });
 
@@ -141,8 +141,8 @@ describe("sql", (): void => {
     validateMigrationSql(contents);
     assert.deepEqual(parseMigrationSql(contents).get(file), {
       checksum,
-      down: "SELECT 'ok';",
-      up: "SELECT '-- migrate:down';",
+      down: "\nSELECT 'ok';\n",
+      up: "\nSELECT '-- migrate:down';\n",
     });
   });
 

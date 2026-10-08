@@ -68,10 +68,8 @@ function parseSql(source: MigrationSource): MigrationSql {
   const downMarker = markers.find((marker) => marker[1] === "down")!;
   return {
     checksum: source.checksum,
-    down: sql.slice(downMarker.index! + downMarker[0].length).trim(),
-    up: sql
-      .slice(upMarker.index! + upMarker[0].length, downMarker.index!)
-      .trim(),
+    down: sql.slice(downMarker.index! + downMarker[0].length),
+    up: sql.slice(upMarker.index! + upMarker[0].length, downMarker.index!),
   };
 }
 

@@ -20,10 +20,12 @@ function runCli(
   args: string[],
   env?: NodeJS.ProcessEnv,
 ): Promise<{ code: number | string; stdout: string; stderr: string }> {
-  // A FORCE_COLOR from the test environment would add colors to stderr.
+  // A FORCE_COLOR or NO_COLOR from the test environment would change the
+  // colors on stderr.
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
     FORCE_COLOR: undefined,
+    NO_COLOR: undefined,
     ...env,
   };
   // An explicit undefined removes an inherited variable from the test.
