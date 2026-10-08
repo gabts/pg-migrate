@@ -120,15 +120,15 @@ one, even inside a SQL comment or string. `validate` checks markers in every
 file, but `up`, `down`, and `repair` check only the files they use.
 
 Each section is sent to PostgreSQL as is. If the down section is empty, `down`
-removes only the history row and leaves the schema unchanged. A later `up`
+only records the revert and leaves the schema unchanged. A later `up`
 runs the up section again.
 
 ## How migrations run
 
-The history table stores the filename and a SHA-256 checksum of each applied
-migration. `status`, `validate`, `up`, and `down` stop if an applied file was
-edited, renamed, or removed. They also stop if a pending file sorts before an
-applied one.
+The history table logs every apply, revert, and repair with the filename and a
+SHA-256 checksum of the migration. `status`, `validate`, `up`, and `down` stop
+if an applied file was edited, renamed, or removed. They also stop if a pending
+file sorts before an applied one.
 Checksums use the exact bytes of the file, so keep line endings stable:
 
 ```gitattributes
@@ -158,6 +158,8 @@ tables, prepared statements, and session advisory locks are not reset.
   `CREATE INDEX CONCURRENTLY`, fail.
 - `psql` meta-commands, variables, and `COPY FROM STDIN` are not supported.
 - The tool does not create schemas. Create the history table's schema first.
+- Do not edit the history table by hand. The tool checks the table's columns
+  but trusts the rows it wrote.
 - A command needs one server session from start to finish. Use a direct
   connection, not a pool that assigns connections per transaction or statement.
 

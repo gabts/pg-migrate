@@ -83,18 +83,6 @@ describe("consistency", (): void => {
     );
   });
 
-  it("rejects a duplicate applied version", (): void => {
-    assert.throws(
-      () =>
-        validateMigrationConsistency(
-          migrationIndex,
-          [applied(first.version), applied(first.version)],
-          checksums,
-        ),
-      new Error(`Applied migration version '${first.version}' is duplicated.`),
-    );
-  });
-
   it("rejects an applied version that is missing on disk", (): void => {
     const version = "20260811150000";
 

@@ -189,7 +189,7 @@ Behavior:
   The command checks UTF-8 encoding and marker structure only in migrations
   that it will revert.
   An empty migrate:down section runs no migration SQL.
-  The command removes only the migration history row.
+  The command only records the revert in the migration history.
   It does not restore data or reverse schema changes.
   A later up runs the original up section again.
   Each migration uses its own transaction.
@@ -230,7 +230,7 @@ Behavior:
   The command checks UTF-8 encoding and marker structure in the target.
   All file names must be valid, but other applied migrations are not checked.
   Repair edited migrations one at a time.
-  It updates only the history row and runs no migration SQL.
+  It only records a repair event in the history and runs no migration SQL.
   It does not create a missing history table.
   Make sure the schema already matches the edited file.
   The command waits for the migration advisory lock.

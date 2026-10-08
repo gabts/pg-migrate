@@ -11,8 +11,8 @@ import {
   lockMigrations,
   readAppliedMigrations,
   readValidatedHistoryDefinition,
+  recordMigrationEvent,
   resolveHistoryTable,
-  updateAppliedMigration,
   validateHistoryTableName,
   type AppliedMigration,
 } from "./migration/history.js";
@@ -453,17 +453,11 @@ export async function repair(input: RepairOptions): Promise<RepairResult> {
 
     // Other applied migrations are not checked, so that several edited
     // files can be repaired one at a time.
-    const records = applied.filter(
+    const record = applied.find(
       (migration) => migration.version === target.version,
     );
-    const record = records[0];
     if (!record) {
       throw new Error(`Migration target '${target.file}' is not applied.`);
-    }
-    if (records.length > 1) {
-      throw new Error(
-        `Applied migration version '${target.version}' is duplicated.`,
-      );
     }
     const sourceByFile = await readValidatedMigrationSql([target], options.log);
     const checksum = sourceByFile.get(target.file)!.checksum;
@@ -476,9 +470,10 @@ export async function repair(input: RepairOptions): Promise<RepairResult> {
 
     options.log({ file: target.file, type: "repair-start" });
     try {
-      await updateAppliedMigration(
+      await recordMigrationEvent(
         client,
         historyTable.qualifiedName,
+        "repair",
         target.version,
         target.file,
         checksum,

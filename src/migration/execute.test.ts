@@ -105,12 +105,12 @@ describe("execute", (): void => {
         "BEGIN;",
         "CREATE TABLE users (id integer);",
         "RESET SESSION AUTHORIZATION; RESET ALL;",
-        'INSERT INTO "schema_migrations" (version, file, checksum, applied_at) VALUES ($1, $2, $3, clock_timestamp());',
+        'INSERT INTO "schema_migrations" (version, file, checksum, action, executed_at, executed_by) VALUES ($1, $2, $3, $4, clock_timestamp(), session_user);',
         "COMMIT;",
         "BEGIN;",
         "CREATE TABLE posts (id integer);",
         "RESET SESSION AUTHORIZATION; RESET ALL;",
-        'INSERT INTO "schema_migrations" (version, file, checksum, applied_at) VALUES ($1, $2, $3, clock_timestamp());',
+        'INSERT INTO "schema_migrations" (version, file, checksum, action, executed_at, executed_by) VALUES ($1, $2, $3, $4, clock_timestamp(), session_user);',
         "COMMIT;",
       ],
     );
@@ -118,11 +118,13 @@ describe("execute", (): void => {
       first.version,
       first.file,
       "first-checksum",
+      "apply",
     ]);
     assert.deepEqual(queries[8]?.parameters, [
       second.version,
       second.file,
       "second-checksum",
+      "apply",
     ]);
     assert.deepEqual(
       events.map((event) => event.type),
@@ -153,17 +155,27 @@ describe("execute", (): void => {
         "BEGIN;",
         "DROP TABLE posts;",
         "RESET SESSION AUTHORIZATION; RESET ALL;",
-        'DELETE FROM "schema_migrations" WHERE version = $1;',
+        'INSERT INTO "schema_migrations" (version, file, checksum, action, executed_at, executed_by) VALUES ($1, $2, $3, $4, clock_timestamp(), session_user);',
         "COMMIT;",
         "BEGIN;",
         "DROP TABLE users;",
         "RESET SESSION AUTHORIZATION; RESET ALL;",
-        'DELETE FROM "schema_migrations" WHERE version = $1;',
+        'INSERT INTO "schema_migrations" (version, file, checksum, action, executed_at, executed_by) VALUES ($1, $2, $3, $4, clock_timestamp(), session_user);',
         "COMMIT;",
       ],
     );
-    assert.deepEqual(queries[3]?.parameters, [second.version]);
-    assert.deepEqual(queries[8]?.parameters, [first.version]);
+    assert.deepEqual(queries[3]?.parameters, [
+      second.version,
+      second.file,
+      "second-checksum",
+      "revert",
+    ]);
+    assert.deepEqual(queries[8]?.parameters, [
+      first.version,
+      first.file,
+      "first-checksum",
+      "revert",
+    ]);
   });
 
   it("skips an empty down section", async (): Promise<void> => {
@@ -185,11 +197,16 @@ describe("execute", (): void => {
       queries.map((query) => compact(query.sql)),
       [
         "BEGIN;",
-        'DELETE FROM "schema_migrations" WHERE version = $1;',
+        'INSERT INTO "schema_migrations" (version, file, checksum, action, executed_at, executed_by) VALUES ($1, $2, $3, $4, clock_timestamp(), session_user);',
         "COMMIT;",
       ],
     );
-    assert.deepEqual(queries[1]?.parameters, [first.version]);
+    assert.deepEqual(queries[1]?.parameters, [
+      first.version,
+      first.file,
+      "first-checksum",
+      "revert",
+    ]);
   });
 
   it("creates an uninitialized history table", async (): Promise<void> => {
@@ -213,7 +230,7 @@ describe("execute", (): void => {
       queries.map((query) => compact(query.sql)),
       [
         "BEGIN;",
-        'CREATE TABLE "app"."schema_migrations" ( version text PRIMARY KEY, file text NOT NULL, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now() );',
+        "CREATE TABLE \"app\".\"schema_migrations\" ( id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, version text NOT NULL, file text NOT NULL, checksum text NOT NULL, action text NOT NULL CHECK (action IN ('apply', 'revert', 'repair')), executed_at timestamptz NOT NULL, executed_by text NOT NULL );",
         "COMMIT;",
       ],
     );

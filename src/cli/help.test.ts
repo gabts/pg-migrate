@@ -103,7 +103,7 @@ describe("help", (): void => {
     assert.match(help, /target remains applied/);
     assert.match(help, /checks UTF-8 encoding and marker structure/i);
     assert.match(help, /empty migrate:down section runs no migration SQL/i);
-    assert.match(help, /removes only the migration history row/i);
+    assert.match(help, /only records the revert in the migration history/i);
     assert.match(help, /does not restore data or reverse schema changes/i);
     assert.match(help, /later up runs the original up section again/i);
     assert.match(help, /filenames and checksums must match/i);

@@ -1,10 +1,6 @@
 import type * as pg from "pg";
 import type { DiskMigration } from "./files.js";
-import {
-  createHistoryTable,
-  recordAppliedMigration,
-  removeAppliedMigration,
-} from "./history.js";
+import { createHistoryTable, recordMigrationEvent } from "./history.js";
 import type { LogSink, MigrateResult } from "./model.js";
 import type { MigrationSql } from "./sql.js";
 
@@ -47,10 +43,10 @@ async function executeMigration(
   client: pg.Client,
   migration: DiskMigration,
   migrationSql: MigrationSql,
-  direction: "down" | "up",
+  action: "apply" | "revert",
   qualifiedTable: string,
 ): Promise<void> {
-  const sql = migrationSql[direction];
+  const sql = action === "apply" ? migrationSql.up : migrationSql.down;
   await client.query("BEGIN;");
   if (sql !== "") {
     await client.query(sql);
@@ -58,17 +54,14 @@ async function executeMigration(
     // for the history write and later migrations. RESET ALL keeps the role.
     await client.query("RESET SESSION AUTHORIZATION; RESET ALL;");
   }
-  if (direction === "up") {
-    await recordAppliedMigration(
-      client,
-      qualifiedTable,
-      migration.version,
-      migration.file,
-      migrationSql.checksum,
-    );
-  } else {
-    await removeAppliedMigration(client, qualifiedTable, migration.version);
-  }
+  await recordMigrationEvent(
+    client,
+    qualifiedTable,
+    action,
+    migration.version,
+    migration.file,
+    migrationSql.checksum,
+  );
   await client.query("COMMIT;");
 }
 
@@ -84,6 +77,7 @@ export async function executeMigrations(
     await initializeHistory(client, options.qualifiedTable, options.table);
     options.log({ table: options.table, type: "history-initialize-done" });
   }
+  const action = options.direction === "up" ? "apply" : "revert";
   for (const migration of plan) {
     const migrationSql = sqlByFile.get(migration.file)!;
     const startedAt = Date.now();
@@ -97,7 +91,7 @@ export async function executeMigrations(
         client,
         migration,
         migrationSql,
-        options.direction,
+        action,
         options.qualifiedTable,
       );
     } catch (error) {
@@ -110,7 +104,6 @@ export async function executeMigrations(
       if (await rollbackAfterError(client)) {
         options.log({ type: "failed-migration-rollback-done" });
       }
-      const action = options.direction === "up" ? "apply" : "revert";
       throw new Error(`Failed to ${action} migration '${migration.file}'.`, {
         cause: error,
       });

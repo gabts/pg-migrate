@@ -7,12 +7,11 @@ import {
   readAppliedMigrations,
   readHistoryDefinition,
   readValidatedHistoryDefinition,
-  recordAppliedMigration,
-  removeAppliedMigration,
+  recordMigrationEvent,
   resolveHistoryTable,
-  updateAppliedMigration,
   validateHistoryDefinition,
   validateHistoryTableName,
+  type HistoryColumn,
 } from "./history.js";
 
 function noLog(): undefined {
@@ -39,6 +38,23 @@ function createClient(results: unknown[][] = []): {
     },
   } as unknown as pg.Client;
   return { client, queries };
+}
+
+function historyColumns(): HistoryColumn[] {
+  return [
+    { identity: true, name: "id", notNull: true, type: "bigint" },
+    { identity: false, name: "version", notNull: true, type: "text" },
+    { identity: false, name: "file", notNull: true, type: "text" },
+    { identity: false, name: "checksum", notNull: true, type: "text" },
+    { identity: false, name: "action", notNull: true, type: "text" },
+    {
+      identity: false,
+      name: "executed_at",
+      notNull: true,
+      type: "timestamp with time zone",
+    },
+    { identity: false, name: "executed_by", notNull: true, type: "text" },
+  ];
 }
 
 describe("history", (): void => {
@@ -218,19 +234,7 @@ describe("history", (): void => {
 
   it("validates a history definition", (): void => {
     validateHistoryDefinition(
-      {
-        columns: [
-          { name: "version", notNull: true, type: "text" },
-          { name: "file", notNull: true, type: "text" },
-          { name: "checksum", notNull: true, type: "text" },
-          {
-            name: "applied_at",
-            notNull: true,
-            type: "timestamp with time zone",
-          },
-        ],
-        initialized: true,
-      },
+      { columns: historyColumns(), initialized: true },
       "schema_migrations",
     );
   });
@@ -245,22 +249,13 @@ describe("history", (): void => {
   });
 
   it("rejects an invalid history definition", (): void => {
+    const columns = historyColumns();
+    columns[1]!.type = "integer";
+
     assert.throws(
       () =>
         validateHistoryDefinition(
-          {
-            columns: [
-              { name: "version", notNull: true, type: "integer" },
-              { name: "file", notNull: true, type: "text" },
-              { name: "checksum", notNull: true, type: "text" },
-              {
-                name: "applied_at",
-                notNull: true,
-                type: "timestamp with time zone",
-              },
-            ],
-            initialized: true,
-          },
+          { columns, initialized: true },
           "schema_migrations",
         ),
       new Error(
@@ -271,21 +266,14 @@ describe("history", (): void => {
   });
 
   it("rejects a history definition without checksums", (): void => {
+    const columns = historyColumns().filter(
+      (column) => column.name !== "checksum",
+    );
+
     assert.throws(
       () =>
         validateHistoryDefinition(
-          {
-            columns: [
-              { name: "version", notNull: true, type: "text" },
-              { name: "file", notNull: true, type: "text" },
-              {
-                name: "applied_at",
-                notNull: true,
-                type: "timestamp with time zone",
-              },
-            ],
-            initialized: true,
-          },
+          { columns, initialized: true },
           "schema_migrations",
         ),
       new Error(
@@ -296,27 +284,35 @@ describe("history", (): void => {
   });
 
   it("rejects a nullable history column", (): void => {
+    const columns = historyColumns();
+    columns[3]!.notNull = false;
+
     assert.throws(
       () =>
         validateHistoryDefinition(
-          {
-            columns: [
-              { name: "version", notNull: true, type: "text" },
-              { name: "file", notNull: true, type: "text" },
-              { name: "checksum", notNull: false, type: "text" },
-              {
-                name: "applied_at",
-                notNull: true,
-                type: "timestamp with time zone",
-              },
-            ],
-            initialized: true,
-          },
+          { columns, initialized: true },
           "schema_migrations",
         ),
       new Error(
         "Migration history table 'schema_migrations' column 'checksum' must " +
           "be NOT NULL.",
+      ),
+    );
+  });
+
+  it("rejects an id that is not an identity column", (): void => {
+    const columns = historyColumns();
+    columns[0]!.identity = false;
+
+    assert.throws(
+      () =>
+        validateHistoryDefinition(
+          { columns, initialized: true },
+          "schema_migrations",
+        ),
+      new Error(
+        "Migration history table 'schema_migrations' column 'id' must be an " +
+          "identity column.",
       ),
     );
   });
@@ -341,37 +337,22 @@ describe("history", (): void => {
     );
 
     assert.deepEqual(result, rows);
-    assert.match(queries[0]!.sql, /version,\s+file,\s+checksum,/);
-    assert.match(queries[0]!.sql, /applied_at AT TIME ZONE 'UTC'/);
+    assert.match(queries[0]!.sql, /executed_at AT TIME ZONE 'UTC'/);
     assert.match(queries[0]!.sql, /'YYYY-MM-DD"T"HH24:MI:SS\.MS"Z"'/);
-    assert.match(
-      queries[0]!.sql,
-      /FROM "app"\."schema_migrations"\s+ORDER BY version;/,
-    );
+    assert.match(queries[0]!.sql, /FROM "app"\."schema_migrations"/);
   });
 
   it("writes history changes", async (): Promise<void> => {
     const { client, queries } = createClient();
 
     await createHistoryTable(client, '"schema_migrations"');
-    await recordAppliedMigration(
+    await recordMigrationEvent(
       client,
       '"schema_migrations"',
+      "repair",
       "20260811120000",
       "20260811120000_add_users.sql",
       "migration-checksum",
-    );
-    await removeAppliedMigration(
-      client,
-      '"schema_migrations"',
-      "20260811120000",
-    );
-    await updateAppliedMigration(
-      client,
-      '"schema_migrations"',
-      "20260811120000",
-      "20260811120000_create_users.sql",
-      "new-checksum",
     );
 
     assert.match(queries[0]!.sql, /CREATE TABLE "schema_migrations"/);
@@ -380,14 +361,7 @@ describe("history", (): void => {
       "20260811120000",
       "20260811120000_add_users.sql",
       "migration-checksum",
-    ]);
-    assert.match(queries[2]!.sql, /DELETE FROM "schema_migrations"/);
-    assert.deepEqual(queries[2]!.parameters, ["20260811120000"]);
-    assert.match(queries[3]!.sql, /UPDATE "schema_migrations"/);
-    assert.deepEqual(queries[3]!.parameters, [
-      "20260811120000",
-      "20260811120000_create_users.sql",
-      "new-checksum",
+      "repair",
     ]);
   });
 });

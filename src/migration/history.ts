@@ -1,7 +1,9 @@
 import type * as pg from "pg";
 import type { LogSink } from "./model.js";
 
-interface HistoryColumn {
+/** One column of the migration history table definition. */
+export interface HistoryColumn {
+  identity: boolean;
   name: string;
   notNull: boolean;
   type: string;
@@ -23,10 +25,13 @@ const maxIdentifierLength = 63;
 const tableNamePattern = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?$/;
 
 const requiredColumns = new Map<string, string>([
+  ["id", "bigint"],
   ["version", "text"],
   ["file", "text"],
   ["checksum", "text"],
-  ["applied_at", "timestamp with time zone"],
+  ["action", "text"],
+  ["executed_at", "timestamp with time zone"],
+  ["executed_by", "text"],
 ]);
 
 /** One applied migration read from the history table. */
@@ -170,14 +175,15 @@ export async function readHistoryDefinition(
     `
       SELECT
         attname AS name,
+        attidentity <> '' AS identity,
         attnotnull AS "notNull",
         format_type(atttypid, atttypmod) AS type
       FROM pg_attribute
       WHERE attrelid = $1::regclass
-        AND attname IN ('version', 'file', 'checksum', 'applied_at')
+        AND attname = ANY($2)
         AND NOT attisdropped;
     `,
-    [qualifiedTable],
+    [qualifiedTable, [...requiredColumns.keys()]],
   );
   return { columns: columnsResult.rows, initialized: true };
 }
@@ -210,6 +216,13 @@ export function validateHistoryDefinition(
           "be NOT NULL.",
       );
     }
+    // Events are read in id order, so the database must assign each id.
+    if (name === "id" && !column.identity) {
+      throw new Error(
+        `Migration history table '${table}' column 'id' must be an ` +
+          "identity column.",
+      );
+    }
   }
 }
 
@@ -237,7 +250,7 @@ export async function readValidatedHistoryDefinition(
   return definition;
 }
 
-/** Reads applied migrations from the history table. */
+/** Reads applied migrations, one per version, in version order. */
 export async function readAppliedMigrations(
   client: pg.Client,
   qualifiedTable: string,
@@ -247,18 +260,33 @@ export async function readAppliedMigrations(
   log({ table, type: "applied-read-start" });
   let result: pg.QueryResult<AppliedMigration>;
   try {
+    // The latest event of a version holds its current file and checksum.
+    // Events are ordered by id because clock times can tie or go backwards.
     // Format in SQL so global pg timestamp parsers cannot change the result.
     result = await client.query<AppliedMigration>(
       `
+        WITH latest AS (
+          SELECT DISTINCT ON (version) version, file, checksum, action
+          FROM ${qualifiedTable}
+          ORDER BY version, id DESC
+        ),
+        applied AS (
+          SELECT DISTINCT ON (version) version, executed_at
+          FROM ${qualifiedTable}
+          WHERE action = 'apply'
+          ORDER BY version, id DESC
+        )
         SELECT
           version,
-          file,
-          checksum,
+          latest.file,
+          latest.checksum,
           to_char(
-            applied_at AT TIME ZONE 'UTC',
+            applied.executed_at AT TIME ZONE 'UTC',
             'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
           ) AS "appliedAt"
-        FROM ${qualifiedTable}
+        FROM latest
+        JOIN applied USING (version)
+        WHERE latest.action <> 'revert'
         ORDER BY version;
       `,
     );
@@ -279,52 +307,33 @@ export async function createHistoryTable(
   await client.query(`
     CREATE TABLE ${qualifiedTable}
     (
-      version text PRIMARY KEY,
+      id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      version text NOT NULL,
       file text NOT NULL,
       checksum text NOT NULL,
-      applied_at timestamptz NOT NULL DEFAULT now()
+      action text NOT NULL CHECK (action IN ('apply', 'revert', 'repair')),
+      executed_at timestamptz NOT NULL,
+      executed_by text NOT NULL
     );
   `);
 }
 
-/** Adds an applied migration to the history table. */
-export async function recordAppliedMigration(
+/** Adds a migration event to the history table. */
+export async function recordMigrationEvent(
   client: pg.Client,
   qualifiedTable: string,
+  action: "apply" | "repair" | "revert",
   version: string,
   file: string,
   checksum: string,
 ): Promise<void> {
-  // Supply database time so existing history tables do not need a default.
+  // clock_timestamp() is the time of the write. now() would be the start of
+  // the transaction, which a slow migration can push far into the past. The
+  // session user is the login role, which SET ROLE does not change.
   await client.query(
     `INSERT INTO ${qualifiedTable} ` +
-      `(version, file, checksum, applied_at) ` +
-      `VALUES ($1, $2, $3, clock_timestamp());`,
-    [version, file, checksum],
-  );
-}
-
-/** Removes an applied migration from the history table. */
-export async function removeAppliedMigration(
-  client: pg.Client,
-  qualifiedTable: string,
-  version: string,
-): Promise<void> {
-  await client.query(`DELETE FROM ${qualifiedTable} WHERE version = $1;`, [
-    version,
-  ]);
-}
-
-/** Records the current file and checksum of an applied migration. */
-export async function updateAppliedMigration(
-  client: pg.Client,
-  qualifiedTable: string,
-  version: string,
-  file: string,
-  checksum: string,
-): Promise<void> {
-  await client.query(
-    `UPDATE ${qualifiedTable} SET file = $2, checksum = $3 WHERE version = $1;`,
-    [version, file, checksum],
+      "(version, file, checksum, action, executed_at, executed_by) " +
+      "VALUES ($1, $2, $3, $4, clock_timestamp(), session_user);",
+    [version, file, checksum, action],
   );
 }

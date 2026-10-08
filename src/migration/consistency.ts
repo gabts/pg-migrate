@@ -4,15 +4,9 @@ import type { LogSink } from "./model.js";
 
 function validateAppliedMigration(
   migration: AppliedMigration,
-  seenVersions: Set<string>,
   migrationIndex: MigrationIndex,
   checksums: Map<string, string>,
 ): void {
-  if (seenVersions.has(migration.version)) {
-    throw new Error(
-      `Applied migration version '${migration.version}' is duplicated.`,
-    );
-  }
   const diskMigration = migrationIndex.byVersion.get(migration.version);
   if (!diskMigration) {
     throw new Error(
@@ -32,7 +26,6 @@ function validateAppliedMigration(
         "recorded checksum.",
     );
   }
-  seenVersions.add(migration.version);
 }
 
 function findLatestApplied(
@@ -76,15 +69,12 @@ export function validateMigrationConsistency(
   log: LogSink = (): undefined => undefined,
 ): void {
   log({ type: "consistency-validation-start" });
-  const appliedVersions = new Set<string>();
   for (const migration of applied) {
-    validateAppliedMigration(
-      migration,
-      appliedVersions,
-      migrationIndex,
-      checksums,
-    );
+    validateAppliedMigration(migration, migrationIndex, checksums);
   }
+  const appliedVersions = new Set(
+    applied.map((migration) => migration.version),
+  );
   validateContinuousHistory(migrationIndex, appliedVersions);
   log({ type: "consistency-validation-done" });
 }

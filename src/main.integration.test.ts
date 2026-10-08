@@ -83,12 +83,12 @@ async function relationExists(name: string): Promise<boolean> {
   return result.rows[0]?.exists ?? false;
 }
 
-async function readHistoryVersions(): Promise<string[]> {
-  const result = await getAdmin().query<{ version: string }>(
-    `SELECT version FROM ${qualifiedRelation("schema_migrations")} ` +
-      "ORDER BY version;",
+async function readHistoryEvents(): Promise<string[]> {
+  const result = await getAdmin().query<{ action: string; version: string }>(
+    "SELECT action, version " +
+      `FROM ${qualifiedRelation("schema_migrations")} ORDER BY id;`,
   );
-  return result.rows.map((row) => row.version);
+  return result.rows.map((row) => `${row.action} ${row.version}`);
 }
 
 describe("PostgreSQL test configuration", (): void => {
@@ -302,9 +302,9 @@ describe(
         target: secondVersion,
       });
       assert.deepEqual(firstUp, { files: [firstFile, secondFile] });
-      assert.deepEqual(await readHistoryVersions(), [
-        firstVersion,
-        secondVersion,
+      assert.deepEqual(await readHistoryEvents(), [
+        `apply ${firstVersion}`,
+        `apply ${secondVersion}`,
       ]);
 
       assert.deepEqual(await validate(commandOptions()), {
@@ -325,14 +325,27 @@ describe(
         target: firstFile,
       });
       assert.deepEqual(targetedDown, { files: [thirdFile, secondFile] });
-      assert.deepEqual(await readHistoryVersions(), [firstVersion]);
+      assert.deepEqual(await readHistoryEvents(), [
+        `apply ${firstVersion}`,
+        `apply ${secondVersion}`,
+        `apply ${thirdVersion}`,
+        `revert ${thirdVersion}`,
+        `revert ${secondVersion}`,
+      ]);
       assert.equal(await relationExists("posts"), false);
       assert.equal(await relationExists("users"), true);
 
       assert.deepEqual(await rollback(commandOptions()), {
         files: [firstFile],
       });
-      assert.deepEqual(await readHistoryVersions(), []);
+      assert.deepEqual(await readHistoryEvents(), [
+        `apply ${firstVersion}`,
+        `apply ${secondVersion}`,
+        `apply ${thirdVersion}`,
+        `revert ${thirdVersion}`,
+        `revert ${secondVersion}`,
+        `revert ${firstVersion}`,
+      ]);
       assert.equal(await relationExists("users"), false);
     });
 
@@ -365,6 +378,62 @@ describe(
       for (const command of [status, validate, migrate, rollback]) {
         await assert.rejects(command(commandOptions()), error);
       }
+    });
+
+    it("records every history change as an event", async (): Promise<void> => {
+      const file = await writeMigration(
+        firstVersion,
+        "add_users",
+        "SELECT 1;",
+        "",
+      );
+      const contents = await fs.readFile(path.join(directory, file));
+      const checksum = createHash("sha256").update(contents).digest("hex");
+      await migrate(commandOptions());
+      await rollback(commandOptions());
+      await migrate(commandOptions());
+      const renamedFile = `${firstVersion}_create_users.sql`;
+      await fs.rename(
+        path.join(directory, file),
+        path.join(directory, renamedFile),
+      );
+      await repair({ ...commandOptions(), target: firstVersion });
+
+      const events = await getAdmin().query(
+        "SELECT action, version, file, checksum, " +
+          "executed_by = session_user AS by_session_user, " +
+          "to_char(executed_at AT TIME ZONE 'UTC', " +
+          `'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS executed_at ` +
+          `FROM ${qualifiedRelation("schema_migrations")} ORDER BY id;`,
+      );
+      const event = {
+        by_session_user: true,
+        checksum,
+        file,
+        version: firstVersion,
+      };
+      assert.deepEqual(
+        events.rows.map(({ executed_at: _, ...row }) => row),
+        [
+          { ...event, action: "apply" },
+          { ...event, action: "revert" },
+          { ...event, action: "apply" },
+          { ...event, action: "repair", file: renamedFile },
+        ],
+      );
+
+      // The applied time stays at the latest apply event after a repair.
+      const migrationStatus = await status(commandOptions());
+      assert.deepEqual(migrationStatus.summary, {
+        applied: 1,
+        pending: 0,
+        total: 1,
+      });
+      assert.equal(migrationStatus.current?.file, renamedFile);
+      assert.equal(
+        migrationStatus.current?.appliedAt,
+        events.rows[2]?.executed_at,
+      );
     });
 
     it("rejects a renamed applied migration", async (): Promise<void> => {
@@ -432,10 +501,14 @@ describe(
           "repair-done",
         ],
       );
-      const history = await getAdmin().query<{ file: string }>(
-        `SELECT file FROM ${qualifiedRelation("schema_migrations")};`,
+      const history = await getAdmin().query<{ action: string; file: string }>(
+        "SELECT action, file " +
+          `FROM ${qualifiedRelation("schema_migrations")} ORDER BY id;`,
       );
-      assert.deepEqual(history.rows, [{ file: renamedFile }]);
+      assert.deepEqual(history.rows, [
+        { action: "apply", file },
+        { action: "repair", file: renamedFile },
+      ]);
       assert.deepEqual(await rollback(commandOptions()), {
         files: [renamedFile],
       });
@@ -507,43 +580,7 @@ describe(
       );
     });
 
-    it("rejects a repair of a duplicated history version", async (): Promise<void> => {
-      const file = await writeMigration(
-        firstVersion,
-        "add_users",
-        "SELECT 1;",
-        "",
-      );
-      // A history table that the user created can lack the primary key.
-      await getAdmin().query(`
-        CREATE TABLE ${qualifiedRelation("schema_migrations")}
-        (
-          version text NOT NULL,
-          file text NOT NULL,
-          checksum text NOT NULL,
-          applied_at timestamptz NOT NULL DEFAULT now()
-        );
-      `);
-      await getAdmin().query(
-        `INSERT INTO ${qualifiedRelation("schema_migrations")} ` +
-          "(version, file, checksum) VALUES ($1, $2, 'old'), ($1, $2, 'old');",
-        [firstVersion, file],
-      );
-
-      await assert.rejects(
-        repair({ ...commandOptions(), target: firstVersion }),
-        new Error(`Applied migration version '${firstVersion}' is duplicated.`),
-      );
-      const history = await getAdmin().query<{ checksum: string }>(
-        `SELECT checksum FROM ${qualifiedRelation("schema_migrations")};`,
-      );
-      assert.deepEqual(history.rows, [
-        { checksum: "old" },
-        { checksum: "old" },
-      ]);
-    });
-
-    it("wraps a failed repair update", async (): Promise<void> => {
+    it("wraps a failed repair write", async (): Promise<void> => {
       const file = await writeMigration(
         firstVersion,
         "add_users",
@@ -605,11 +642,14 @@ describe(
       const options = unqualifiedCommandOptions();
 
       assert.deepEqual(await migrate(options), { files: [file] });
-      assert.deepEqual(await readHistoryVersions(), [firstVersion]);
+      assert.deepEqual(await readHistoryEvents(), [`apply ${firstVersion}`]);
       assert.equal((await status(options)).current?.file, file);
 
       assert.deepEqual(await rollback(options), { files: [file] });
-      assert.deepEqual(await readHistoryVersions(), []);
+      assert.deepEqual(await readHistoryEvents(), [
+        `apply ${firstVersion}`,
+        `revert ${firstVersion}`,
+      ]);
       assert.equal(await relationExists("users"), false);
     });
 
@@ -690,7 +730,12 @@ describe(
       assert.deepEqual(await rollback(commandOptions()), {
         files: [firstFile],
       });
-      assert.deepEqual(await readHistoryVersions(), []);
+      assert.deepEqual(await readHistoryEvents(), [
+        `apply ${firstVersion}`,
+        `apply ${secondVersion}`,
+        `revert ${secondVersion}`,
+        `revert ${firstVersion}`,
+      ]);
     });
 
     it("reverts a migration with an empty down section", async (): Promise<void> => {
@@ -706,7 +751,10 @@ describe(
 
       assert.deepEqual(result, { files: [file] });
       assert.equal(await relationExists("users"), true);
-      assert.deepEqual(await readHistoryVersions(), []);
+      assert.deepEqual(await readHistoryEvents(), [
+        `apply ${firstVersion}`,
+        `revert ${firstVersion}`,
+      ]);
     });
 
     it("keeps committed migrations when a later migration fails", async (): Promise<void> => {
@@ -740,7 +788,7 @@ describe(
 
       assert.equal(await relationExists("users"), true);
       assert.equal(await relationExists("posts"), false);
-      assert.deepEqual(await readHistoryVersions(), [firstVersion]);
+      assert.deepEqual(await readHistoryEvents(), [`apply ${firstVersion}`]);
     });
 
     it("writes a short migration failure only in default output", async (): Promise<void> => {
@@ -815,7 +863,7 @@ describe(
 
       assert.deepEqual(result, { files: [file] });
       assert.equal(await relationExists("users"), true);
-      assert.deepEqual(await readHistoryVersions(), [firstVersion]);
+      assert.deepEqual(await readHistoryEvents(), [`apply ${firstVersion}`]);
     });
 
     it("refreshes applied checksums after waiting for the lock", async (): Promise<void> => {
@@ -874,7 +922,7 @@ describe(
         await lockClient.end();
       }
 
-      assert.deepEqual(await readHistoryVersions(), [firstVersion]);
+      assert.deepEqual(await readHistoryEvents(), [`apply ${firstVersion}`]);
       assert.equal(await relationExists("users"), true);
     });
 
@@ -1003,7 +1051,7 @@ describe(
 
       const applied = results.filter((result) => result.files.length > 0);
       assert.deepEqual(applied, [{ files: [file] }]);
-      assert.deepEqual(await readHistoryVersions(), [firstVersion]);
+      assert.deepEqual(await readHistoryEvents(), [`apply ${firstVersion}`]);
     });
 
     it("rejects when the database connection is lost", async (): Promise<void> => {
@@ -1123,8 +1171,8 @@ describe(
       await getAdmin().query(`
         CREATE TABLE ${qualifiedRelation("schema_migrations")}
         (
-          version integer PRIMARY KEY,
-          applied_at timestamptz NOT NULL DEFAULT now()
+          id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+          version integer NOT NULL
         );
       `);
 
@@ -1137,32 +1185,47 @@ describe(
       );
     });
 
-    it("rejects a null applied timestamp", async (): Promise<void> => {
-      await writeMigration(
-        firstVersion,
-        "add_users",
-        `CREATE TABLE ${qualifiedRelation("users")} (id integer);`,
-        `DROP TABLE ${qualifiedRelation("users")};`,
-      );
+    it("rejects an id without an identity", async (): Promise<void> => {
       await getAdmin().query(`
         CREATE TABLE ${qualifiedRelation("schema_migrations")}
         (
-          version text PRIMARY KEY,
+          id bigint NOT NULL DEFAULT 0,
+          version text NOT NULL,
           file text NOT NULL,
           checksum text NOT NULL,
-          applied_at timestamptz
+          action text NOT NULL,
+          executed_at timestamptz NOT NULL,
+          executed_by text NOT NULL
         );
       `);
-      await getAdmin().query(
-        `INSERT INTO ${qualifiedRelation("schema_migrations")} ` +
-          "(version, file, checksum, applied_at) VALUES ($1, $2, $3, NULL);",
-        [firstVersion, `${firstVersion}_add_users.sql`, "checksum"],
+
+      await assert.rejects(
+        validate(commandOptions()),
+        new Error(
+          `Migration history table '${table}' column 'id' must be an ` +
+            "identity column.",
+        ),
       );
+    });
+
+    it("rejects a nullable history column", async (): Promise<void> => {
+      await getAdmin().query(`
+        CREATE TABLE ${qualifiedRelation("schema_migrations")}
+        (
+          id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+          version text NOT NULL,
+          file text NOT NULL,
+          checksum text NOT NULL,
+          action text NOT NULL,
+          executed_at timestamptz,
+          executed_by text NOT NULL
+        );
+      `);
 
       await assert.rejects(
         status(commandOptions()),
         new Error(
-          `Migration history table '${table}' column 'applied_at' must be ` +
+          `Migration history table '${table}' column 'executed_at' must be ` +
             "NOT NULL.",
         ),
       );
