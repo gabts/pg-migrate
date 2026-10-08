@@ -56,7 +56,7 @@ pg-migrate --version
 | ------------------------ | ------------------------------------------------- |
 | `-d, --directory <path>` | Migration directory.                              |
 | `--env-file <path>`      | Environment file.                                 |
-| `-t, --table <name>`     | History table; database commands only.            |
+| `--table <name>`         | History table; database commands only.            |
 | `-u, --url <url>`        | PostgreSQL URL; database commands only.           |
 | `--target <target>`      | Target version or filename; `up` and `down` only. |
 | `--fail-on-pending`      | `status` exits `2` when migrations are pending.   |

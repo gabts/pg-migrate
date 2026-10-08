@@ -25,7 +25,6 @@ const optionsDescriptors = {
   },
   table: {
     type: "string",
-    short: "t",
   },
   target: {
     type: "string",

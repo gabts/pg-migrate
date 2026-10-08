@@ -49,10 +49,6 @@ describe("parse", (): void => {
       const { values } = parseArgs([
         "-d",
         "migrations",
-        "-t",
-        "migration_history",
-        "--target",
-        "20240101120000_init.sql",
         "-u",
         "postgres://localhost/db",
       ]);
@@ -61,8 +57,6 @@ describe("parse", (): void => {
         { ...values },
         {
           directory: "migrations",
-          table: "migration_history",
-          target: "20240101120000_init.sql",
           url: "postgres://localhost/db",
         },
       );
