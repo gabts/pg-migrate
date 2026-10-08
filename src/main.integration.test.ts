@@ -630,6 +630,55 @@ describe(
       assert.equal(stderr, "Running pg-migrate repair...\n");
     });
 
+    it("exits 2 from status with pending migrations", async (): Promise<void> => {
+      const file = await writeMigration(
+        firstVersion,
+        "add_users",
+        "SELECT 1;",
+        "",
+      );
+      const args = [
+        ...[cliPath, "status", "--url", testUrl],
+        ...["--directory", directory, "--table", table],
+      ];
+      const failArgs = [...args, "--fail-on-pending"];
+      const quietArgs = [...failArgs, "--quiet"];
+
+      // execFile rejects when the exit code is not zero. The error contains
+      // the exit code and output streams.
+      await assert.rejects(
+        promisify(execFile)(process.execPath, failArgs),
+        (error: { code: number; stdout: string }): boolean => {
+          assert.equal(error.code, 2);
+          assert.equal(
+            error.stdout,
+            "History table is not initialized.\n" +
+              `○ Pending  ${file}\n` +
+              "0 applied, 1 pending, 1 total.\n",
+          );
+          return true;
+        },
+      );
+      await assert.rejects(
+        promisify(execFile)(process.execPath, quietArgs),
+        (error: { code: number; stderr: string; stdout: string }): boolean => {
+          assert.equal(error.code, 2);
+          assert.equal(error.stdout, "");
+          assert.equal(error.stderr, "");
+          return true;
+        },
+      );
+      // Without the flag, pending migrations exit 0.
+      await promisify(execFile)(process.execPath, [...args, "--quiet"]);
+      await migrate(commandOptions());
+      const { stdout, stderr } = await promisify(execFile)(
+        process.execPath,
+        quietArgs,
+      );
+      assert.equal(stdout, "");
+      assert.equal(stderr, "");
+    });
+
     it("keeps an unqualified history table in one schema", async (): Promise<void> => {
       const file = await writeMigration(
         firstVersion,
@@ -806,8 +855,6 @@ describe(
       // A FORCE_COLOR from the test environment would add colors to stderr.
       const options = { env: { ...process.env, FORCE_COLOR: undefined } };
 
-      // execFile rejects when the exit code is not zero. The error contains
-      // the exit code and output streams.
       await assert.rejects(
         promisify(execFile)(process.execPath, args, options),
         (error: { code: number; stderr: string }): boolean => {

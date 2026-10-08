@@ -147,6 +147,24 @@ describe("validate", (): void => {
         }),
       new Error("Unknown option '--target'."),
     );
+    assert.throws(
+      () =>
+        validateInvocation({
+          positionals: ["validate"],
+          values: { "fail-on-pending": true },
+        }),
+      new Error("Unknown option '--fail-on-pending'."),
+    );
+  });
+
+  it("accepts the pending flag for status", (): void => {
+    assert.deepEqual(
+      validateInvocation({
+        positionals: ["status"],
+        values: { "fail-on-pending": true },
+      }),
+      { command: "status", values: { "fail-on-pending": true } },
+    );
   });
 
   it("returns the help topic for a help request", (): void => {

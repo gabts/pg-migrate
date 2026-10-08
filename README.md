@@ -58,6 +58,7 @@ pg-migrate help [command]
 | `-t, --table <name>`     | History table; database commands only.            |
 | `-u, --url <url>`        | PostgreSQL URL; database commands only.           |
 | `--target <target>`      | Target version or filename; `up` and `down` only. |
+| `--fail-on-pending`      | `status` exits `2` when migrations are pending.   |
 | `--no-color`             | Disable color.                                    |
 | `-q, --quiet`            | Show only errors and requested help.              |
 | `-v, --verbose`          | Show detailed progress.                           |
@@ -68,7 +69,8 @@ applies through the target. `down` reverts every migration after it, so the
 target stays applied.
 
 Results and help go to stdout. Progress and errors go to stderr. A failure
-exits with code `1`. Colors follow `NO_COLOR` and `FORCE_COLOR`.
+exits with code `1`, and `status --fail-on-pending` exits with `2` when
+migrations are pending. Colors follow `NO_COLOR` and `FORCE_COLOR`.
 
 ## Configuration
 

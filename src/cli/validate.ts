@@ -15,6 +15,7 @@ const GLOBAL_OPTIONS = [
   "verbose",
 ] as const;
 const DATABASE_OPTIONS = [...GLOBAL_OPTIONS, "table", "url"] as const;
+const STATUS_OPTIONS = [...DATABASE_OPTIONS, "fail-on-pending"] as const;
 const MIGRATE_OPTIONS = [...DATABASE_OPTIONS, "target"] as const;
 
 function assertNoPositionals(positionals: string[]): void {
@@ -96,7 +97,10 @@ export function validateInvocation(
     case "status":
     case "validate":
       assertNoPositionals(positionals);
-      assertOptions(parsed.values, DATABASE_OPTIONS);
+      assertOptions(
+        parsed.values,
+        command === "status" ? STATUS_OPTIONS : DATABASE_OPTIONS,
+      );
       return help
         ? { command: "help", topic: command }
         : { command, values: parsed.values };

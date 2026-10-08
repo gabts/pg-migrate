@@ -110,6 +110,15 @@ export async function resolveInvocation(
 
   switch (invocation.command) {
     case "status":
+      return {
+        command: invocation.command,
+        failOnPending: invocation.values["fail-on-pending"] === true,
+        options: {
+          directory: config.directory,
+          table: config.table,
+          url,
+        },
+      };
     case "validate":
       return {
         command: invocation.command,

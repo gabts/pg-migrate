@@ -10,6 +10,9 @@ const optionsDescriptors = {
     type: "string",
     short: "d",
   },
+  "fail-on-pending": {
+    type: "boolean",
+  },
   help: {
     type: "boolean",
     short: "h",

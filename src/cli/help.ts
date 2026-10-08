@@ -72,6 +72,7 @@ Options:
   -d, --directory <path> Migrations directory, defaults to PGM_DIRECTORY or migrations
   -t, --table <name>     History table, defaults to PGM_TABLE or schema_migrations
   -u, --url <url>        PostgreSQL URL, or use PGM_URL
+  --fail-on-pending      Exit with 2 when migrations are pending
   --no-color             Disable color in progress and error output
   -q, --quiet            Suppress output except errors and explicit help
   -v, --verbose          Show progress logs
@@ -84,6 +85,7 @@ Behavior:
   It does not create a missing history table.
   A missing history table is reported as uninitialized.
   The command does not acquire the migration advisory lock.
+  With --fail-on-pending, pending migrations exit 2. Errors exit 1.
 
 Output:
   Migration states and counts go to stdout.
@@ -91,8 +93,9 @@ Output:
   --verbose also shows phase progress on stderr.
   --quiet suppresses normal command output; errors remain visible.
 
-Example:
-  pg-migrate status --url postgres://localhost/app`;
+Examples:
+  pg-migrate status --url postgres://localhost/app
+  pg-migrate status --quiet --fail-on-pending`;
 
 const validateHelpText = `Usage:
   pg-migrate validate [options]

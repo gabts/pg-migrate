@@ -23,6 +23,7 @@ export type Command = (typeof COMMANDS)[number];
 export interface Args {
   config?: string;
   directory?: string;
+  "fail-on-pending"?: boolean;
   help?: boolean;
   "no-color"?: boolean;
   quiet?: boolean;
@@ -63,7 +64,7 @@ export type ResolvedInvocation =
       command: "create";
       options: { directory: string; name: string };
     }
-  | { command: "status"; options: DatabaseOptions }
+  | { command: "status"; failOnPending: boolean; options: DatabaseOptions }
   | { command: "validate"; options: DatabaseOptions }
   | { command: "up"; options: MigrateOptions }
   | { command: "down"; options: MigrateOptions }

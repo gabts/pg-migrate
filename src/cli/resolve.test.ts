@@ -39,6 +39,25 @@ describe("resolve", (): void => {
       await resolveInvocation(status({ url: "postgres://args/db" }), {}),
       {
         command: "status",
+        failOnPending: false,
+        options: {
+          directory: "migrations",
+          table: "schema_migrations",
+          url: "postgres://args/db",
+        },
+      },
+    );
+  });
+
+  it("resolves the status pending flag", async (): Promise<void> => {
+    assert.deepEqual(
+      await resolveInvocation(
+        status({ "fail-on-pending": true, url: "postgres://args/db" }),
+        {},
+      ),
+      {
+        command: "status",
+        failOnPending: true,
         options: {
           directory: "migrations",
           table: "schema_migrations",
@@ -161,6 +180,7 @@ describe("resolve", (): void => {
       }),
       {
         command: "status",
+        failOnPending: false,
         options: {
           directory: "sql/migrations",
           table: "migration_history",
@@ -195,6 +215,7 @@ PGM_URL=postgres://file/db
       await resolveInvocation(status({ config: configPath }), {}),
       {
         command: "status",
+        failOnPending: false,
         options: {
           directory: "sql/migrations",
           table: "migration_history",

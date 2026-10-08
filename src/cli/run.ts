@@ -54,8 +54,14 @@ async function executeInvocation(
     case "create": {
       return create({ ...invocation.options, log });
     }
-    case "status":
-      return formatStatus(await status({ ...invocation.options, log }));
+    case "status": {
+      const result = await status({ ...invocation.options, log });
+      // Exit code 1 is for errors, so a check can tell them apart.
+      if (invocation.failOnPending && result.summary.pending > 0) {
+        process.exitCode = 2;
+      }
+      return formatStatus(result);
+    }
     case "validate":
       return formatValidation(await validate({ ...invocation.options, log }));
     case "up":
@@ -72,7 +78,8 @@ async function executeInvocation(
 
 /**
  * CLI entry point: runs the invocation and converts any error into a stderr
- * message and exit code 1.
+ * message and exit code 1. `status --fail-on-pending` exits 2 when
+ * migrations are pending.
  */
 export async function run(
   argv = process.argv,
