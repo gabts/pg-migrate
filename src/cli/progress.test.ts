@@ -84,6 +84,29 @@ describe("progress", (): void => {
     assert.equal(output.match(/\n/g)?.length, 5);
   });
 
+  it("replaces the repair phase with one completed line", (): void => {
+    const captured = captureStream(true);
+    const progress = createVerboseOutput(captured.stream);
+
+    progress.log({
+      file: "20260719120000_add_users.sql",
+      type: "repair-start",
+    });
+    progress.log({
+      file: "20260719120000_add_users.sql",
+      type: "repair-done",
+    });
+
+    const output = captured.read();
+    assert.match(output, /⠋ Updating migration history for '20260719120000_/);
+    assert.ok(
+      output.endsWith(
+        "› Updated migration history for '20260719120000_add_users.sql'.\n",
+      ),
+    );
+    assert.equal(output.match(/\n/g)?.length, 1);
+  });
+
   it("prints stable progress lines for redirected output", (): void => {
     const captured = captureStream(false);
     const progress = createVerboseOutput(captured.stream);

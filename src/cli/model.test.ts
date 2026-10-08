@@ -4,7 +4,8 @@ import { isCommand } from "./model.js";
 
 describe("model", (): void => {
   it("accepts every recognized command", (): void => {
-    for (const command of ["create", "status", "validate", "up", "down"]) {
+    const commands = ["create", "status", "validate", "up", "down", "repair"];
+    for (const command of commands) {
       assert.equal(isCommand(command), true);
     }
   });

@@ -314,3 +314,17 @@ export async function removeAppliedMigration(
     version,
   ]);
 }
+
+/** Records the current file and checksum of an applied migration. */
+export async function updateAppliedMigration(
+  client: pg.Client,
+  qualifiedTable: string,
+  version: string,
+  file: string,
+  checksum: string,
+): Promise<void> {
+  await client.query(
+    `UPDATE ${qualifiedTable} SET file = $2, checksum = $3 WHERE version = $1;`,
+    [version, file, checksum],
+  );
+}

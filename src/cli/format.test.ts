@@ -7,6 +7,7 @@ import {
   formatFailureCause,
   formatHelpHint,
   formatMigrate,
+  formatRepair,
   formatStatus,
   formatValidation,
 } from "./format.js";
@@ -102,6 +103,15 @@ describe("format", (): void => {
 
     it("omits an empty migration result", (): void => {
       assert.equal(formatMigrate({ files: [] }, "up"), undefined);
+    });
+  });
+
+  describe("formatRepair", (): void => {
+    it("names the repaired migration", (): void => {
+      assert.equal(
+        formatRepair({ file: "20260811120000_add_users.sql" }),
+        "Repaired migration '20260811120000_add_users.sql'.",
+      );
     });
   });
 
@@ -454,6 +464,18 @@ describe("format", (): void => {
           false,
         ),
         "› Initialized migration history table 'schema_migrations'.",
+      );
+    });
+
+    it("formats history repair", (): void => {
+      const file = "20260811120000_add_users.sql";
+      assert.equal(
+        formatEvent({ file, type: "repair-start" }, false),
+        `Updating migration history for '${file}'...`,
+      );
+      assert.equal(
+        formatEvent({ file, type: "repair-done" }, false),
+        `› Updated migration history for '${file}'.`,
       );
     });
 

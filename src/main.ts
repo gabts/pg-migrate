@@ -12,6 +12,7 @@ import {
   readAppliedMigrations,
   readValidatedHistoryDefinition,
   resolveHistoryTable,
+  updateAppliedMigration,
   validateHistoryTableName,
   type AppliedMigration,
 } from "./migration/history.js";
@@ -22,6 +23,8 @@ import type {
   LogSink,
   MigrateOptions,
   MigrateResult,
+  RepairOptions,
+  RepairResult,
   StatusResult,
   ValidationResult,
 } from "./migration/model.js";
@@ -38,6 +41,8 @@ export type {
   LogSink,
   MigrateOptions,
   MigrateResult,
+  RepairOptions,
+  RepairResult,
   StatusResult,
   ValidationResult,
 } from "./migration/model.js";
@@ -408,6 +413,83 @@ export async function rollback(input: MigrateOptions): Promise<MigrateResult> {
       qualifiedTable: historyTable.qualifiedName,
       table: options.table,
     });
+  } finally {
+    await disconnectDatabase(client, options.log);
+  }
+}
+
+/** Records the current file and checksum of one applied migration. */
+export async function repair(input: RepairOptions): Promise<RepairResult> {
+  const options = withSafeLog(input);
+  const client = createDatabaseClient(options.url);
+  validateHistoryTableName(options.table);
+  const migrationIndex = await readMigrationIndex(
+    options.directory,
+    options.log,
+  );
+  const target = findMigrationTarget(
+    options.target,
+    migrationIndex,
+    options.log,
+  );
+  await connectDatabase(client, options.log);
+  try {
+    const historyTable = await resolveHistoryTable(client, options.table);
+    await lockMigrations(client, historyTable, options.log);
+    const history = await readValidatedHistoryDefinition(
+      client,
+      historyTable.qualifiedName,
+      options.table,
+      options.log,
+    );
+    const applied = history.initialized
+      ? await readAppliedMigrations(
+          client,
+          historyTable.qualifiedName,
+          options.table,
+          options.log,
+        )
+      : [];
+
+    // Other applied migrations are not checked, so that several edited
+    // files can be repaired one at a time.
+    const records = applied.filter(
+      (migration) => migration.version === target.version,
+    );
+    const record = records[0];
+    if (!record) {
+      throw new Error(`Migration target '${target.file}' is not applied.`);
+    }
+    if (records.length > 1) {
+      throw new Error(
+        `Applied migration version '${target.version}' is duplicated.`,
+      );
+    }
+    const sourceByFile = await readValidatedMigrationSql([target], options.log);
+    const checksum = sourceByFile.get(target.file)!.checksum;
+    if (record.file === target.file && record.checksum === checksum) {
+      throw new Error(
+        `Applied migration file '${target.file}' already matches its ` +
+          "history.",
+      );
+    }
+
+    options.log({ file: target.file, type: "repair-start" });
+    try {
+      await updateAppliedMigration(
+        client,
+        historyTable.qualifiedName,
+        target.version,
+        target.file,
+        checksum,
+      );
+    } catch (error) {
+      throw new Error(`Failed to repair migration '${target.file}'.`, {
+        cause: error,
+      });
+    }
+    options.log({ file: target.file, type: "repair-done" });
+    return { file: target.file };
   } finally {
     await disconnectDatabase(client, options.log);
   }

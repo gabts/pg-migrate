@@ -10,6 +10,7 @@ import {
   recordAppliedMigration,
   removeAppliedMigration,
   resolveHistoryTable,
+  updateAppliedMigration,
   validateHistoryDefinition,
   validateHistoryTableName,
 } from "./history.js";
@@ -365,6 +366,13 @@ describe("history", (): void => {
       '"schema_migrations"',
       "20260811120000",
     );
+    await updateAppliedMigration(
+      client,
+      '"schema_migrations"',
+      "20260811120000",
+      "20260811120000_create_users.sql",
+      "new-checksum",
+    );
 
     assert.match(queries[0]!.sql, /CREATE TABLE "schema_migrations"/);
     assert.match(queries[1]!.sql, /INSERT INTO "schema_migrations"/);
@@ -375,5 +383,11 @@ describe("history", (): void => {
     ]);
     assert.match(queries[2]!.sql, /DELETE FROM "schema_migrations"/);
     assert.deepEqual(queries[2]!.parameters, ["20260811120000"]);
+    assert.match(queries[3]!.sql, /UPDATE "schema_migrations"/);
+    assert.deepEqual(queries[3]!.parameters, [
+      "20260811120000",
+      "20260811120000_create_users.sql",
+      "new-checksum",
+    ]);
   });
 });

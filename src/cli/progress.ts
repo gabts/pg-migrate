@@ -124,6 +124,7 @@ export function createProgressOutput(
       case "plan-start":
       case "history-initialize-start":
       case "migration-start":
+      case "repair-start":
         start(formatEvent(event, colors));
         return;
     }

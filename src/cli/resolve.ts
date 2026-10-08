@@ -130,5 +130,15 @@ export async function resolveInvocation(
           url,
         },
       };
+    case "repair":
+      return {
+        command: invocation.command,
+        options: {
+          directory: config.directory,
+          table: config.table,
+          target: invocation.target,
+          url,
+        },
+      };
   }
 }

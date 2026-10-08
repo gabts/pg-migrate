@@ -7,7 +7,8 @@ describe("help", (): void => {
     const help = getHelpText("help");
 
     assert.match(help, /pg-migrate <command> \[arguments\] \[options\]/);
-    for (const command of ["create", "status", "validate", "up", "down"]) {
+    const commands = ["create", "status", "validate", "up", "down", "repair"];
+    for (const command of commands) {
       assert.match(help, new RegExp(`\\b${command}\\b`));
     }
     assert.match(help, /-c, --config <path>/);
@@ -115,5 +116,24 @@ describe("help", (): void => {
     assert.match(help, /-q, --quiet/);
     assert.match(help, /-v, --verbose/);
     assert.doesNotMatch(help, /JSON/);
+  });
+
+  it("shows repair target behavior", (): void => {
+    const help = getHelpText("repair");
+
+    assert.match(help, /pg-migrate repair <target> \[options\]/);
+    assert.match(help, /target must be applied/);
+    assert.match(help, /checks UTF-8 encoding and marker structure/i);
+    assert.match(help, /other applied migrations are not checked/i);
+    assert.match(help, /runs no migration SQL/);
+    assert.match(help, /does not create a missing history table/);
+    assert.match(help, /waits for the migration advisory lock/);
+    assert.match(help, /confirmation with the repaired file name/i);
+    assert.match(help, /command header and errors go to stderr/i);
+    assert.match(help, /--verbose also shows phase progress/i);
+    assert.match(help, /--quiet suppresses normal command output/i);
+    assert.match(help, /-q, --quiet/);
+    assert.match(help, /-v, --verbose/);
+    assert.doesNotMatch(help, /--target/);
   });
 });

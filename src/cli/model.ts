@@ -1,6 +1,18 @@
-import type { DatabaseOptions, LogEvent, MigrateOptions } from "../main.js";
+import type {
+  DatabaseOptions,
+  LogEvent,
+  MigrateOptions,
+  RepairOptions,
+} from "../main.js";
 
-const COMMANDS = ["create", "status", "validate", "up", "down"] as const;
+const COMMANDS = [
+  "create",
+  "status",
+  "validate",
+  "up",
+  "down",
+  "repair",
+] as const;
 
 /** A recognized CLI command name. */
 export type Command = (typeof COMMANDS)[number];
@@ -39,6 +51,7 @@ export type CliLogSink = (event: CliLogEvent) => undefined;
 /** A command with valid positionals and options. */
 export type ValidatedInvocation =
   | { command: "create"; name: string; values: Args }
+  | { command: "repair"; target: string; values: Args }
   | {
       command: "status" | "validate" | "up" | "down";
       values: Args;
@@ -53,7 +66,8 @@ export type ResolvedInvocation =
   | { command: "status"; options: DatabaseOptions }
   | { command: "validate"; options: DatabaseOptions }
   | { command: "up"; options: MigrateOptions }
-  | { command: "down"; options: MigrateOptions };
+  | { command: "down"; options: MigrateOptions }
+  | { command: "repair"; options: RepairOptions };
 
 /** Returns whether a value is a recognized CLI command name. */
 export function isCommand(value: unknown): value is Command {

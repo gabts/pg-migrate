@@ -131,6 +131,27 @@ describe("resolve", (): void => {
     });
   });
 
+  it("passes the repair target to the library options", async (): Promise<void> => {
+    const result = await resolveInvocation(
+      {
+        command: "repair",
+        target: "20240101120000",
+        values: { url: "postgres://args/db" },
+      },
+      {},
+    );
+
+    assert.deepEqual(result, {
+      command: "repair",
+      options: {
+        directory: "migrations",
+        table: "schema_migrations",
+        target: "20240101120000",
+        url: "postgres://args/db",
+      },
+    });
+  });
+
   it("fills missing values from environment variables", async (): Promise<void> => {
     assert.deepEqual(
       await resolveInvocation(status({}), {

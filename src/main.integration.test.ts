@@ -13,11 +13,13 @@ import { promisify } from "node:util";
 import * as pg from "pg";
 import {
   migrate,
+  repair,
   rollback,
   status,
   validate,
   type DatabaseOptions,
   type LogEvent,
+  type RepairResult,
 } from "./main.js";
 
 if (existsSync(".env")) {
@@ -388,6 +390,209 @@ describe(
       }
     });
 
+    it("repairs a renamed applied migration", async (): Promise<void> => {
+      const file = await writeMigration(
+        firstVersion,
+        "add_users",
+        `CREATE TABLE ${qualifiedRelation("users")} (id integer);`,
+        `DROP TABLE ${qualifiedRelation("users")};`,
+      );
+      await migrate(commandOptions());
+      // Repair reads only its target, so this invalid pending file is skipped.
+      await fs.writeFile(
+        path.join(directory, `${secondVersion}_add_posts.sql`),
+        "SELECT 2;\n",
+      );
+      const renamedFile = `${firstVersion}_create_users.sql`;
+      await fs.rename(
+        path.join(directory, file),
+        path.join(directory, renamedFile),
+      );
+
+      const events: string[] = [];
+
+      assert.deepEqual(
+        await repair({
+          ...commandOptions(),
+          log(event): void {
+            events.push(event.type);
+          },
+          target: renamedFile,
+        }),
+        { file: renamedFile },
+      );
+      assert.deepEqual(
+        events.filter((type) => /^(lock|applied-read|repair)-/.test(type)),
+        [
+          "lock-acquire-start",
+          "lock-acquire-done",
+          "applied-read-start",
+          "applied-read-done",
+          "repair-start",
+          "repair-done",
+        ],
+      );
+      const history = await getAdmin().query<{ file: string }>(
+        `SELECT file FROM ${qualifiedRelation("schema_migrations")};`,
+      );
+      assert.deepEqual(history.rows, [{ file: renamedFile }]);
+      assert.deepEqual(await rollback(commandOptions()), {
+        files: [renamedFile],
+      });
+      assert.equal(await relationExists("users"), false);
+    });
+
+    it("repairs one applied migration at a time", async (): Promise<void> => {
+      const firstFile = await writeMigration(
+        firstVersion,
+        "add_users",
+        "SELECT 1;",
+        "",
+      );
+      const secondFile = await writeMigration(
+        secondVersion,
+        "add_posts",
+        "SELECT 2;",
+        "",
+      );
+      await migrate(commandOptions());
+      await fs.appendFile(path.join(directory, firstFile), "-- changed\n");
+      await fs.appendFile(path.join(directory, secondFile), "-- changed\n");
+
+      await repair({ ...commandOptions(), target: firstVersion });
+      await assert.rejects(
+        validate(commandOptions()),
+        new Error(
+          `Applied migration file '${secondFile}' does not match its ` +
+            "recorded checksum.",
+        ),
+      );
+      await repair({ ...commandOptions(), target: secondVersion });
+      assert.deepEqual(await validate(commandOptions()), {
+        applied: 2,
+        pending: 0,
+        total: 2,
+      });
+    });
+
+    it("rejects a repair of an unchanged or unapplied migration", async (): Promise<void> => {
+      const firstFile = await writeMigration(
+        firstVersion,
+        "add_users",
+        "SELECT 1;",
+        "",
+      );
+      const secondFile = await writeMigration(
+        secondVersion,
+        "add_posts",
+        "SELECT 2;",
+        "",
+      );
+      await assert.rejects(
+        repair({ ...commandOptions(), target: firstVersion }),
+        new Error(`Migration target '${firstFile}' is not applied.`),
+      );
+      assert.equal(await relationExists("schema_migrations"), false);
+      await migrate({ ...commandOptions(), target: firstVersion });
+
+      await assert.rejects(
+        repair({ ...commandOptions(), target: firstVersion }),
+        new Error(
+          `Applied migration file '${firstFile}' already matches its history.`,
+        ),
+      );
+      await assert.rejects(
+        repair({ ...commandOptions(), target: secondVersion }),
+        new Error(`Migration target '${secondFile}' is not applied.`),
+      );
+    });
+
+    it("rejects a repair of a duplicated history version", async (): Promise<void> => {
+      const file = await writeMigration(
+        firstVersion,
+        "add_users",
+        "SELECT 1;",
+        "",
+      );
+      // A history table that the user created can lack the primary key.
+      await getAdmin().query(`
+        CREATE TABLE ${qualifiedRelation("schema_migrations")}
+        (
+          version text NOT NULL,
+          file text NOT NULL,
+          checksum text NOT NULL,
+          applied_at timestamptz NOT NULL DEFAULT now()
+        );
+      `);
+      await getAdmin().query(
+        `INSERT INTO ${qualifiedRelation("schema_migrations")} ` +
+          "(version, file, checksum) VALUES ($1, $2, 'old'), ($1, $2, 'old');",
+        [firstVersion, file],
+      );
+
+      await assert.rejects(
+        repair({ ...commandOptions(), target: firstVersion }),
+        new Error(`Applied migration version '${firstVersion}' is duplicated.`),
+      );
+      const history = await getAdmin().query<{ checksum: string }>(
+        `SELECT checksum FROM ${qualifiedRelation("schema_migrations")};`,
+      );
+      assert.deepEqual(history.rows, [
+        { checksum: "old" },
+        { checksum: "old" },
+      ]);
+    });
+
+    it("wraps a failed repair update", async (): Promise<void> => {
+      const file = await writeMigration(
+        firstVersion,
+        "add_users",
+        "SELECT 1;",
+        "",
+      );
+      await migrate(commandOptions());
+      await getAdmin().query(
+        `ALTER TABLE ${qualifiedRelation("schema_migrations")} ` +
+          "ADD CHECK (file NOT LIKE '%renamed%');",
+      );
+      const renamedFile = `${firstVersion}_renamed_users.sql`;
+      await fs.rename(
+        path.join(directory, file),
+        path.join(directory, renamedFile),
+      );
+
+      await assert.rejects(
+        repair({ ...commandOptions(), target: firstVersion }),
+        (error: unknown): boolean => {
+          assert.ok(error instanceof Error);
+          assert.equal(
+            error.message,
+            `Failed to repair migration '${renamedFile}'.`,
+          );
+          assert.ok(error.cause instanceof pg.DatabaseError);
+          return true;
+        },
+      );
+    });
+
+    it("writes the repaired file to stdout", async (): Promise<void> => {
+      const file = await writeMigration(
+        firstVersion,
+        "add_users",
+        "SELECT 1;",
+        "",
+      );
+      await migrate(commandOptions());
+      await fs.appendFile(path.join(directory, file), "-- changed\n");
+
+      const { stdout, stderr } = await promisify(execFile)(process.execPath, [
+        ...[cliPath, "repair", firstVersion, "--url", testUrl],
+        ...["--directory", directory, "--table", table],
+      ]);
+      assert.equal(stdout, `Repaired migration '${file}'.\n`);
+      assert.equal(stderr, "Running pg-migrate repair...\n");
+    });
+
     it("keeps an unqualified history table in one schema", async (): Promise<void> => {
       const file = await writeMigration(
         firstVersion,
@@ -671,6 +876,67 @@ describe(
 
       assert.deepEqual(await readHistoryVersions(), [firstVersion]);
       assert.equal(await relationExists("users"), true);
+    });
+
+    it("reads the repair target after waiting for the lock", async (): Promise<void> => {
+      const file = await writeMigration(
+        firstVersion,
+        "add_users",
+        "SELECT 1;",
+        "",
+      );
+      const filePath = path.join(directory, file);
+      await migrate(commandOptions());
+      await fs.appendFile(filePath, "-- changed\n");
+      const lockClient = new pg.Client({ connectionString: testUrl });
+      await lockClient.connect();
+
+      async function repairDuringLockWait(
+        change: () => Promise<void>,
+      ): Promise<RepairResult> {
+        await lockClient.query(
+          "SELECT pg_advisory_lock(hashtext($1), hashtext($2));",
+          [schema, "schema_migrations"],
+        );
+        const lockStarted = Promise.withResolvers<void>();
+        const result = repair({
+          ...commandOptions(),
+          log(event): void {
+            if (event.type === "lock-acquire-start") {
+              lockStarted.resolve();
+            }
+          },
+          target: firstVersion,
+        });
+        // An early failure rejects at once instead of waiting forever.
+        await Promise.race([lockStarted.promise, result]);
+        await change();
+        await lockClient.query(
+          "SELECT pg_advisory_unlock(hashtext($1), hashtext($2));",
+          [schema, "schema_migrations"],
+        );
+        return result;
+      }
+
+      try {
+        assert.deepEqual(
+          await repairDuringLockWait(() =>
+            fs.appendFile(filePath, "-- changed again\n"),
+          ),
+          { file },
+        );
+        assert.deepEqual(await validate(commandOptions()), {
+          applied: 1,
+          pending: 0,
+          total: 1,
+        });
+        await assert.rejects(
+          repairDuringLockWait(() => fs.writeFile(filePath, "SELECT 1;\n")),
+          new Error(`Missing 'migrate:up' marker in '${file}'.`),
+        );
+      } finally {
+        await lockClient.end();
+      }
     });
 
     it("waits when another connection holds the migration lock", async (): Promise<void> => {

@@ -6,11 +6,12 @@ const generalHelpText = `Usage:
   pg-migrate <command> --help
 
 Commands:
-  create <name>  Create a timestamped migration file
-  status         Show applied and pending migration state
-  validate       Validate file structure and database history
-  up             Apply pending migrations
-  down           Revert the latest applied migration
+  create <name>    Create a timestamped migration file
+  status           Show applied and pending migration state
+  validate         Validate file structure and database history
+  up               Apply pending migrations
+  down             Revert the latest applied migration
+  repair <target>  Record an applied migration's current file and checksum
 
 Global options:
   -c, --config <path>    Environment file, defaults to PGM_CONFIG or .env
@@ -206,6 +207,44 @@ Examples:
   pg-migrate down --url postgres://localhost/app
   pg-migrate down --target 20260811120000_add_users.sql`;
 
+const repairHelpText = `Usage:
+  pg-migrate repair <target> [options]
+
+Records the current file name and checksum of one applied migration.
+
+Options:
+  -c, --config <path>    Environment file, defaults to PGM_CONFIG or .env
+  -d, --directory <path> Migrations directory, defaults to PGM_DIRECTORY or migrations
+  -t, --table <name>     History table, defaults to PGM_TABLE or schema_migrations
+  -u, --url <url>        PostgreSQL URL, or use PGM_URL
+  --no-color             Disable color in progress and error output
+  -q, --quiet            Suppress output except errors and explicit help
+  -v, --verbose          Show progress logs
+  -h, --help             Show this help
+
+Behavior:
+  Use it after you edit or rename an applied migration file on purpose.
+  A rename must keep the version, which identifies the migration.
+  <target> can be a 14-digit version or the current migration file name.
+  The target must be applied, and its history must differ from the file.
+  The command checks UTF-8 encoding and marker structure in the target.
+  All file names must be valid, but other applied migrations are not checked.
+  Repair edited migrations one at a time.
+  It updates only the history row and runs no migration SQL.
+  It does not create a missing history table.
+  Make sure the schema already matches the edited file.
+  The command waits for the migration advisory lock.
+
+Output:
+  A confirmation with the repaired file name goes to stdout.
+  The command header and errors go to stderr.
+  --verbose also shows phase progress on stderr.
+  --quiet suppresses normal command output; errors remain visible.
+
+Examples:
+  pg-migrate repair 20260811120000
+  pg-migrate repair 20260811120000_add_users.sql`;
+
 /** Returns general or command-specific CLI help text. */
 export function getHelpText(command: Command | "help"): string {
   switch (command) {
@@ -219,6 +258,8 @@ export function getHelpText(command: Command | "help"): string {
       return upHelpText;
     case "down":
       return downHelpText;
+    case "repair":
+      return repairHelpText;
     case "help":
       return generalHelpText;
   }

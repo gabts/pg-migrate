@@ -6,7 +6,14 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { setImmediate } from "node:timers/promises";
-import { migrate, rollback, status, validate, type LogEvent } from "./main.js";
+import {
+  migrate,
+  repair,
+  rollback,
+  status,
+  validate,
+  type LogEvent,
+} from "./main.js";
 
 describe("main", (): void => {
   describe("database commands", (): void => {
@@ -92,7 +99,7 @@ describe("main", (): void => {
         url: "postgres://localhost/example",
       };
 
-      for (const command of [migrate, rollback]) {
+      for (const command of [migrate, rollback, repair]) {
         const events: LogEvent[] = [];
         await assert.rejects(
           command({
@@ -123,10 +130,11 @@ describe("main", (): void => {
       const options = {
         directory: tempDir,
         table,
+        target: "20260811120000",
         url: "postgres://localhost/example",
       };
 
-      for (const command of [status, validate, migrate, rollback]) {
+      for (const command of [status, validate, migrate, rollback, repair]) {
         const events: LogEvent[] = [];
         await assert.rejects(
           command({
@@ -142,7 +150,7 @@ describe("main", (): void => {
     });
 
     it("rejects an empty database URL before database work", async (): Promise<void> => {
-      for (const command of [status, validate, migrate, rollback]) {
+      for (const command of [status, validate, migrate, rollback, repair]) {
         const events: LogEvent[] = [];
 
         await assert.rejects(
@@ -152,6 +160,7 @@ describe("main", (): void => {
               events.push(event);
             },
             table: "schema_migrations",
+            target: "20260811120000",
             url: "",
           }),
           new Error("Invalid value '' for 'url'."),
@@ -161,7 +170,7 @@ describe("main", (): void => {
     });
 
     it("rejects an omitted database URL before database work", async (): Promise<void> => {
-      for (const command of [status, validate, migrate, rollback]) {
+      for (const command of [status, validate, migrate, rollback, repair]) {
         const events: LogEvent[] = [];
         const options = {
           directory: tempDir,
@@ -169,7 +178,8 @@ describe("main", (): void => {
             events.push(event);
           },
           table: "schema_migrations",
-        } as Parameters<typeof command>[0];
+          target: "20260811120000",
+        } as Parameters<typeof repair>[0];
 
         await assert.rejects(
           command(options),
@@ -180,7 +190,7 @@ describe("main", (): void => {
     });
 
     it("rejects invalid database URL types before database work", async (): Promise<void> => {
-      for (const command of [status, validate, migrate, rollback]) {
+      for (const command of [status, validate, migrate, rollback, repair]) {
         const events: LogEvent[] = [];
         const options = {
           directory: tempDir,
@@ -188,8 +198,9 @@ describe("main", (): void => {
             events.push(event);
           },
           table: "schema_migrations",
+          target: "20260811120000",
           url: 42,
-        } as unknown as Parameters<typeof command>[0];
+        } as unknown as Parameters<typeof repair>[0];
 
         await assert.rejects(
           command(options),
@@ -200,7 +211,7 @@ describe("main", (): void => {
     });
 
     it("rejects a white-space database URL before database work", async (): Promise<void> => {
-      for (const command of [status, validate, migrate, rollback]) {
+      for (const command of [status, validate, migrate, rollback, repair]) {
         const events: LogEvent[] = [];
 
         await assert.rejects(
@@ -210,6 +221,7 @@ describe("main", (): void => {
               events.push(event);
             },
             table: "schema_migrations",
+            target: "20260811120000",
             url: " ",
           }),
           new Error("Invalid value ' ' for 'url'."),
@@ -219,7 +231,7 @@ describe("main", (): void => {
     });
 
     it("rejects a malformed database URL before database work", async (): Promise<void> => {
-      for (const command of [status, validate, migrate, rollback]) {
+      for (const command of [status, validate, migrate, rollback, repair]) {
         const events: LogEvent[] = [];
 
         await assert.rejects(
@@ -229,6 +241,7 @@ describe("main", (): void => {
               events.push(event);
             },
             table: "schema_migrations",
+            target: "20260811120000",
             url: "postgres://user:secret@[localhost/app",
           }),
           new Error("Database URL is not a valid URL."),

@@ -41,6 +41,11 @@ export interface MigrateResult {
   files: string[];
 }
 
+/** Migration file whose history record a repair operation updated. */
+export interface RepairResult {
+  file: string;
+}
+
 /** A progress event emitted by the library. */
 export type LogEvent =
   | { type: "directory-read-start"; directory: string }
@@ -97,6 +102,8 @@ export type LogEvent =
       direction: "up" | "down";
     }
   | { type: "failed-migration-rollback-done" }
+  | { type: "repair-start"; file: string }
+  | { type: "repair-done"; file: string }
   | { type: "no-pending" }
   | { type: "no-applied" }
   | { type: "target-current" };
@@ -115,4 +122,9 @@ export interface DatabaseOptions {
 /** Options for applying or reverting migrations. */
 export interface MigrateOptions extends DatabaseOptions {
   target?: string;
+}
+
+/** Options for repairing the history record of one applied migration. */
+export interface RepairOptions extends DatabaseOptions {
+  target: string;
 }

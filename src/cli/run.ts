@@ -1,10 +1,11 @@
-import { migrate, rollback, status, validate } from "../main.js";
+import { migrate, repair, rollback, status, validate } from "../main.js";
 import { create } from "./create.js";
 import {
   formatError,
   formatFailureCause,
   formatHelpHint,
   formatMigrate,
+  formatRepair,
   formatStatus,
   formatValidation,
 } from "./format.js";
@@ -64,6 +65,8 @@ async function executeInvocation(
         await rollback({ ...invocation.options, log }),
         "down",
       );
+    case "repair":
+      return formatRepair(await repair({ ...invocation.options, log }));
   }
 }
 

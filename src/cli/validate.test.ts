@@ -66,6 +66,20 @@ describe("validate", (): void => {
     );
   });
 
+  it("returns a valid repair invocation", (): void => {
+    assert.deepEqual(
+      validateInvocation({
+        positionals: ["repair", "20260811120000"],
+        values: { table: "app.schema_migrations" },
+      }),
+      {
+        command: "repair",
+        target: "20260811120000",
+        values: { table: "app.schema_migrations" },
+      },
+    );
+  });
+
   it("rejects an unknown command", (): void => {
     assert.throws(
       () => validateInvocation({ positionals: ["bogus"], values: {} }),
@@ -77,6 +91,10 @@ describe("validate", (): void => {
     assert.throws(
       () => validateInvocation({ positionals: ["create"], values: {} }),
       new Error("Missing required argument 'name'."),
+    );
+    assert.throws(
+      () => validateInvocation({ positionals: ["repair"], values: {} }),
+      new Error("Missing required argument 'target'."),
     );
   });
 
@@ -93,6 +111,14 @@ describe("validate", (): void => {
       () =>
         validateInvocation({ positionals: ["status", "extra"], values: {} }),
       new Error("Unexpected positional 'extra'."),
+    );
+    assert.throws(
+      () =>
+        validateInvocation({
+          positionals: ["repair", "20260811120000", "20260811130000"],
+          values: {},
+        }),
+      new Error("Unexpected positional '20260811130000'."),
     );
   });
 
@@ -113,6 +139,14 @@ describe("validate", (): void => {
         }),
       new Error("Unknown option '--target'."),
     );
+    assert.throws(
+      () =>
+        validateInvocation({
+          positionals: ["repair", "20260811120000"],
+          values: { target: "20260811120000" },
+        }),
+      new Error("Unknown option '--target'."),
+    );
   });
 
   it("returns the help topic for a help request", (): void => {
@@ -122,8 +156,13 @@ describe("validate", (): void => {
       helpTopic(["up"], { help: true, url: "postgres://x/db" }),
       "up",
     );
-    // Help for create does not require the name.
+    // Help for create and repair does not require their arguments.
     assert.equal(helpTopic(["create"], { help: true }), "create");
+    assert.equal(helpTopic(["repair"], { help: true }), "repair");
+    assert.equal(
+      helpTopic(["repair", "20260811120000"], { help: true }),
+      "repair",
+    );
   });
 
   it("rejects an unknown help topic before its options", (): void => {
@@ -155,6 +194,14 @@ describe("validate", (): void => {
       () =>
         validateInvocation({
           positionals: ["status", "extra"],
+          values: { help: true },
+        }),
+      new Error("Unexpected positional 'extra'."),
+    );
+    assert.throws(
+      () =>
+        validateInvocation({
+          positionals: ["repair", "20260811120000", "extra"],
           values: { help: true },
         }),
       new Error("Unexpected positional 'extra'."),

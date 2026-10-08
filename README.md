@@ -42,13 +42,14 @@ pg-migrate <command> [arguments] [options]
 pg-migrate help [command]
 ```
 
-| Command         | Action                                   |
-| --------------- | ---------------------------------------- |
-| `create <name>` | Create a timestamped migration file.     |
-| `status`        | Show applied and pending migrations.     |
-| `validate`      | Check files and history, not SQL syntax. |
-| `up`            | Apply all pending migrations in order.   |
-| `down`          | Revert the latest applied migration.     |
+| Command           | Action                                                   |
+| ----------------- | -------------------------------------------------------- |
+| `create <name>`   | Create a timestamped migration file.                     |
+| `status`          | Show applied and pending migrations.                     |
+| `validate`        | Check files and history, not SQL syntax.                 |
+| `up`              | Apply all pending migrations in order.                   |
+| `down`            | Revert the latest applied migration.                     |
+| `repair <target>` | Record an applied migration's current file and checksum. |
 
 | Option                   | Use                                               |
 | ------------------------ | ------------------------------------------------- |
@@ -116,7 +117,7 @@ A file has an `-- migrate:up` section followed by a `-- migrate:down` section,
 as in the quick start. Only white space can come before the first marker, and
 the up section must not be empty. A line that holds only a marker counts as
 one, even inside a SQL comment or string. `validate` checks markers in every
-file, but `up` and `down` check only the files they run.
+file, but `up`, `down`, and `repair` check only the files they use.
 
 Each section is sent to PostgreSQL as is. If the down section is empty, `down`
 removes only the history row and leaves the schema unchanged. A later `up`
@@ -125,17 +126,23 @@ runs the up section again.
 ## How migrations run
 
 The history table stores the filename and a SHA-256 checksum of each applied
-migration. Database commands stop if an applied file was edited, renamed, or
-removed. They also stop if a pending file sorts before an applied one.
+migration. `status`, `validate`, `up`, and `down` stop if an applied file was
+edited, renamed, or removed. They also stop if a pending file sorts before an
+applied one.
 Checksums use the exact bytes of the file, so keep line endings stable:
 
 ```gitattributes
 *.sql text eol=lf
 ```
 
-`up`, `down`, and `validate` hold an advisory lock for the history table. Each
-migration runs in its own transaction together with its history change. If a
-migration fails, only that migration rolls back.
+After you edit an applied file on purpose, or rename it but keep its version,
+run `repair <target>` to record its current filename and checksum. It repairs
+one migration at a time and fails if the history already matches the file. It
+runs no migration SQL, so first make sure the schema matches the edited file.
+
+`up`, `down`, `validate`, and `repair` hold an advisory lock for the history
+table. Each migration runs in its own transaction together with its history
+change. If a migration fails, only that migration rolls back.
 
 After each migration, session settings such as `search_path` and `SET ROLE`
 reset to the connection defaults. Set shared defaults in the URL, such as
@@ -159,6 +166,7 @@ tables, prepared statements, and session advisory locks are not reset.
 ```ts
 import {
   migrate,
+  repair,
   rollback,
   status,
   validate,
@@ -179,6 +187,7 @@ const migrationStatus = await status(options);
 const validation = await validate(options);
 const applied = await migrate(options);
 const reverted = await rollback({ ...options, target: "20260811120000" });
+const repaired = await repair({ ...options, target: "20260811120000" });
 ```
 
 All options are explicit. The API does not read `PGM_*` variables, but the
@@ -187,6 +196,7 @@ driver still reads `PG*` variables. `create` is CLI-only.
 - `status` returns the state of each migration and the counts.
 - `validate` returns counts.
 - `migrate` and `rollback` return the filenames they ran.
+- `repair` returns the filename it repaired.
 
 `log` receives typed progress events. It is not awaited, and its errors are
 ignored. Failures throw an `Error`, and database errors are kept as `cause`.

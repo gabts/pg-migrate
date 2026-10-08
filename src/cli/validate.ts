@@ -24,16 +24,16 @@ function assertNoPositionals(positionals: string[]): void {
   }
 }
 
-function requireName(positionals: string[]): string {
-  const name = positionals[0];
-  if (name === undefined) {
-    throw new Error("Missing required argument 'name'.");
+function requireArgument(positionals: string[], argument: string): string {
+  const value = positionals[0];
+  if (value === undefined) {
+    throw new Error(`Missing required argument '${argument}'.`);
   }
   const extra = positionals[1];
   if (extra !== undefined) {
     throw new Error(`Unexpected positional '${extra}'.`);
   }
-  return name;
+  return value;
 }
 
 function assertOptions(values: Args, allowed: readonly string[]): void {
@@ -90,7 +90,7 @@ export function validateInvocation(
       }
       return {
         command,
-        name: requireName(positionals),
+        name: requireArgument(positionals, "name"),
         values: parsed.values,
       };
     case "status":
@@ -107,5 +107,16 @@ export function validateInvocation(
       return help
         ? { command: "help", topic: command }
         : { command, values: parsed.values };
+    case "repair":
+      assertOptions(parsed.values, DATABASE_OPTIONS);
+      if (help) {
+        assertNoPositionals(positionals.slice(1));
+        return { command: "help", topic: command };
+      }
+      return {
+        command,
+        target: requireArgument(positionals, "target"),
+        values: parsed.values,
+      };
   }
 }

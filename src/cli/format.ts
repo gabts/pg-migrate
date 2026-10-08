@@ -1,6 +1,11 @@
 import { styleText } from "node:util";
 import * as pg from "pg";
-import type { MigrateResult, StatusResult, ValidationResult } from "../main.js";
+import type {
+  MigrateResult,
+  RepairResult,
+  StatusResult,
+  ValidationResult,
+} from "../main.js";
 import type { DatabaseDetails } from "../migration/model.js";
 import type { CliLogEvent, Command } from "./model.js";
 
@@ -74,6 +79,11 @@ export function formatMigrate(
   const migration = result.files.length === 1 ? "migration" : "migrations";
   const action = direction === "up" ? "applied" : "reverted";
   return `${result.files.length} ${migration} ${action}.`;
+}
+
+/** Formats the final result of a repair command. */
+export function formatRepair(result: RepairResult): string {
+  return `Repaired migration '${result.file}'.`;
 }
 
 /** Formats migration status as terminal text. */
@@ -198,6 +208,10 @@ export function formatEvent(event: CliLogEvent, colors: boolean): string {
       return `${paint("red", "✖", colors)} Failed '${event.file}' (${event.durationMs}ms)`;
     case "failed-migration-rollback-done":
       return `${paint("gray", "›", colors)} Rolled back failed migration transaction.`;
+    case "repair-start":
+      return `Updating migration history for '${event.file}'...`;
+    case "repair-done":
+      return `${paint("gray", "›", colors)} Updated migration history for '${event.file}'.`;
     case "no-pending":
       return "No pending migrations.";
     case "no-applied":
