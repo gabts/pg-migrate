@@ -270,22 +270,6 @@ describe("run", (): void => {
     assert.match(files[0]!, /^\d{14}_add_users\.sql$/);
   });
 
-  it("lets quiet take precedence over verbose", async (): Promise<void> => {
-    const directory = path.join(tempDir, "migrations");
-    const { code, stdout, stderr } = await runCli([
-      "create",
-      "add_users",
-      "--directory",
-      directory,
-      "--quiet",
-      "--verbose",
-    ]);
-
-    assert.equal(code, 0);
-    assert.equal(stdout, "");
-    assert.equal(stderr, "");
-  });
-
   it("writes errors to stderr and exits 1", async (): Promise<void> => {
     const { code, stdout, stderr } = await runCli(["bogus"]);
     assert.equal(code, 1);

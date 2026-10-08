@@ -66,6 +66,9 @@ export function validateInvocation(
   | { command: "help"; topic: Command | "help" }
   | { command: "version" } {
   const [command, ...positionals] = parsed.positionals;
+  if (parsed.values.quiet === true && parsed.values.verbose === true) {
+    throw new Error("Option '--quiet' cannot be used with '--verbose'.");
+  }
   if (
     command === undefined &&
     parsed.values.version === true &&

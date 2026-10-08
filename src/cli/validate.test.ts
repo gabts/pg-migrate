@@ -267,4 +267,15 @@ describe("validate", (): void => {
       new Error("Unknown option '--version'."),
     );
   });
+
+  it("rejects quiet with verbose", (): void => {
+    assert.throws(
+      () =>
+        validateInvocation({
+          positionals: ["up"],
+          values: { quiet: true, verbose: true },
+        }),
+      new Error("Option '--quiet' cannot be used with '--verbose'."),
+    );
+  });
 });

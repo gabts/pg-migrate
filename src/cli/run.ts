@@ -123,7 +123,7 @@ export async function run(argv = process.argv): Promise<void> {
     }
 
     helpCommand = validated.command;
-    verbose = !quiet && validated.values.verbose === true;
+    verbose = validated.values.verbose === true;
     if (!quiet) {
       process.stderr.write(`Running pg-migrate ${validated.command}...\n`);
     }
