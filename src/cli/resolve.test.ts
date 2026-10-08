@@ -34,13 +34,13 @@ describe("resolve", (): void => {
 
   // Each test uses a new temporary working directory. This prevents a .env
   // file in the repository from changing configuration resolution. PGM_
-  // variables from the shell running the tests are removed for the same
-  // reason.
+  // variables and DATABASE_URL from the shell running the tests are removed
+  // for the same reason.
   beforeEach(async (): Promise<void> => {
     previousCwd = process.cwd();
     previousEnv = { ...process.env };
     for (const key of Object.keys(process.env)) {
-      if (key.startsWith("PGM_")) {
+      if (key.startsWith("PGM_") || key === "DATABASE_URL") {
         delete process.env[key];
       }
     }
@@ -100,7 +100,7 @@ describe("resolve", (): void => {
     assert.deepEqual(
       resolve(
         { command: "create", name: "add_users", values: {} },
-        { PGM_TABLE: "", PGM_URL: "" },
+        { PGM_TABLE: "", DATABASE_URL: "" },
       ),
       {
         command: "create",
@@ -180,7 +180,7 @@ describe("resolve", (): void => {
       resolve(status({}), {
         PGM_DIRECTORY: "sql/migrations",
         PGM_TABLE: "migration_history",
-        PGM_URL: "postgres://env/db",
+        DATABASE_URL: "postgres://env/db",
       }),
       {
         command: "status",
@@ -194,7 +194,7 @@ describe("resolve", (): void => {
     );
   });
 
-  it("ignores unprefixed environment variables", (): void => {
+  it("ignores unprefixed variables other than DATABASE_URL", (): void => {
     assert.throws(
       () =>
         resolve(status({}), {
@@ -212,7 +212,7 @@ describe("resolve", (): void => {
       `
 PGM_DIRECTORY=sql/migrations
 PGM_TABLE=migration_history
-PGM_URL=postgres://file/db
+DATABASE_URL=postgres://file/db
 `,
     );
 
@@ -229,7 +229,7 @@ PGM_URL=postgres://file/db
 
   it("reads the environment file path from PGM_ENV_FILE", async (): Promise<void> => {
     const envFilePath = path.join(tempDir, "custom.env");
-    await fs.writeFile(envFilePath, "PGM_URL=postgres://file/db\n");
+    await fs.writeFile(envFilePath, "DATABASE_URL=postgres://file/db\n");
 
     const result = resolve(status({}), {
       PGM_ENV_FILE: envFilePath,
@@ -241,7 +241,7 @@ PGM_URL=postgres://file/db
   it("loads every variable of the environment file", async (): Promise<void> => {
     await fs.writeFile(
       path.join(tempDir, ".env"),
-      "PGM_URL=postgres://file/db\nPGPASSWORD=secret\n",
+      "DATABASE_URL=postgres://file/db\nPGPASSWORD=secret\n",
     );
     // A shell value would win over the file. afterEach restores it.
     delete process.env.PGPASSWORD;
@@ -254,8 +254,8 @@ PGM_URL=postgres://file/db
   it("prefers the env-file option over PGM_ENV_FILE", async (): Promise<void> => {
     const argPath = path.join(tempDir, "arg.env");
     const envPath = path.join(tempDir, "env.env");
-    await fs.writeFile(argPath, "PGM_URL=postgres://arg/db\n");
-    await fs.writeFile(envPath, "PGM_URL=postgres://env/db\n");
+    await fs.writeFile(argPath, "DATABASE_URL=postgres://arg/db\n");
+    await fs.writeFile(envPath, "DATABASE_URL=postgres://env/db\n");
 
     const result = resolve(status({ "env-file": argPath }), {
       PGM_ENV_FILE: envPath,
@@ -267,7 +267,7 @@ PGM_URL=postgres://file/db
   it("reads the default environment file", async (): Promise<void> => {
     await fs.writeFile(
       path.join(tempDir, ".env"),
-      "PGM_URL=postgres://default/db\n",
+      "DATABASE_URL=postgres://default/db\n",
     );
 
     const result = resolve(status({}));
@@ -277,11 +277,11 @@ PGM_URL=postgres://file/db
 
   it("prefers options over environment and file values", async (): Promise<void> => {
     const envFilePath = path.join(tempDir, ".env");
-    await fs.writeFile(envFilePath, "PGM_URL=postgres://file/db\n");
+    await fs.writeFile(envFilePath, "DATABASE_URL=postgres://file/db\n");
 
     const result = resolve(
       status({ "env-file": envFilePath, url: "postgres://args/db" }),
-      { PGM_URL: "postgres://env/db" },
+      { DATABASE_URL: "postgres://env/db" },
     );
 
     assert.equal(databaseUrl(result), "postgres://args/db");
@@ -289,10 +289,10 @@ PGM_URL=postgres://file/db
 
   it("prefers environment over file values", async (): Promise<void> => {
     const envFilePath = path.join(tempDir, ".env");
-    await fs.writeFile(envFilePath, "PGM_URL=postgres://file/db\n");
+    await fs.writeFile(envFilePath, "DATABASE_URL=postgres://file/db\n");
 
     const result = resolve(status({ "env-file": envFilePath }), {
-      PGM_URL: "postgres://env/db",
+      DATABASE_URL: "postgres://env/db",
     });
 
     assert.equal(databaseUrl(result), "postgres://env/db");
@@ -302,7 +302,7 @@ PGM_URL=postgres://file/db
     const env = {
       PGM_DIRECTORY: "sql/migrations",
       PGM_TABLE: "migration_history",
-      PGM_URL: "postgres://env/db",
+      DATABASE_URL: "postgres://env/db",
     };
 
     assert.throws(
@@ -322,17 +322,17 @@ PGM_URL=postgres://file/db
   it("rejects empty environment values instead of using file values", async (): Promise<void> => {
     await fs.writeFile(
       path.join(tempDir, ".env"),
-      "PGM_URL=postgres://file/db\n",
+      "DATABASE_URL=postgres://file/db\n",
     );
 
     assert.throws(
-      () => resolve(status({}), { PGM_URL: "" }),
+      () => resolve(status({}), { DATABASE_URL: "" }),
       new Error("Invalid value '' for 'url'."),
     );
   });
 
   it("rejects empty environment file values", async (): Promise<void> => {
-    await fs.writeFile(path.join(tempDir, ".env"), "PGM_URL=\n");
+    await fs.writeFile(path.join(tempDir, ".env"), "DATABASE_URL=\n");
 
     assert.throws(
       () => resolve(status({})),
@@ -342,7 +342,7 @@ PGM_URL=postgres://file/db
 
   it("rejects an empty env-file option instead of using PGM_ENV_FILE", async (): Promise<void> => {
     const envFilePath = path.join(tempDir, "custom.env");
-    await fs.writeFile(envFilePath, "PGM_URL=postgres://file/db\n");
+    await fs.writeFile(envFilePath, "DATABASE_URL=postgres://file/db\n");
 
     assert.throws(
       () =>

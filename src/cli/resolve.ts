@@ -9,7 +9,7 @@ interface ResolvedValues extends Args {
 const ENV_KEY_DIRECTORY = "PGM_DIRECTORY";
 const ENV_KEY_ENV_FILE = "PGM_ENV_FILE";
 const ENV_KEY_TABLE = "PGM_TABLE";
-const ENV_KEY_URL = "PGM_URL";
+const ENV_KEY_URL = "DATABASE_URL";
 
 const DEFAULT_DIRECTORY = "migrations";
 const DEFAULT_ENV_FILE = ".env";

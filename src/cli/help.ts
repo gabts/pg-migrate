@@ -72,7 +72,7 @@ Options:
   -d, --directory <path> Migrations directory, defaults to PGM_DIRECTORY or migrations
   --env-file <path>      Environment file, defaults to PGM_ENV_FILE or .env
   -t, --table <name>     History table, defaults to PGM_TABLE or schema_migrations
-  -u, --url <url>        PostgreSQL URL, or use PGM_URL
+  -u, --url <url>        PostgreSQL URL, or use DATABASE_URL
   --fail-on-pending      Exit with 2 when migrations are pending
   --no-color             Disable color in progress and error output
   -q, --quiet            Suppress output except errors and explicit help
@@ -107,7 +107,7 @@ Options:
   -d, --directory <path> Migrations directory, defaults to PGM_DIRECTORY or migrations
   --env-file <path>      Environment file, defaults to PGM_ENV_FILE or .env
   -t, --table <name>     History table, defaults to PGM_TABLE or schema_migrations
-  -u, --url <url>        PostgreSQL URL, or use PGM_URL
+  -u, --url <url>        PostgreSQL URL, or use DATABASE_URL
   --no-color             Disable color in progress and error output
   -q, --quiet            Suppress output except errors and explicit help
   -v, --verbose          Show progress logs
@@ -140,7 +140,7 @@ Options:
   -d, --directory <path> Migrations directory, defaults to PGM_DIRECTORY or migrations
   --env-file <path>      Environment file, defaults to PGM_ENV_FILE or .env
   -t, --table <name>     History table, defaults to PGM_TABLE or schema_migrations
-  -u, --url <url>        PostgreSQL URL, or use PGM_URL
+  -u, --url <url>        PostgreSQL URL, or use DATABASE_URL
   --target <target>      Apply through this version or file, including the target
   --no-color             Disable color in progress and error output
   -q, --quiet            Suppress output except errors and explicit help
@@ -178,7 +178,7 @@ Options:
   -d, --directory <path> Migrations directory, defaults to PGM_DIRECTORY or migrations
   --env-file <path>      Environment file, defaults to PGM_ENV_FILE or .env
   -t, --table <name>     History table, defaults to PGM_TABLE or schema_migrations
-  -u, --url <url>        PostgreSQL URL, or use PGM_URL
+  -u, --url <url>        PostgreSQL URL, or use DATABASE_URL
   --target <target>      Revert migrations after this version or file
   --no-color             Disable color in progress and error output
   -q, --quiet            Suppress output except errors and explicit help
@@ -220,7 +220,7 @@ Options:
   -d, --directory <path> Migrations directory, defaults to PGM_DIRECTORY or migrations
   --env-file <path>      Environment file, defaults to PGM_ENV_FILE or .env
   -t, --table <name>     History table, defaults to PGM_TABLE or schema_migrations
-  -u, --url <url>        PostgreSQL URL, or use PGM_URL
+  -u, --url <url>        PostgreSQL URL, or use DATABASE_URL
   --no-color             Disable color in progress and error output
   -q, --quiet            Suppress output except errors and explicit help
   -v, --verbose          Show progress logs

@@ -82,15 +82,15 @@ environment file, then default.
 
 | Variable        | Use                 | Default             |
 | --------------- | ------------------- | ------------------- |
+| `DATABASE_URL`  | PostgreSQL URL      | None                |
 | `PGM_DIRECTORY` | Migration directory | `migrations`        |
 | `PGM_ENV_FILE`  | Environment file    | `.env`              |
 | `PGM_TABLE`     | History table       | `schema_migrations` |
-| `PGM_URL`       | PostgreSQL URL      | None                |
 
 ```dotenv
+DATABASE_URL=postgres://localhost/app
 PGM_DIRECTORY=db/migrations
 PGM_TABLE=app.schema_migrations
-PGM_URL=postgres://localhost/app
 ```
 
 The environment file is loaded with Node's `process.loadEnvFile`, which
@@ -104,7 +104,8 @@ directory, even when they are set in a file. Table and schema names must
 match `[a-z_][a-z0-9_]*`.
 
 Connecting times out after 10 seconds. Lock and statement waits have no
-timeout, so for deployments set them in the URL, in milliseconds:
+timeout, so for deployments set them in milliseconds in a URL used only for
+migrations, through `--url` or a separate env file:
 
 ```text
 postgres://localhost/app?lock_timeout=5000&statement_timeout=60000
@@ -203,8 +204,9 @@ const reverted = await rollback({ ...options, target: "20260811120000" });
 const repaired = await repair({ ...options, target: "20260811120000" });
 ```
 
-All options are explicit. The API does not read `PGM_*` variables, but the
-driver still reads `PG*` variables. `create` is CLI-only.
+All options are explicit. The API does not read `PGM_*` variables or
+`DATABASE_URL`, but the driver still reads `PG*` variables. `create` is
+CLI-only.
 
 - `status` returns the state of each migration and the counts.
 - `validate` returns counts.

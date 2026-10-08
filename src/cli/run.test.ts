@@ -348,7 +348,7 @@ describe("run", (): void => {
     const { code, stderr } = await runCli(
       ["status", "--env-file", envFilePath],
       {
-        PGM_URL: undefined,
+        DATABASE_URL: undefined,
       },
     );
 
@@ -357,9 +357,9 @@ describe("run", (): void => {
     assert.ok(stderr.includes("Run `pg-migrate status --help` for usage."));
   });
 
-  it("rejects an empty URL instead of using PGM_URL", async (): Promise<void> => {
+  it("rejects an empty URL instead of using DATABASE_URL", async (): Promise<void> => {
     const { code, stderr } = await runCli(["status", "--url="], {
-      PGM_URL: "postgres://env/db",
+      DATABASE_URL: "postgres://env/db",
     });
 
     assert.equal(code, 1);
