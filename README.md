@@ -43,6 +43,8 @@ pg-migrate help [command]
 pg-migrate --version
 ```
 
+### Commands
+
 | Command           | Action                                                   |
 | ----------------- | -------------------------------------------------------- |
 | `create <name>`   | Create a timestamped migration file.                     |
@@ -51,6 +53,8 @@ pg-migrate --version
 | `up`              | Apply all pending migrations in order.                   |
 | `down`            | Revert the latest applied migration.                     |
 | `repair <target>` | Record an applied migration's current file and checksum. |
+
+### Options
 
 | Option                   | Use                                               |
 | ------------------------ | ------------------------------------------------- |
@@ -70,6 +74,8 @@ A target is a 14-digit version, such as `20260811120000`, or a filename. `up`
 applies through the target. `down` reverts every migration after it, so the
 target stays applied.
 
+### Output and exit codes
+
 Results and help go to stdout. Progress and errors go to stderr. A failure
 exits with code `1`, and `status --fail-on-pending` exits with `2` when
 migrations are pending. Colors follow `NO_COLOR` and `FORCE_COLOR` from the
@@ -86,6 +92,8 @@ environment file, then default.
 | `PGM_DIRECTORY` | Migration directory | `migrations`        |
 | `PGM_ENV_FILE`  | Environment file    | `.env`              |
 | `PGM_TABLE`     | History table       | `schema_migrations` |
+
+An example environment file:
 
 ```dotenv
 DATABASE_URL=postgres://localhost/app
