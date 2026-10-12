@@ -9,7 +9,7 @@ export function withSafeLog<T extends { log?: LogSink }>(
     log(event: LogEvent): undefined {
       // Call the sink as a method so that it can use 'this'.
       try {
-        void Promise.resolve(options.log?.(event)).catch(() => {});
+        void Promise.resolve(options.log?.(event)).catch((): void => {});
       } catch {}
     },
   };

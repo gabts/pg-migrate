@@ -16,7 +16,7 @@ function captureStream(isTTY: boolean): CapturedStream {
     isTTY?: boolean;
   };
   stream.isTTY = isTTY;
-  stream.on("data", (chunk: Buffer) => {
+  stream.on("data", (chunk: Buffer): void => {
     text += chunk.toString();
   });
   return { read: () => text, stream };

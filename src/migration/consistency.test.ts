@@ -68,9 +68,14 @@ describe("consistency", (): void => {
   it("emits validation events", (): void => {
     const events: LogEvent[] = [];
 
-    validateMigrationConsistency(migrationIndex, [], checksums, (event) => {
-      events.push(event);
-    });
+    validateMigrationConsistency(
+      migrationIndex,
+      [],
+      checksums,
+      (event): void => {
+        events.push(event);
+      },
+    );
 
     assert.deepEqual(events, [
       { type: "consistency-validation-start" },

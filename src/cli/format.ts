@@ -91,7 +91,7 @@ export function formatStatus(status: StatusResult): string {
   const summary =
     `${status.summary.applied} applied, ${status.summary.pending} pending, ` +
     `${status.summary.total} total.`;
-  const migrations = status.migrations.map((migration) => {
+  const migrations = status.migrations.map((migration): string => {
     const state = migration.state === "applied" ? "✔ Applied" : "○ Pending";
     return `${state}  ${migration.file}`;
   });

@@ -45,7 +45,7 @@ describe("checksum", (): void => {
     };
     const events: LogEvent[] = [];
 
-    const result = await readMigrationChecksums([migration], (event) => {
+    const result = await readMigrationChecksums([migration], (event): void => {
       events.push(event);
     });
 

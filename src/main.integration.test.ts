@@ -965,7 +965,7 @@ describe(
           );
 
           let reportLockStart = (): void => {};
-          const lockStarted = new Promise<void>((resolve) => {
+          const lockStarted = new Promise<void>((resolve): void => {
             reportLockStart = resolve;
           });
           const result = command({
@@ -1081,7 +1081,7 @@ describe(
         );
 
         let reportLockStart = (): void => {};
-        const lockStarted = new Promise<void>((resolve) => {
+        const lockStarted = new Promise<void>((resolve): void => {
           reportLockStart = resolve;
         });
         const migration = migrate({
@@ -1141,18 +1141,18 @@ describe(
       const target = new URL(testUrl);
       const sockets: net.Socket[] = [];
       // Proxy the connection so the test can drop it like a server restart.
-      const proxy = net.createServer((socket) => {
+      const proxy = net.createServer((socket): void => {
         const upstream = net.connect(
           Number(target.port || 5432),
           target.hostname,
         );
         sockets.push(socket);
-        socket.on("error", () => {});
-        upstream.on("error", () => {});
+        socket.on("error", (): void => {});
+        upstream.on("error", (): void => {});
         socket.on("close", () => upstream.destroy());
         socket.pipe(upstream).pipe(socket);
       });
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve): void => {
         proxy.listen(0, "127.0.0.1", resolve);
       });
       const url = new URL(testUrl);
@@ -1168,7 +1168,7 @@ describe(
         );
 
         let reportLockStart = (): void => {};
-        const lockStarted = new Promise<void>((resolve) => {
+        const lockStarted = new Promise<void>((resolve): void => {
           reportLockStart = resolve;
         });
         const migration = migrate({
