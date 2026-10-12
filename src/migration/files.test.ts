@@ -153,6 +153,18 @@ describe("files", (): void => {
     );
   });
 
+  it("reports the first invalid filename in code unit order", (): void => {
+    // A locale order would put 'a.sql' first.
+    assert.throws(
+      () =>
+        validateMigrationFilenames(tempDir, [
+          { isFile: true, name: "a.sql" },
+          { isFile: true, name: "B.sql" },
+        ]),
+      new Error("Invalid migration filename 'B.sql'."),
+    );
+  });
+
   it("rejects a migration entry that is not a file", (): void => {
     const file = "20240101120000_create_users.sql";
 

@@ -67,7 +67,7 @@ function migrationEntries(
 ): MigrationDirectoryEntry[] {
   return entries
     .filter((entry) => entry.name.endsWith(".sql"))
-    .sort((first, second) => first.name.localeCompare(second.name));
+    .sort((first, second) => (first.name < second.name ? -1 : 1));
 }
 
 // A broken link is not a file.
