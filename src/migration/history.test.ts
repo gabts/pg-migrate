@@ -5,12 +5,11 @@ import {
   createHistoryTable,
   lockMigrations,
   readHistory,
-  readHistoryDefinition,
   recordMigrationEvent,
   resolveHistoryTable,
-  validateHistoryDefinition,
   validateHistoryTableName,
   type HistoryColumn,
+  type ResolvedHistoryTable,
 } from "./history.js";
 
 function noLog(): undefined {
@@ -54,6 +53,20 @@ function historyColumns(): HistoryColumn[] {
     },
     { identity: false, name: "executed_by", notNull: true, type: "text" },
   ];
+}
+
+const historyTable: ResolvedHistoryTable = {
+  name: "schema_migrations",
+  qualifiedName: '"public"."schema_migrations"',
+  schema: "public",
+  table: "schema_migrations",
+};
+
+function readHistoryWithColumns(
+  columns: HistoryColumn[],
+): ReturnType<typeof readHistory> {
+  const { client } = createClient([[{ exists: true }], columns]);
+  return readHistory(client, historyTable, noLog);
 }
 
 describe("history", (): void => {
@@ -206,55 +219,12 @@ describe("history", (): void => {
     }
   });
 
-  it("reads an uninitialized history definition", async (): Promise<void> => {
-    const { client, queries } = createClient([[{ exists: false }]]);
-
-    const result = await readHistoryDefinition(client, '"schema_migrations"');
-
-    assert.deepEqual(result, { columns: [], initialized: false });
-    assert.deepEqual(queries, [
-      {
-        parameters: ['"schema_migrations"'],
-        sql: "SELECT to_regclass($1) IS NOT NULL AS exists;",
-      },
-    ]);
-  });
-
-  it("reads a history definition without validating it", async (): Promise<void> => {
-    const columns = [{ name: "version", notNull: true, type: "integer" }];
-    const { client } = createClient([[{ exists: true }], columns]);
-
-    const result = await readHistoryDefinition(client, '"schema_migrations"');
-
-    assert.deepEqual(result, { columns, initialized: true });
-  });
-
-  it("validates a history definition", (): void => {
-    validateHistoryDefinition(
-      { columns: historyColumns(), initialized: true },
-      "schema_migrations",
-    );
-  });
-
-  it("validates an uninitialized history definition", (): void => {
-    assert.doesNotThrow(() =>
-      validateHistoryDefinition(
-        { columns: [], initialized: false },
-        "schema_migrations",
-      ),
-    );
-  });
-
-  it("rejects an invalid history definition", (): void => {
+  it("rejects an invalid history definition", async (): Promise<void> => {
     const columns = historyColumns();
     columns[1]!.type = "integer";
 
-    assert.throws(
-      () =>
-        validateHistoryDefinition(
-          { columns, initialized: true },
-          "schema_migrations",
-        ),
+    await assert.rejects(
+      readHistoryWithColumns(columns),
       new Error(
         "Migration history table 'schema_migrations' column 'version' must " +
           "be 'text', not 'integer'.",
@@ -262,17 +232,13 @@ describe("history", (): void => {
     );
   });
 
-  it("rejects a history definition without checksums", (): void => {
+  it("rejects a history definition without checksums", async (): Promise<void> => {
     const columns = historyColumns().filter(
       (column) => column.name !== "checksum",
     );
 
-    assert.throws(
-      () =>
-        validateHistoryDefinition(
-          { columns, initialized: true },
-          "schema_migrations",
-        ),
+    await assert.rejects(
+      readHistoryWithColumns(columns),
       new Error(
         "Migration history table 'schema_migrations' is missing column " +
           "'checksum'.",
@@ -280,16 +246,12 @@ describe("history", (): void => {
     );
   });
 
-  it("rejects a nullable history column", (): void => {
+  it("rejects a nullable history column", async (): Promise<void> => {
     const columns = historyColumns();
     columns[3]!.notNull = false;
 
-    assert.throws(
-      () =>
-        validateHistoryDefinition(
-          { columns, initialized: true },
-          "schema_migrations",
-        ),
+    await assert.rejects(
+      readHistoryWithColumns(columns),
       new Error(
         "Migration history table 'schema_migrations' column 'checksum' must " +
           "be NOT NULL.",
@@ -297,16 +259,12 @@ describe("history", (): void => {
     );
   });
 
-  it("rejects an id that is not an identity column", (): void => {
+  it("rejects an id that is not an identity column", async (): Promise<void> => {
     const columns = historyColumns();
     columns[0]!.identity = false;
 
-    assert.throws(
-      () =>
-        validateHistoryDefinition(
-          { columns, initialized: true },
-          "schema_migrations",
-        ),
+    await assert.rejects(
+      readHistoryWithColumns(columns),
       new Error(
         "Migration history table 'schema_migrations' column 'id' must be an " +
           "identity column.",
@@ -315,12 +273,17 @@ describe("history", (): void => {
   });
 
   it("reads no applied migrations without a history table", async (): Promise<void> => {
-    const { client } = createClient([[{ exists: true }], [{ exists: false }]]);
-    const table = await resolveHistoryTable(client, "app.schema_migrations");
+    const { client, queries } = createClient([[{ exists: false }]]);
 
-    const history = await readHistory(client, table, noLog);
+    const history = await readHistory(client, historyTable, noLog);
 
     assert.deepEqual(history, { applied: [], initialized: false });
+    assert.deepEqual(queries, [
+      {
+        parameters: ['"public"."schema_migrations"'],
+        sql: "SELECT to_regclass($1) IS NOT NULL AS exists;",
+      },
+    ]);
   });
 
   it("reads applied migrations from a valid history table", async (): Promise<void> => {

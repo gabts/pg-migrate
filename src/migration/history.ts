@@ -159,8 +159,7 @@ export async function lockMigrations(
   log({ table: table.name, type: "lock-acquire-done" });
 }
 
-/** Reads the migration history table definition. */
-export async function readHistoryDefinition(
+async function readHistoryDefinition(
   client: pg.Client,
   qualifiedTable: string,
 ): Promise<HistoryDefinition> {
@@ -189,8 +188,7 @@ export async function readHistoryDefinition(
   return { columns: columnsResult.rows, initialized: true };
 }
 
-/** Validates the migration history table definition. */
-export function validateHistoryDefinition(
+function validateHistoryDefinition(
   definition: HistoryDefinition,
   table: string,
 ): void {
