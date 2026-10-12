@@ -200,7 +200,7 @@ function validateHistoryDefinition(
     const column = definition.columns.find((column) => column.name === name);
     if (!column) {
       throw new Error(
-        `Migration history table '${table}' is missing column ` + `'${name}'.`,
+        `Migration history table '${table}' is missing column '${name}'.`,
       );
     }
     if (column.type !== expectedType) {
