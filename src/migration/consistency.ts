@@ -1,3 +1,4 @@
+import { readMigrationChecksums } from "./checksum.js";
 import type { DiskMigration, MigrationIndex } from "./files.js";
 import type { AppliedMigration } from "./history.js";
 import type { LogSink } from "./model.js";
@@ -77,4 +78,23 @@ export function validateMigrationConsistency(
   );
   validateContinuousHistory(migrationIndex, appliedVersions);
   log({ type: "consistency-validation-done" });
+}
+
+/** Validates applied files on disk and returns their checksums. */
+export async function validateAppliedFiles(
+  migrationIndex: MigrationIndex,
+  applied: AppliedMigration[],
+  log: LogSink,
+): Promise<Map<string, string>> {
+  const appliedVersions = new Set(
+    applied.map((migration) => migration.version),
+  );
+  const checksums = await readMigrationChecksums(
+    migrationIndex.all.filter((migration) =>
+      appliedVersions.has(migration.version),
+    ),
+    log,
+  );
+  validateMigrationConsistency(migrationIndex, applied, checksums, log);
+  return checksums;
 }

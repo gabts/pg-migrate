@@ -1,6 +1,13 @@
 import * as assert from "node:assert/strict";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
 import { describe, it } from "node:test";
-import { validateMigrationConsistency } from "./consistency.js";
+import { calculateMigrationChecksum } from "./checksum.js";
+import {
+  validateAppliedFiles,
+  validateMigrationConsistency,
+} from "./consistency.js";
 import type { DiskMigration, MigrationIndex } from "./files.js";
 import type { AppliedMigration } from "./history.js";
 import type { LogEvent } from "./model.js";
@@ -42,6 +49,10 @@ const checksums = new Map([
   [third.file, "third-checksum"],
 ]);
 const appliedAt = "2026-08-11T12:00:00.000Z";
+
+function noLog(): undefined {
+  return undefined;
+}
 
 function applied(version: string): AppliedMigration {
   const migration = migrationIndex.byVersion.get(version);
@@ -146,5 +157,39 @@ describe("consistency", (): void => {
           "checksum.",
       ),
     );
+  });
+
+  it("validates applied files on disk and returns their checksums", async (): Promise<void> => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pg_migrate-"));
+    const contents = Buffer.from("-- migrate:up\nSELECT 1;\n");
+    const index: MigrationIndex = {
+      ...migrationIndex,
+      all: migrationIndex.all.map((migration) => ({
+        ...migration,
+        path: path.join(tempDir, migration.file),
+      })),
+    };
+    const checksum = calculateMigrationChecksum(contents);
+
+    try {
+      await fs.writeFile(path.join(tempDir, first.file), contents);
+
+      const result = await validateAppliedFiles(
+        index,
+        [{ ...applied(first.version), checksum }],
+        noLog,
+      );
+
+      assert.deepEqual(result, new Map([[first.file, checksum]]));
+      await assert.rejects(
+        validateAppliedFiles(index, [applied(first.version)], noLog),
+        new Error(
+          `Applied migration file '${first.file}' does not match its ` +
+            "recorded checksum.",
+        ),
+      );
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   });
 });

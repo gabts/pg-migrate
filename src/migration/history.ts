@@ -14,7 +14,8 @@ interface HistoryDefinition {
   initialized: boolean;
 }
 
-interface ResolvedHistoryTable {
+/** A migration history table resolved to one fixed schema. */
+export interface ResolvedHistoryTable {
   name: string;
   qualifiedName: string;
   schema: string;
@@ -226,8 +227,7 @@ export function validateHistoryDefinition(
   }
 }
 
-/** Reads and validates one migration history table definition. */
-export async function readValidatedHistoryDefinition(
+async function readValidatedHistoryDefinition(
   client: pg.Client,
   qualifiedTable: string,
   table: string,
@@ -250,8 +250,7 @@ export async function readValidatedHistoryDefinition(
   return definition;
 }
 
-/** Reads applied migrations, one per version, in version order. */
-export async function readAppliedMigrations(
+async function readAppliedMigrations(
   client: pg.Client,
   qualifiedTable: string,
   table: string,
@@ -297,6 +296,24 @@ export async function readAppliedMigrations(
   }
   log({ count: result.rows.length, table, type: "applied-read-done" });
   return result.rows;
+}
+
+/** Validates the history table definition and reads applied migrations. */
+export async function readHistory(
+  client: pg.Client,
+  table: ResolvedHistoryTable,
+  log: LogSink,
+): Promise<{ applied: AppliedMigration[]; initialized: boolean }> {
+  const definition = await readValidatedHistoryDefinition(
+    client,
+    table.qualifiedName,
+    table.name,
+    log,
+  );
+  const applied = definition.initialized
+    ? await readAppliedMigrations(client, table.qualifiedName, table.name, log)
+    : [];
+  return { applied, initialized: definition.initialized };
 }
 
 /** Creates the migration history table. */

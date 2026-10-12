@@ -4,9 +4,8 @@ import type * as pg from "pg";
 import {
   createHistoryTable,
   lockMigrations,
-  readAppliedMigrations,
+  readHistory,
   readHistoryDefinition,
-  readValidatedHistoryDefinition,
   recordMigrationEvent,
   resolveHistoryTable,
   validateHistoryDefinition,
@@ -124,7 +123,17 @@ describe("history", (): void => {
         createClient([[{ exists: true }]]).client,
         "app.schema_migrations",
       );
-      const log = (): undefined => undefined;
+      // Reads a valid history table definition, then fails on the next query.
+      const results = [[{ exists: true }], historyColumns()];
+      const appliedClient = {
+        query: async (): Promise<{ rows: unknown[] }> => {
+          const rows = results.shift();
+          if (!rows) {
+            throw failure;
+          }
+          return { rows };
+        },
+      } as unknown as pg.Client;
 
       for (const [operation, message] of [
         [
@@ -140,23 +149,11 @@ describe("history", (): void => {
           "Failed to acquire migration lock for 'app.schema_migrations'.",
         ],
         [
-          () =>
-            readValidatedHistoryDefinition(
-              client,
-              table.qualifiedName,
-              table.name,
-              log,
-            ),
+          () => readHistory(client, table, noLog),
           "Failed to read migration history table 'app.schema_migrations'.",
         ],
         [
-          () =>
-            readAppliedMigrations(
-              client,
-              table.qualifiedName,
-              table.name,
-              noLog,
-            ),
+          () => readHistory(appliedClient, table, noLog),
           "Failed to read migration history table 'app.schema_migrations'.",
         ],
       ] as const) {
@@ -317,29 +314,38 @@ describe("history", (): void => {
     );
   });
 
-  it("reads applied migrations separately", async (): Promise<void> => {
-    const appliedAt = "2026-08-11T12:00:00.000Z";
+  it("reads no applied migrations without a history table", async (): Promise<void> => {
+    const { client } = createClient([[{ exists: true }], [{ exists: false }]]);
+    const table = await resolveHistoryTable(client, "app.schema_migrations");
+
+    const history = await readHistory(client, table, noLog);
+
+    assert.deepEqual(history, { applied: [], initialized: false });
+  });
+
+  it("reads applied migrations from a valid history table", async (): Promise<void> => {
     const rows = [
       {
-        appliedAt,
+        appliedAt: "2026-08-11T12:00:00.000Z",
         checksum: "migration-checksum",
         file: "20260811120000_add_users.sql",
         version: "20260811120000",
       },
     ];
-    const { client, queries } = createClient([rows]);
+    const { client, queries } = createClient([
+      [{ exists: true }],
+      [{ exists: true }],
+      historyColumns(),
+      rows,
+    ]);
+    const table = await resolveHistoryTable(client, "app.schema_migrations");
 
-    const result = await readAppliedMigrations(
-      client,
-      '"app"."schema_migrations"',
-      "app.schema_migrations",
-      noLog,
-    );
+    const history = await readHistory(client, table, noLog);
 
-    assert.deepEqual(result, rows);
-    assert.match(queries[0]!.sql, /executed_at AT TIME ZONE 'UTC'/);
-    assert.match(queries[0]!.sql, /'YYYY-MM-DD"T"HH24:MI:SS\.MS"Z"'/);
-    assert.match(queries[0]!.sql, /FROM "app"\."schema_migrations"/);
+    assert.deepEqual(history, { applied: rows, initialized: true });
+    assert.match(queries[3]!.sql, /executed_at AT TIME ZONE 'UTC'/);
+    assert.match(queries[3]!.sql, /'YYYY-MM-DD"T"HH24:MI:SS\.MS"Z"'/);
+    assert.match(queries[3]!.sql, /FROM "app"\."schema_migrations"/);
   });
 
   it("writes history changes", async (): Promise<void> => {
