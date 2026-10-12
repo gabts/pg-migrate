@@ -19,7 +19,7 @@ Global options:
   --env-file <path>      Environment file, defaults to PGM_ENV_FILE or .env
   --no-color             Disable color in progress and error output
   -q, --quiet            Suppress output except errors and explicit help
-  -v, --verbose          Show progress logs
+  --verbose              Show progress logs
   -h, --help             Show help
 
 Configuration precedence:
@@ -43,7 +43,7 @@ Options:
   --env-file <path>      Environment file, defaults to PGM_ENV_FILE or .env
   --no-color             Disable color in progress and error output
   -q, --quiet            Suppress output except errors and explicit help
-  -v, --verbose          Show progress logs
+  --verbose              Show progress logs
   -h, --help             Show this help
 
 Behavior:
@@ -76,7 +76,7 @@ Options:
   --fail-on-pending      Exit with 2 when migrations are pending
   --no-color             Disable color in progress and error output
   -q, --quiet            Suppress output except errors and explicit help
-  -v, --verbose          Show progress logs
+  --verbose              Show progress logs
   -h, --help             Show this help
 
 Behavior:
@@ -110,7 +110,7 @@ Options:
   -u, --url <url>        PostgreSQL URL, or use DATABASE_URL
   --no-color             Disable color in progress and error output
   -q, --quiet            Suppress output except errors and explicit help
-  -v, --verbose          Show progress logs
+  --verbose              Show progress logs
   -h, --help             Show this help
 
 Behavior:
@@ -144,7 +144,7 @@ Options:
   --target <target>      Apply through this version or file, including the target
   --no-color             Disable color in progress and error output
   -q, --quiet            Suppress output except errors and explicit help
-  -v, --verbose          Show progress logs
+  --verbose              Show progress logs
   -h, --help             Show this help
 
 Behavior:
@@ -182,7 +182,7 @@ Options:
   --target <target>      Revert migrations after this version or file
   --no-color             Disable color in progress and error output
   -q, --quiet            Suppress output except errors and explicit help
-  -v, --verbose          Show progress logs
+  --verbose              Show progress logs
   -h, --help             Show this help
 
 Behavior:
@@ -223,7 +223,7 @@ Options:
   -u, --url <url>        PostgreSQL URL, or use DATABASE_URL
   --no-color             Disable color in progress and error output
   -q, --quiet            Suppress output except errors and explicit help
-  -v, --verbose          Show progress logs
+  --verbose              Show progress logs
   -h, --help             Show this help
 
 Behavior:

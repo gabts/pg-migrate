@@ -35,10 +35,10 @@ const optionsDescriptors = {
   },
   verbose: {
     type: "boolean",
-    short: "v",
   },
   version: {
     type: "boolean",
+    short: "v",
   },
 } as const satisfies util.ParseArgsConfig["options"];
 

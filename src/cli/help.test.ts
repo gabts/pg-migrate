@@ -15,7 +15,7 @@ describe("help", (): void => {
     assert.match(help, /--env-file <path>/);
     assert.match(help, /-d, --directory <path>/);
     assert.match(help, /-q, --quiet/);
-    assert.match(help, /-v, --verbose/);
+    assert.match(help, /^  --verbose +Show progress logs$/m);
     assert.match(help, /Command output, when present, goes to stdout\./);
     assert.match(help, /command header, completion messages, and errors/i);
     assert.match(help, /--verbose also shows phase progress/i);
@@ -34,7 +34,7 @@ describe("help", (): void => {
     assert.match(help, /--verbose also shows phase progress/i);
     assert.match(help, /--quiet suppresses normal command output/i);
     assert.match(help, /-q, --quiet/);
-    assert.match(help, /-v, --verbose/);
+    assert.match(help, /^  --verbose +Show progress logs$/m);
     assert.doesNotMatch(help, /--url|--table|--target/);
   });
 
@@ -52,7 +52,7 @@ describe("help", (): void => {
     assert.match(help, /--verbose also shows phase progress/i);
     assert.match(help, /--quiet suppresses normal command output/i);
     assert.match(help, /-q, --quiet/);
-    assert.match(help, /-v, --verbose/);
+    assert.match(help, /^  --verbose +Show progress logs$/m);
     assert.doesNotMatch(help, /--target/);
   });
 
@@ -72,7 +72,7 @@ describe("help", (): void => {
     assert.match(help, /--verbose also shows phase progress/i);
     assert.match(help, /--quiet suppresses normal command output/i);
     assert.match(help, /-q, --quiet/);
-    assert.match(help, /-v, --verbose/);
+    assert.match(help, /^  --verbose +Show progress logs$/m);
     assert.doesNotMatch(help, /--target/);
   });
 
@@ -94,7 +94,7 @@ describe("help", (): void => {
     assert.match(help, /--verbose also shows phase progress/i);
     assert.match(help, /--quiet suppresses normal command output/i);
     assert.match(help, /-q, --quiet/);
-    assert.match(help, /-v, --verbose/);
+    assert.match(help, /^  --verbose +Show progress logs$/m);
     assert.doesNotMatch(help, /JSON/);
   });
 
@@ -116,7 +116,7 @@ describe("help", (): void => {
     assert.match(help, /--verbose also shows phase progress/i);
     assert.match(help, /--quiet suppresses normal command output/i);
     assert.match(help, /-q, --quiet/);
-    assert.match(help, /-v, --verbose/);
+    assert.match(help, /^  --verbose +Show progress logs$/m);
     assert.doesNotMatch(help, /JSON/);
   });
 
@@ -135,7 +135,7 @@ describe("help", (): void => {
     assert.match(help, /--verbose also shows phase progress/i);
     assert.match(help, /--quiet suppresses normal command output/i);
     assert.match(help, /-q, --quiet/);
-    assert.match(help, /-v, --verbose/);
+    assert.match(help, /^  --verbose +Show progress logs$/m);
     assert.doesNotMatch(help, /--target/);
   });
 });

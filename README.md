@@ -66,9 +66,9 @@ pg-migrate --version
 | `--fail-on-pending`      | `status` exits `2` when migrations are pending.   |
 | `--no-color`             | Disable color.                                    |
 | `-q, --quiet`            | Show only errors and requested help.              |
-| `-v, --verbose`          | Show detailed progress.                           |
+| `--verbose`              | Show detailed progress.                           |
 | `-h, --help`             | Show help.                                        |
-| `--version`              | Show the version; without a command only.         |
+| `-v, --version`          | Show the version; without a command only.         |
 
 A target is a 14-digit version, such as `20260811120000`, or a filename. `up`
 applies through the target. `down` reverts every migration after it, so the

@@ -62,9 +62,9 @@ describe("parse", (): void => {
       );
     });
 
-    it("parses verbose with its long and short flags", (): void => {
-      assert.equal(parseArgs(["--verbose"]).values.verbose, true);
-      assert.equal(parseArgs(["-v"]).values.verbose, true);
+    it("parses version with its long and short flags", (): void => {
+      assert.equal(parseArgs(["--version"]).values.version, true);
+      assert.equal(parseArgs(["-v"]).values.version, true);
     });
 
     it("omits verbose when the flag is absent", (): void => {
@@ -114,8 +114,8 @@ describe("parse", (): void => {
         ]);
       }, new Error("Repeated option '--url'."));
       assert.throws((): void => {
-        parseArgs(["status", "-vv"]);
-      }, new Error("Repeated option '--verbose'."));
+        parseArgs(["status", "-qq"]);
+      }, new Error("Repeated option '--quiet'."));
     });
 
     it("keeps '=' in a separate or long option value", (): void => {
